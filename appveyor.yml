@@ -1,0 +1,22 @@
+version: 1.0.{build}
+image: Visual Studio 2019
+branches:
+  only:
+  - master
+configuration:
+  - Debug
+  - Release
+clone_folder: C:\wnbd
+init:
+- ps: $env:PATH ="C:\Python37;"+$env:PATH
+- ps: New-Item -Type HardLink -Path "C:\Python37\python3.exe" -Value "C:\Python37\python.exe"
+
+build_script:
+- '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsx86_amd64.bat"'
+- msbuild C:\wnbd\vstudio\wnbd.sln /property:Configuration=%CONFIGURATION%
+- copy C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\* .
+- 7z a wnbd-%CONFIGURATION%.zip C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.cat C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.inf C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.sys C:\wnbd\vstudio\x64\%CONFIGURATION%\wnbd-client.exe
+
+artifacts:
+  - path: wnbd-%CONFIGURATION%.zip
+    name: wnbd
