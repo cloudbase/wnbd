@@ -35,7 +35,7 @@ How to build
 ------------
 
 ```
-> git clone https://github.com/aserdean/wnbd
+> git clone https://github.com/cloudbase/wnbd
 > msbuild wnbd\vstudio\wnbd.sln
 > copy wnbd\vstudio\x64\Debug\driver\* .
 > copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
