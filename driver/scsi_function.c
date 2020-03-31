@@ -100,6 +100,11 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
                        Device, Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
+    if (Device->Missing) {
+        WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
+                      Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+        goto Exit;
+    }
 
     InterlockedIncrement(&Device->OutstandingIoCount);
     Status = WnbdHandleSrbOperation(DeviceExtension, Device->ScsiDeviceExtension, Srb);
