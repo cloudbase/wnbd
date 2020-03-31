@@ -377,6 +377,8 @@ WnbdDeleteConnection(_In_ PGLOBAL_INFORMATION GInfo,
     ASSERT(GInfo);
     ASSERT(Info);
     PUSER_ENTRY EntryMarked = NULL;
+    ULONG TargetIndex = 0;
+    ULONG BusIndex = 0;
     if(!WnbdFindConnection(GInfo, Info, &EntryMarked)) {
         WNBD_LOG_ERROR("Could not find connection to delete");
         return STATUS_OBJECT_NAME_NOT_FOUND;
@@ -388,6 +390,8 @@ WnbdDeleteConnection(_In_ PGLOBAL_INFORMATION GInfo,
     NTSTATUS Status = STATUS_UNSUCCESSFUL;
 
     if(ScsiInfo) {
+        TargetIndex = ScsiInfo->TargetIndex;
+        BusIndex = ScsiInfo->BusIndex;
         ScsiInfo->SoftTerminateDevice = TRUE;
         KeSetEvent(&ScsiInfo->DeviceEvent, (KPRIORITY)0, FALSE);
         LARGE_INTEGER Timeout;
@@ -411,6 +415,8 @@ WnbdDeleteConnection(_In_ PGLOBAL_INFORMATION GInfo,
     }
 
     Status = WnbdDeleteConnectionEntry(EntryMarked);
+
+    RtlClearBits(&ScsiBitMapHeader, TargetIndex + (BusIndex * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
 
     InterlockedDecrement(&GInfo->ConnectionCount);
     WNBD_LOG_LOUD(": Exit");
