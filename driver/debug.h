@@ -10,6 +10,11 @@
 #include <ntdef.h>
 #include <wdm.h>
 
+//TODO remove
+#if DBG
+#define OVERRIDE_LOUD
+#endif
+
 #ifndef OVERRIDE_LOUD
 #define WNBD_DBG_ERROR    DPFLTR_ERROR_LEVEL
 #define WNBD_DBG_WARN     DPFLTR_WARNING_LEVEL
