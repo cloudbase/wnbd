@@ -61,6 +61,7 @@ How to install
   PS C:\WINDOWS\system32> Confirm-SecureBootUEFI
   False
   ```
+  **A reboot is required after changing `bcdedit` settings**
 
 * **Installation/removal**.
 
