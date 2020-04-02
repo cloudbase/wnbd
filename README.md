@@ -79,7 +79,7 @@ How to install
     ```
   (The command above assumes that the utility `devcon.exe` is in the current directory)
 
-  For convenience, we included <a href="vstudio/reinstall.cmd">reinstall.cmd</a> which uninstalls (ignoring the error) and installs the driver again.
+  For convenience, we included <a href="vstudio/reinstall.ps1">reinstall.ps1</a> which uninstalls (ignoring the error) and installs the driver again.
 
 [Ceph integration](https://docs.ceph.com/docs/master/man/8/rbd-nbd/) [`rbd-nbd`](https://github.com/cloudbase/ceph/tree/windows)
 --------------------------
