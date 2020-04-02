@@ -28,7 +28,7 @@ WnbdGetBlockCount(_In_ UINT64 DiskSize, UINT16 BlockSize)
 UCHAR
 WnbdReadCapacity(_In_ PSCSI_REQUEST_BLOCK Srb,
                  _In_ PCDB Cdb,
-                 _In_ UINT16 BlockSize,
+                 _In_ UINT64 BlockSize,
                  _In_ UINT64 BlockCount)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -51,7 +51,7 @@ WnbdReadCapacity(_In_ PSCSI_REQUEST_BLOCK Srb,
     case SCSIOP_READ_CAPACITY:
         {
         if (sizeof(READ_CAPACITY_DATA) > DataTransferLength) {
-            break;
+            goto Exit;
         }
         PREAD_CAPACITY_DATA ReadCapacityData = DataBuffer;
         REVERSE_BYTES_4(&ReadCapacityData->LogicalBlockAddress, &BlockCount);
