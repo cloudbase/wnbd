@@ -180,6 +180,17 @@ Exit:
     WNBD_LOG_LOUD(": Exit");
     return Status;
 }
+
+VOID
+WnbdSetNullUserInput(PUSER_IN Info)
+{
+    Info->InstanceName[MAX_NAME_LENGTH - 1] = '\0';
+    Info->Hostname[MAX_NAME_LENGTH - 1] = '\0';
+    Info->PortName[MAX_NAME_LENGTH - 1] = '\0';
+    Info->ExportName[MAX_NAME_LENGTH - 1] = '\0';
+    Info->SerialNumber[MAX_NAME_LENGTH - 1] = '\0';
+}
+
 _Use_decl_annotations_
 NTSTATUS
 WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
@@ -205,6 +216,8 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
+
+    WnbdSetNullUserInput(Info);
 
     if(WnbdFindConnection(GInfo, Info, NULL)) {
         Status = STATUS_OBJECT_NAME_COLLISION;
@@ -234,7 +247,7 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
         WNBD_LOG_LOUD("Received block size: %u", Info->BlockSize);
         NewEntry->BlockSize = Info->BlockSize;
     }
-    //TODO Ensure Info Strings are null terminated
+
     Sock = NbdOpenAndConnect(Info->Hostname, Info->PortName);
     ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader,1,0);
 
