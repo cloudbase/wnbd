@@ -12,25 +12,110 @@
 #include "srb_helper.h"
 #include "scsi_function.h"
 #include "util.h"
+#include "userspace.h"
+
+UCHAR DrainDeviceQueue(PVOID DeviceExtension,
+                       PSCSI_REQUEST_BLOCK Srb)
+
+{
+    WNBD_LOG_ERROR(": Enter");
+    ASSERT(Srb);
+    ASSERT(DeviceExtension);
+
+    UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
+    PWNBD_SCSI_DEVICE Device;
+    PWNBD_LU_EXTENSION LuExtension;
+    KIRQL Irql;
+    KeAcquireSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, &Irql);
+
+    WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+        WnbdToStringSrbCdbOperation(SrbGetCdb(Srb)->AsByte[0]),
+        Srb, SrbGetCdb(Srb)->AsByte[0], Srb->PathId, Srb->TargetId, Srb->Lun);
+
+    LuExtension = (PWNBD_LU_EXTENSION)
+        StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun);
+
+    if (!LuExtension) {
+        WNBD_LOG_ERROR(": Unable to get LUN extension for device PathId: %d TargetId: %d LUN: %d",
+            Srb->PathId, Srb->TargetId, Srb->Lun);
+        goto Exit;
+    }
+
+    Device = WnbdFindDevice(LuExtension, DeviceExtension, Srb);
+    if (NULL == Device) {
+        WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
+            Srb->PathId, Srb->TargetId, Srb->Lun);
+        goto Exit;
+    }
+
+    if (NULL == Device->ScsiDeviceExtension) {
+        WNBD_LOG_ERROR("%p has no ScsiDeviceExtension. PathId = %d. TargetId = %d. LUN = %d",
+            Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+        goto Exit;
+    }
+    if (Device->Missing) {
+        WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
+            Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+        goto Exit;
+    }
+    PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
+    PLIST_ENTRY Request;
+    PSRB_QUEUE_ELEMENT Element;
+
+    while ((Request = ExInterlockedRemoveHeadList(&Info->ListHead, &Info->ListLock)) != NULL) {
+        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
+
+        Element->Srb->DataTransferLength = 0;
+        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+
+        InterlockedDecrement(&Device->OutstandingIoCount);
+        WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
+            Element->Srb, Element->Srb->SrbStatus, WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+        StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
+        ExFreePool(Element);
+    }
+
+    SrbStatus = SRB_STATUS_SUCCESS;
+
+Exit:
+    KeReleaseSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, Irql);
+
+    WNBD_LOG_LOUD(": Exit");
+    return SrbStatus;
+}
 
 _Use_decl_annotations_
 UCHAR
-WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
-                             PSCSI_REQUEST_BLOCK  Srb)
+WnbdAbortFunction(_In_ PVOID DeviceExtension,
+                  _In_ PSCSI_REQUEST_BLOCK Srb)
 {
     WNBD_LOG_LOUD(": Enter");
 
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
-    StorPortCompleteRequest(DeviceExtension,
-                            Srb->PathId,
-                            Srb->TargetId,
-                            Srb->Lun,
-                            SRB_STATUS_BUSY);
+    UCHAR SrbStatus = DrainDeviceQueue(DeviceExtension, Srb);
+
     WNBD_LOG_LOUD(": Exit");
 
-    return SRB_STATUS_SUCCESS;
+    return SrbStatus;
+}
+
+_Use_decl_annotations_
+UCHAR
+WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
+                             PSCSI_REQUEST_BLOCK Srb)
+{
+    WNBD_LOG_LOUD(": Enter");
+
+    ASSERT(Srb);
+    ASSERT(DeviceExtension);
+
+    UCHAR SrbStatus = DrainDeviceQueue(DeviceExtension, Srb);
+
+    WNBD_LOG_LOUD(": Exit");
+
+    return SrbStatus;
 }
 
 _Use_decl_annotations_

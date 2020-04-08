@@ -10,6 +10,10 @@
 #include "common.h"
 
 UCHAR
+WnbdAbortFunction(_In_ PVOID DeviceExtension,
+                  _In_ PSCSI_REQUEST_BLOCK Srb);
+
+UCHAR
 WnbdResetLogicalUnitFunction(_In_ PVOID DeviceExtension,
                              _In_ PSCSI_REQUEST_BLOCK Srb);
 

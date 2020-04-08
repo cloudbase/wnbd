@@ -308,6 +308,10 @@ WnbdHwStartIo(PVOID DeviceExtension,
         SrbStatus = WnbdResetDeviceFunction(Ext, Srb);
         break;
 
+    case SRB_FUNCTION_ABORT_COMMAND:
+        SrbStatus = WnbdAbortFunction(Ext, Srb);
+        break;
+
     case SRB_FUNCTION_PNP:
         SrbStatus = WnbdPNPFunction(Srb);
         break;
@@ -320,6 +324,7 @@ WnbdHwStartIo(PVOID DeviceExtension,
         break;
 
     case SRB_FUNCTION_WMI:
+    case SRB_FUNCTION_RESET_BUS:
     default:
         WNBD_LOG_ERROR("Unknown SRB Function = 0x%x(%s)",
                        Srb->Function, WnbdToStringSrbFunction(Srb->Function));
