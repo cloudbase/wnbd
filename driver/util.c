@@ -19,6 +19,8 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
     WNBD_LOG_LOUD(": Enter");
     ASSERT(ScsiInformation);
     PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION)ScsiInformation;
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(&ScsiInfo->GlobalInformation->ConnectionMutex, TRUE);
 
     PLIST_ENTRY Request;
     PSRB_QUEUE_ELEMENT Element;
@@ -50,6 +52,9 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
         Close(ScsiInfo->Socket);
         ScsiInfo->Socket = -1;
     }
+
+    ExReleaseResourceLite(&ScsiInfo->GlobalInformation->ConnectionMutex);
+    KeLeaveCriticalRegion();
 
     ExFreePool(ScsiInfo);
     ScsiInfo = NULL;
@@ -272,11 +277,15 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         } else {
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+            KeEnterCriticalRegion();
+            ExAcquireResourceExclusiveLite(&DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);
             if (-1 != DeviceInformation->Socket) {
                 WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
                 Close(DeviceInformation->Socket);
+                DeviceInformation->Socket = -1;
             }
-            DeviceInformation->Socket = -1;
+            ExReleaseResourceLite(&DeviceInformation->GlobalInformation->ConnectionMutex);
+            KeLeaveCriticalRegion();
         }
 
         PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)DeviceInformation->Device;

@@ -423,6 +423,11 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
     UINT16 BlockSize = Info->UserEntry->BlockSize;
     UINT64 BlockCount = WnbdGetBlockCount(Info->UserEntry->DiskSize, BlockSize);
 
+    if (Info->SoftTerminateDevice || Info->HardTerminateDevice) {
+        Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+        return status;
+    }
+
     WNBD_LOG_LOUD("Processing %s command",
                   WnbdToStringSrbCdbOperation(Cdb->AsByte[0]));
 
