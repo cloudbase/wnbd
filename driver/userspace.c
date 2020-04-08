@@ -249,11 +249,15 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
     }
 
     Sock = NbdOpenAndConnect(Info->Hostname, Info->PortName);
-    ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader,1,0);
+    if (-1 == Sock) {
+        Status = STATUS_CONNECTION_REFUSED;
+        goto ExitInquiryData;
+    }
 
-    if(0xFFFFFFFF == bitNumber
-       || -1 == Sock) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
+    ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
+
+    if (0xFFFFFFFF == bitNumber) {
+        Status = STATUS_INVALID_FIELD_IN_PARAMETER_LIST;
         goto ExitInquiryData;
     }
 
