@@ -30,7 +30,7 @@ if ($status -eq $false) {
     Write-Host "wnbd.sys not found in $scriptLocation"
 }
 
-& $devconBin /r remove "root\wnbd"
+& $devconBin remove "root\wnbd"
 
 pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
     % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] }
