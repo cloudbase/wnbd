@@ -14,6 +14,7 @@ int Syntax(void)
     printf("wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> <DoNotNegotiate>\n");
     printf("wnbd-client unmap <InstanceName>\n");
     printf("wnbd-client list \n");
+    printf("wnbd-client set-debug <int>\n");
 
     return -1;
 }
@@ -273,6 +274,80 @@ WnbdList(PGET_LIST_OUT* Output)
         Buffer = NULL;
     }
     *Output = (PGET_LIST_OUT)Buffer;
+Exit:
+    return Status;
+}
+
+HKEY OpenKey(HKEY RootKey, LPCTSTR StringKey, BOOLEAN Create)
+{
+    HKEY Key = NULL;
+    DWORD Status = RegOpenKeyExA(RootKey, StringKey, 0, KEY_ALL_ACCESS, &Key);
+
+    if (Status == ERROR_FILE_NOT_FOUND && Create)
+    {
+        printf("Creating registry key: %s\n", StringKey);
+        Status = RegCreateKeyExA(RootKey, StringKey, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &Key, NULL);
+    }
+
+    if (ERROR_SUCCESS != Status) {
+        printf("Could not open registry key: %s\n", StringKey);
+        GLAToString("OpenKey");
+    }
+
+    return Key;
+}
+
+DWORD SetVal(HKEY RootKey, LPCTSTR StringKey, DWORD* Value)
+{
+    DWORD status = RegSetValueExA(RootKey, StringKey, 0, REG_DWORD, (LPBYTE)Value, sizeof(DWORD));
+    if (ERROR_SUCCESS != status) {
+        printf("Could not set registry value: %s\n", StringKey);
+        GLAToString("SetVal");
+        return status;
+    }
+
+    return ERROR_SUCCESS;
+}
+
+DWORD
+WnbdSetDebug(UINT32 LogLevel)
+{
+    HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+    PUCHAR Buffer = NULL;
+    USER_COMMAND Command = { 0 };
+    BOOL DevStatus = FALSE;
+    PCHAR Service = "SYSTEM\\CurrentControlSet\\Services\\wnbd\\";
+
+    HKEY hKey = OpenKey(HKEY_LOCAL_MACHINE, Service, TRUE);
+    if (!hKey) {
+        printf("Could not open or create the registry path: %s\n", Service);
+        return ERROR_PATH_NOT_FOUND;
+    }
+
+    SetVal(hKey, "DebugLogLevel", &LogLevel);
+
+    WnbdDriverHandle = GetWnbdDriverHandle();
+    if (WnbdDriverHandle == INVALID_HANDLE_VALUE) {
+        Status = GetLastError();
+        printf("Could not get WNBD driver handle. Can not send requests.\n");
+        printf("The driver maybe is not installed\n");
+        GLAToString("wnbd-client");
+        goto Exit;
+    }
+
+    Command.IoCode = IOCTL_WNBDVM_DEBUG;
+
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
+        GLAToString("wnbd-client");
+    }
+
 Exit:
     return Status;
 }

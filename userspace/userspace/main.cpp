@@ -80,6 +80,9 @@ int main(int argc, PCHAR argv[])
             }
             ReleaseWMI();
         }
+    } else if (argc == 3 && !strcmp(Command, "set-debug")) {
+        int Value = atoi(argv[2]);
+        WnbdSetDebug(Value);
     } else {
         return Syntax();
     }

@@ -41,6 +41,9 @@ WnbdMap(PCHAR InstanceName,
 DWORD
 WnbdList(PGET_LIST_OUT* Output);
 
+DWORD
+WnbdSetDebug(UINT32 LogLevel);
+
 #ifdef __cplusplus
 }
 #endif
