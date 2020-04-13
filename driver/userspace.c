@@ -17,6 +17,8 @@
 #define CHECK_O_LOCATION(Io, Size) (Io->Parameters.DeviceIoControl.OutputBufferLength < sizeof(Size))
 #define Malloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, (S), 'DBNu')
 
+extern UNICODE_STRING GlobalRegistryPath;
+
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
 ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * SCSI_MAXIMUM_BUSES];
 static ULONG LunId = 0;
@@ -614,6 +616,19 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             KeLeaveCriticalRegion();
             }
             break;
+
+        case IOCTL_WNBDVM_DEBUG:
+        {
+            WNBD_LOG_LOUD("IOCTL_WNBDVM_DEBUG");
+            WCHAR* DebugKey = L"DebugLogLevel";
+            UINT32 temp = 0;
+
+            if (WNBDReadRegistryValue(&GlobalRegistryPath, DebugKey,
+                (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT), &temp)) {
+                WnbdSetLogLevel(temp);
+            }
+        }
+        break;
 
         default:
             {

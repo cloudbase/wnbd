@@ -14,6 +14,14 @@
 #define WNBD_DBG_DEFAULT     WNBD_DBG_INFO
 
 UINT32  WnbdLogLevel = WNBD_DBG_DEFAULT;
+extern UINT32 GlobalLogLevel;
+
+_Use_decl_annotations_
+VOID
+WnbdSetLogLevel(UINT32 Level)
+{
+    GlobalLogLevel = Level;
+}
 
 _Use_decl_annotations_
 VOID
@@ -35,5 +43,9 @@ WnbdLog(UINT32 Level,
     RtlStringCbVPrintfA(Buf, sizeof(Buf), Format, Args);
     va_end(Args);
 
-    DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    if (!GlobalLogLevel) {
+        DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    } else {
+        DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, GlobalLogLevel - 1, "%s:%lu %s\n", FuncName, Line, Buf);
+    }
 }
