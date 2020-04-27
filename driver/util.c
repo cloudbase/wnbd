@@ -281,7 +281,10 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         } else {
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_TIMEOUT;
-            if (STATUS_INVALID_SESSION == Status) {
+            WNBD_LOG_INFO("FD failed with: %x", Status);
+            if (STATUS_CONNECTION_RESET == Status ||
+                STATUS_CONNECTION_DISCONNECTED == Status ||
+                STATUS_CONNECTION_ABORTED == Status) {
                 Element->Srb->SrbStatus = SRB_STATUS_ERROR;
                 KeEnterCriticalRegion();
                 ExAcquireResourceExclusiveLite(&DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);

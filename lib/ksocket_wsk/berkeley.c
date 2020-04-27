@@ -607,7 +607,7 @@ int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
   return -1;
 }
 
-int Send(int sockfd, const void* buf, size_t len, int flags)
+int Send(int sockfd, const void* buf, size_t len, int flags, PNTSTATUS error)
 {
   NTSTATUS Status;
   PKSOCKET Socket = KsArray[FROM_SOCKETFD(sockfd)];
@@ -615,6 +615,7 @@ int Send(int sockfd, const void* buf, size_t len, int flags)
 
   ULONG Length = (ULONG)len;
   Status = KsSend(Socket, (PVOID)buf, &Length, flags);
+  *error = Status;
 
   return NT_SUCCESS(Status)
     ? (int)Length
@@ -636,13 +637,14 @@ int SendTo(int sockfd, const void *buf, size_t len, int flags, const struct sock
     : -1;
 }
 
-int Recv(int sockfd, void* buf, size_t len, int flags)
+int Recv(int sockfd, void* buf, size_t len, int flags, PNTSTATUS error)
 {
   NTSTATUS Status;
   PKSOCKET Socket = KsArray[FROM_SOCKETFD(sockfd)];
 
   ULONG Length = (ULONG)len;
   Status = KsRecv(Socket, (PVOID)buf, &Length, (ULONG)flags);
+  *error = Status;
 
   return NT_SUCCESS(Status)
     ? (int)Length
