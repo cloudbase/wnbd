@@ -78,6 +78,9 @@ WnbdDeleteDevices(_In_ PWNBD_EXTENSION Ext,
         if (Device->ReportedMissing || All) {
             WNBD_LOG_INFO("Deleting device %p with %d:%d:%d",
                 Device, Device->PathId, Device->TargetId, Device->Lun);
+            PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
+            WnbdDeleteConnection((PGLOBAL_INFORMATION)Ext->GlobalInformation,
+                                 &Info->UserEntry->UserInformation);
             RemoveEntryList(&Device->ListEntry);
             WnbdDeleteScsiInformation(Device->ScsiDeviceExtension);
             ExFreePool(Device);
@@ -244,6 +247,7 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
         Element->Srb->DataTransferLength = 0;
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+        PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)DeviceInformation->Device;
         switch (Cdb->AsByte[0]) {
         case SCSIOP_READ6:
         case SCSIOP_READ:
@@ -276,19 +280,22 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
             Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
         } else {
             Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-            KeEnterCriticalRegion();
-            ExAcquireResourceExclusiveLite(&DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);
-            if (-1 != DeviceInformation->Socket) {
-                WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
-                Close(DeviceInformation->Socket);
-                DeviceInformation->Socket = -1;
+            Element->Srb->SrbStatus = SRB_STATUS_TIMEOUT;
+            if (STATUS_INVALID_SESSION == Status) {
+                Element->Srb->SrbStatus = SRB_STATUS_ERROR;
+                KeEnterCriticalRegion();
+                ExAcquireResourceExclusiveLite(&DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);
+                if (-1 != DeviceInformation->Socket) {
+                    WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
+                    Close(DeviceInformation->Socket);
+                    DeviceInformation->Socket = -1;
+                    Device->Missing = TRUE;
+                }
+                ExReleaseResourceLite(&DeviceInformation->GlobalInformation->ConnectionMutex);
+                KeLeaveCriticalRegion();
             }
-            ExReleaseResourceLite(&DeviceInformation->GlobalInformation->ConnectionMutex);
-            KeLeaveCriticalRegion();
         }
 
-        PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)DeviceInformation->Device;
         InterlockedDecrement(&Device->OutstandingIoCount);
         WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
             Element->Srb, Element->Srb->SrbStatus, WnbdToStringSrbStatus(Element->Srb->SrbStatus));

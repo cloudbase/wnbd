@@ -414,12 +414,12 @@ NbdReadStat(INT Fd,
     }
     if(NBD_REPLY_MAGIC != RtlUlongByteSwap(Reply.Magic)) {
         WNBD_LOG_INFO("Invalid NBD_REPLY_MAGIC for NBD_CMD_READ");
-        Status = STATUS_INVALID_SESSION;
+        Status = STATUS_ABANDONED;
         goto Exit;
     }
     if (0 != Reply.Error) {
         WNBD_LOG_INFO("Received reply error from NBD_CMD_READ: %llu", Reply.Error);
-        Status = STATUS_INVALID_SESSION;
+        Status = STATUS_ABANDONED;
         goto Exit;
     }
     if (-1 == RbdReadExact(Fd, Buf, Length)) {
@@ -474,7 +474,7 @@ NbdWriteStat(INT Fd,
 
     if (-1 == Fd) {
         WNBD_LOG_ERROR("Invalid socket");
-        Status = STATUS_INSUFFICIENT_RESOURCES;
+        Status = STATUS_INVALID_SESSION;
         goto Exit;
     }
 #pragma warning(disable:6386)
@@ -495,12 +495,12 @@ NbdWriteStat(INT Fd,
     }
     if (NBD_REPLY_MAGIC != RtlUlongByteSwap(Reply.Magic)) {
         WNBD_LOG_ERROR("Invalid NBD_REPLY_MAGIC for NBD_CMD_WRITE");
-        Status = STATUS_INVALID_SESSION;
+        Status = STATUS_ABANDONED;
         goto Exit;
     }
     if (0 != Reply.Error) {
         WNBD_LOG_ERROR("Received reply error from NBD_CMD_WRITE: %llu", RtlUlongByteSwap(Reply.Error));
-        Status = STATUS_INVALID_SESSION;
+        Status = STATUS_ABANDONED;
         goto Exit;
     }
 
