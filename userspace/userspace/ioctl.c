@@ -51,7 +51,7 @@ GetWnbdDriverHandle(VOID)
     ULONG GLA = { 0 };
     HANDLE WnbdDriverHandle = { 0 };
     DWORD BytesReturned = { 0 };
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = { 0 };
 
     DevInfo = SetupDiGetClassDevs(&WNBD_GUID, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -150,7 +150,7 @@ WnbdMap(PCHAR InstanceName,
         UINT64 DiskSize,
         BOOLEAN MustNegotiate)
 {
-    USER_IN ConnectIn = { 0 };
+    CONNECTION_INFO ConnectIn = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -177,7 +177,7 @@ WnbdMap(PCHAR InstanceName,
     ConnectIn.MustNegotiate = MustNegotiate;
     ConnectIn.BlockSize = 0;
 
-    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP, &ConnectIn, sizeof(USER_IN),
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP, &ConnectIn, sizeof(CONNECTION_INFO),
         NULL, 0, &BytesReturned, NULL);
 
     if (!DevStatus) {
@@ -195,7 +195,7 @@ Exit:
 DWORD
 WnbdUnmap(PCHAR InstanceName)
 {
-    USER_IN DisconnectIn = { 0 };
+    CONNECTION_INFO DisconnectIn = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -214,7 +214,7 @@ WnbdUnmap(PCHAR InstanceName)
     DisconnectIn.IoControlCode = IOCTL_WNBD_UNMAP;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &DisconnectIn, sizeof(USER_IN), NULL, 0, &BytesReturned, NULL);
+        &DisconnectIn, sizeof(CONNECTION_INFO), NULL, 0, &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();
@@ -229,13 +229,13 @@ Exit:
 
 
 DWORD
-WnbdList(PGET_LIST_OUT* Output)
+WnbdList(PDISK_INFO_LIST* Output)
 {
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
     PUCHAR Buffer = NULL;
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = FALSE;
 
     WnbdDriverHandle = GetWnbdDriverHandle();
@@ -264,7 +264,7 @@ WnbdList(PGET_LIST_OUT* Output)
         GLAToString("wnbd-client");
     }
 
-    PGET_LIST_OUT ActiveConnectList = (PGET_LIST_OUT)Buffer;
+    PDISK_INFO_LIST ActiveConnectList = (PDISK_INFO_LIST)Buffer;
 
     if (Buffer && BytesReturned && ActiveConnectList->ActiveListCount) {
         Status = ERROR_SUCCESS;
@@ -273,7 +273,7 @@ WnbdList(PGET_LIST_OUT* Output)
         free(Buffer);
         Buffer = NULL;
     }
-    *Output = (PGET_LIST_OUT)Buffer;
+    *Output = (PDISK_INFO_LIST)Buffer;
 Exit:
     return Status;
 }
@@ -316,7 +316,7 @@ WnbdSetDebug(UINT32 LogLevel)
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
     PUCHAR Buffer = NULL;
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = FALSE;
     PCHAR Service = "SYSTEM\\CurrentControlSet\\Services\\wnbd\\";
 

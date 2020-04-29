@@ -29,7 +29,7 @@ static const GUID WNBD_GUID = {
       {0x8e, 0x13, 0xf1, 0xa3, 0xa4, 0xa6, 0xdb, 0xcb}
 };
 
-typedef struct _USER_IN {
+typedef struct _CONNECTION_INFO {
     ULONG		    IoControlCode;
     CHAR            InstanceName[MAX_NAME_LENGTH];
     CHAR            Hostname[MAX_NAME_LENGTH];
@@ -40,25 +40,25 @@ typedef struct _USER_IN {
     INT             Pid;
     UINT64          DiskSize;
     UINT16          BlockSize;
-} USER_IN, * PUSER_IN;
+} CONNECTION_INFO, * PCONNECTION_INFO;
 
-typedef struct _USER_COMMAND {
+typedef struct _WNBD_COMMAND {
     ULONG		IoCode;
-} USER_COMMAND, *PUSER_COMMAND;
+} WNBD_COMMAND, *PWNBD_COMMAND;
 
-typedef struct _LIST_ENTRY_OUT {
-    USER_IN         ConnectionInformation;
+typedef struct _DISK_INFO {
+    CONNECTION_INFO         ConnectionInformation;
     USHORT          Connected;
     USHORT          BusNumber;
     USHORT          TargetId;
     USHORT          Lun;
     ULONGLONG       DiskSize;
-} LIST_ENTRY_OUT, *PLIST_ENTRY_OUT;
+} DISK_INFO, *PDISK_INFO;
 
-typedef struct _GET_LIST_OUT {
+typedef struct _DISK_INFO_LIST {
     ULONG                   ActiveListCount;
-    LIST_ENTRY_OUT          ActiveEntry[1];
-} GET_LIST_OUT, *PGET_LIST_OUT;
+    DISK_INFO          ActiveEntry[1];
+} DISK_INFO_LIST, *PDISK_INFO_LIST;
 
 #ifdef __cplusplus
 }
