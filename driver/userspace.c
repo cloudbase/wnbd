@@ -20,12 +20,12 @@
 extern UNICODE_STRING GlobalRegistryPath;
 
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
-ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * SCSI_MAXIMUM_BUSES];
+ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * MAX_NUMBER_OF_SCSI_TARGETS];
 static ULONG LunId = 0;
 VOID WnbdInitScsiIds()
 {
     RtlZeroMemory(AssignedScsiIds, sizeof(AssignedScsiIds));
-    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, SCSI_MAXIMUM_TARGETS_PER_BUS * SCSI_MAXIMUM_BUSES);
+    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, SCSI_MAXIMUM_TARGETS_PER_BUS * MAX_NUMBER_OF_SCSI_TARGETS);
 }
 
 _Use_decl_annotations_
@@ -275,7 +275,7 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
         NewEntry->DiskSize = Info->DiskSize;
     }
     ULONG TargetId = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
-    ULONG BusId = bitNumber / SCSI_MAXIMUM_BUSES;
+    ULONG BusId = bitNumber / MAX_NUMBER_OF_SCSI_TARGETS;
 
     PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION) Malloc(sizeof(SCSI_DEVICE_INFORMATION));
     if(!ScsiInfo) {
@@ -610,7 +610,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
                 WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad output buffer",
                     IoLocation->Parameters.DeviceIoControl.IoControlCode);
 
-                Irp->IoStatus.Information = ((GInfo->ConnectionCount - 1) * sizeof(DISK_INFO) ) + sizeof(DISK_INFO_LIST);
+                Irp->IoStatus.Information = (GInfo->ConnectionCount * sizeof(DISK_INFO) ) + sizeof(DISK_INFO_LIST);
                 ExReleaseResourceLite(&GInfo->ConnectionMutex);
                 KeLeaveCriticalRegion();
                 break;
