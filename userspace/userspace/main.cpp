@@ -43,13 +43,6 @@ int main(int argc, PCHAR argv[])
         if (argc == 7) {
             MustNegotiate = FALSE;
         }
-
-        printf("InstanceName=%s\n", InstanceName);
-        printf("HostName=%s\n", HostName);
-        printf("PortName=%s\n", PortName);
-        printf("ExportName=%s\n", ExportName);
-        printf("MustNegotiate=%d\n", MustNegotiate);
-
         WnbdMap(InstanceName, HostName, PortName, ExportName, 50000, MustNegotiate);
     } else if (argc == 3 && !strcmp(Command, "unmap")) {
         InstanceName = argv[2];
@@ -57,13 +50,12 @@ int main(int argc, PCHAR argv[])
     } else if (argc == 2 && !strcmp(Command, "list")) {
         PDISK_INFO_LIST Output = NULL;
         DWORD Status = WnbdList(&Output);
-        std::cout << "Status: " << Status << std::endl;
-        if (!Output) {
-            std::cout << "Output is NULL" << std::endl;
+        if (!SUCCEEDED(Status)) {
+            return Status;
         }
         if (NULL != Output && ERROR_SUCCESS == Status) {
             InitWMI();
-            printf("InstanceName\tPid\tDiskNumber\t\n");
+            printf("InstanceName\t\tPid\t\tDiskNumber\t\t\n");
             for (ULONG index = 0; index < Output->ActiveListCount; index++) {
                 std::wstring WideString = to_wstring(Output->ActiveEntry[index].ConnectionInformation.SerialNumber);
                 std::wstring WQL = L"SELECT * FROM Win32_DiskDrive WHERE SerialNumber = '";
