@@ -604,13 +604,17 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         case IOCTL_WNBD_LIST:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_LIST");
+            KeEnterCriticalRegion();
+            ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
             if(!Irp->AssociatedIrp.SystemBuffer || CHECK_O_LOCATION(IoLocation, DISK_INFO_LIST)) {
                 WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad output buffer",
                     IoLocation->Parameters.DeviceIoControl.IoControlCode);
+
+                Irp->IoStatus.Information = ((GInfo->ConnectionCount - 1) * sizeof(DISK_INFO) ) + sizeof(DISK_INFO_LIST);
+                ExReleaseResourceLite(&GInfo->ConnectionMutex);
+                KeLeaveCriticalRegion();
                 break;
             }
-            KeEnterCriticalRegion();
-            ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
             Status = WnbdEnumerateActiveConnections(GInfo, Irp);
             ExReleaseResourceLite(&GInfo->ConnectionMutex);
             KeLeaveCriticalRegion();
