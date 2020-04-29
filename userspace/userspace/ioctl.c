@@ -103,7 +103,7 @@ GetWnbdDriverHandle(VOID)
             GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
             FILE_FLAG_OVERLAPPED, 0);
 
-        Command.IoCode = IOCTL_WNBDVM_PORT;
+        Command.IoCode = IOCTL_WNBD_PORT;
 
         DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
             &Command, sizeof(Command), &Command, sizeof(Command), &BytesReturned, NULL);
@@ -172,7 +172,7 @@ WnbdMap(PCHAR InstanceName,
     memcpy(&ConnectIn.ExportName, ExportName, min(strlen(ExportName)+1, MAX_NAME_LENGTH));
     memcpy(&ConnectIn.SerialNumber, InstanceName, min(strlen(InstanceName)+1, MAX_NAME_LENGTH));
     ConnectIn.DiskSize = DiskSize;
-    ConnectIn.IoControlCode = IOCTL_WNBDVM_MAP;
+    ConnectIn.IoControlCode = IOCTL_WNBD_MAP;
     ConnectIn.Pid = Pid;
     ConnectIn.MustNegotiate = MustNegotiate;
     ConnectIn.BlockSize = 0;
@@ -211,7 +211,7 @@ WnbdUnmap(PCHAR InstanceName)
     }
 
     memcpy(&DisconnectIn.InstanceName[0], InstanceName, min(strlen(InstanceName), MAX_NAME_LENGTH));
-    DisconnectIn.IoControlCode = IOCTL_WNBDVM_UNMAP;
+    DisconnectIn.IoControlCode = IOCTL_WNBD_UNMAP;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &DisconnectIn, sizeof(USER_IN), NULL, 0, &BytesReturned, NULL);
@@ -253,7 +253,7 @@ WnbdList(PGET_LIST_OUT* Output)
         Status = ERROR_NOT_ENOUGH_MEMORY;
     }
     memset(Buffer, 0, 65000);
-    Command.IoCode = IOCTL_WNBDVM_LIST;
+    Command.IoCode = IOCTL_WNBD_LIST;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), Buffer, 65000, &BytesReturned, NULL);
@@ -337,7 +337,7 @@ WnbdSetDebug(UINT32 LogLevel)
         goto Exit;
     }
 
-    Command.IoCode = IOCTL_WNBDVM_DEBUG;
+    Command.IoCode = IOCTL_WNBD_DEBUG;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);

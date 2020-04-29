@@ -524,14 +524,14 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
 
         switch(Code->IoCode) {
 
-        case IOCTL_WNBDVM_PORT:
+        case IOCTL_WNBD_PORT:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVMPORT_SCSIPORT");
             Status = STATUS_SUCCESS;
             }
             break;
 
-        case IOCTL_WNBDVM_MAP:
+        case IOCTL_WNBD_MAP:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_MAP");
             PUSER_IN Info = (PUSER_IN) Irp->AssociatedIrp.SystemBuffer;
@@ -565,7 +565,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             }
             break;
 
-        case IOCTL_WNBDVM_UNMAP:
+        case IOCTL_WNBD_UNMAP:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_UNMAP");
             PUSER_IN Info = (PUSER_IN) Irp->AssociatedIrp.SystemBuffer;
@@ -601,7 +601,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             }
             break;
 
-        case IOCTL_WNBDVM_LIST:
+        case IOCTL_WNBD_LIST:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_LIST");
             if(!Irp->AssociatedIrp.SystemBuffer || CHECK_O_LOCATION(IoLocation, GET_LIST_OUT)) {
@@ -617,7 +617,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             }
             break;
 
-        case IOCTL_WNBDVM_DEBUG:
+        case IOCTL_WNBD_DEBUG:
         {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_DEBUG");
             WCHAR* DebugKey = L"DebugLogLevel";
