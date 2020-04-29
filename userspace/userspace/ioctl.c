@@ -233,7 +233,7 @@ WnbdList(PDISK_INFO_LIST* Output)
 {
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
-    DWORD BytesReturned = 0;
+    DWORD Length = 0, BytesReturned = 0;
     PUCHAR Buffer = NULL;
     USER_COMMAND Command = { 0 };
     BOOL DevStatus = FALSE;
@@ -247,16 +247,20 @@ WnbdList(PDISK_INFO_LIST* Output)
         goto Exit;
     }
 
-    Buffer = malloc(65000);
+    Command.IoCode = IOCTL_WNBD_LIST;
+    Length = 0;
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command), NULL, 0, &Length, NULL);
+
+    Buffer = malloc(Length);
     if (!Buffer) {
         CloseHandle(WnbdDriverHandle);
         Status = ERROR_NOT_ENOUGH_MEMORY;
     }
-    memset(Buffer, 0, 65000);
-    Command.IoCode = IOCTL_WNBD_LIST;
+    memset(Buffer, 0, Length);
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &Command, sizeof(Command), Buffer, 65000, &BytesReturned, NULL);
+        &Command, sizeof(Command), Buffer, Length, &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();

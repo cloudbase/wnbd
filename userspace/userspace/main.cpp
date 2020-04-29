@@ -76,6 +76,8 @@ int main(int argc, PCHAR argv[])
                 if (d.size() == 1) {
                     DiskInfo temp = d[0];
                     printf("%d\t\t\n", temp.Index);
+                } else {
+                    printf("\t\t\n");
                 }
             }
             ReleaseWMI();
