@@ -19,7 +19,7 @@ int Syntax(void)
     return -1;
 }
 
-void GLAToString(PCHAR Prefix)
+void GLAToString()
 {
     LPVOID LpMsgBuf;
 
@@ -35,7 +35,7 @@ void GLAToString(PCHAR Prefix)
         NULL
     );
 
-    printf("%s: %s", Prefix, (LPTSTR)LpMsgBuf);
+    printf("%s", (LPTSTR)LpMsgBuf);
 
     LocalFree(LpMsgBuf);
 }
@@ -51,7 +51,7 @@ GetWnbdDriverHandle(VOID)
     ULONG GLA = { 0 };
     HANDLE WnbdDriverHandle = { 0 };
     DWORD BytesReturned = { 0 };
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = { 0 };
 
     DevInfo = SetupDiGetClassDevs(&WNBD_GUID, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
@@ -103,7 +103,7 @@ GetWnbdDriverHandle(VOID)
             GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
             FILE_FLAG_OVERLAPPED, 0);
 
-        Command.IoCode = IOCTL_WNBDVM_PORT;
+        Command.IoCode = IOCTL_WNBD_PORT;
 
         DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
             &Command, sizeof(Command), &Command, sizeof(Command), &BytesReturned, NULL);
@@ -114,7 +114,7 @@ GetWnbdDriverHandle(VOID)
             printf("\\\\.\\SCSI%s: error:%d.\n", DevInterfaceDetailData->DevicePath, error);
             CloseHandle(WnbdDriverHandle);
             WnbdDriverHandle = INVALID_HANDLE_VALUE;
-            GLAToString("wnbd-client");
+            GLAToString();
             continue;
         } else {
             SetupDiDestroyDeviceInfoList(DevInfo);
@@ -150,7 +150,7 @@ WnbdMap(PCHAR InstanceName,
         UINT64 DiskSize,
         BOOLEAN MustNegotiate)
 {
-    USER_IN ConnectIn = { 0 };
+    CONNECTION_INFO ConnectIn = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -162,7 +162,7 @@ WnbdMap(PCHAR InstanceName,
         Status = GetLastError();
         printf("Could not get WNBD driver handle. Can not send requests.\n");
         printf("The driver maybe is not installed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
         goto Exit;
     }
 
@@ -172,18 +172,18 @@ WnbdMap(PCHAR InstanceName,
     memcpy(&ConnectIn.ExportName, ExportName, min(strlen(ExportName)+1, MAX_NAME_LENGTH));
     memcpy(&ConnectIn.SerialNumber, InstanceName, min(strlen(InstanceName)+1, MAX_NAME_LENGTH));
     ConnectIn.DiskSize = DiskSize;
-    ConnectIn.IoControlCode = IOCTL_WNBDVM_MAP;
+    ConnectIn.IoControlCode = IOCTL_WNBD_MAP;
     ConnectIn.Pid = Pid;
     ConnectIn.MustNegotiate = MustNegotiate;
     ConnectIn.BlockSize = 0;
 
-    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP, &ConnectIn, sizeof(USER_IN),
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP, &ConnectIn, sizeof(CONNECTION_INFO),
         NULL, 0, &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();
         printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
     }
 
     CloseHandle(WnbdDriverHandle);
@@ -195,7 +195,7 @@ Exit:
 DWORD
 WnbdUnmap(PCHAR InstanceName)
 {
-    USER_IN DisconnectIn = { 0 };
+    CONNECTION_INFO DisconnectIn = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -206,20 +206,20 @@ WnbdUnmap(PCHAR InstanceName)
         Status = GetLastError();
         printf("Could not get WNBD driver handle. Can not send requests.\n");
         printf("The driver maybe is not installed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
         goto Exit;
     }
 
     memcpy(&DisconnectIn.InstanceName[0], InstanceName, min(strlen(InstanceName), MAX_NAME_LENGTH));
-    DisconnectIn.IoControlCode = IOCTL_WNBDVM_UNMAP;
+    DisconnectIn.IoControlCode = IOCTL_WNBD_UNMAP;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &DisconnectIn, sizeof(USER_IN), NULL, 0, &BytesReturned, NULL);
+        &DisconnectIn, sizeof(CONNECTION_INFO), NULL, 0, &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();
         printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
     }
 
     CloseHandle(WnbdDriverHandle);
@@ -229,13 +229,13 @@ Exit:
 
 
 DWORD
-WnbdList(PGET_LIST_OUT* Output)
+WnbdList(PDISK_INFO_LIST* Output)
 {
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
     DWORD Status = ERROR_SUCCESS;
-    DWORD BytesReturned = 0;
+    DWORD Length = 0, BytesReturned = 0;
     PUCHAR Buffer = NULL;
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = FALSE;
 
     WnbdDriverHandle = GetWnbdDriverHandle();
@@ -243,28 +243,32 @@ WnbdList(PGET_LIST_OUT* Output)
         Status = GetLastError();
         printf("Could not get WNBD driver handle. Can not send requests.\n");
         printf("The driver maybe is not installed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
         goto Exit;
     }
 
-    Buffer = malloc(65000);
+    Command.IoCode = IOCTL_WNBD_LIST;
+    Length = 0;
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command), NULL, 0, &Length, NULL);
+
+    Buffer = malloc(Length);
     if (!Buffer) {
         CloseHandle(WnbdDriverHandle);
         Status = ERROR_NOT_ENOUGH_MEMORY;
     }
-    memset(Buffer, 0, 65000);
-    Command.IoCode = IOCTL_WNBDVM_LIST;
+    memset(Buffer, 0, Length);
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &Command, sizeof(Command), Buffer, 65000, &BytesReturned, NULL);
+        &Command, sizeof(Command), Buffer, Length, &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();
         printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
     }
 
-    PGET_LIST_OUT ActiveConnectList = (PGET_LIST_OUT)Buffer;
+    PDISK_INFO_LIST ActiveConnectList = (PDISK_INFO_LIST)Buffer;
 
     if (Buffer && BytesReturned && ActiveConnectList->ActiveListCount) {
         Status = ERROR_SUCCESS;
@@ -273,7 +277,7 @@ WnbdList(PGET_LIST_OUT* Output)
         free(Buffer);
         Buffer = NULL;
     }
-    *Output = (PGET_LIST_OUT)Buffer;
+    *Output = (PDISK_INFO_LIST)Buffer;
 Exit:
     return Status;
 }
@@ -291,7 +295,7 @@ HKEY OpenKey(HKEY RootKey, LPCTSTR StringKey, BOOLEAN Create)
 
     if (ERROR_SUCCESS != Status) {
         printf("Could not open registry key: %s\n", StringKey);
-        GLAToString("OpenKey");
+        GLAToString();
     }
 
     return Key;
@@ -302,7 +306,7 @@ DWORD SetVal(HKEY RootKey, LPCTSTR StringKey, DWORD* Value)
     DWORD status = RegSetValueExA(RootKey, StringKey, 0, REG_DWORD, (LPBYTE)Value, sizeof(DWORD));
     if (ERROR_SUCCESS != status) {
         printf("Could not set registry value: %s\n", StringKey);
-        GLAToString("SetVal");
+        GLAToString();
         return status;
     }
 
@@ -316,7 +320,7 @@ WnbdSetDebug(UINT32 LogLevel)
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
     PUCHAR Buffer = NULL;
-    USER_COMMAND Command = { 0 };
+    WNBD_COMMAND Command = { 0 };
     BOOL DevStatus = FALSE;
     PCHAR Service = "SYSTEM\\CurrentControlSet\\Services\\wnbd\\";
 
@@ -333,11 +337,11 @@ WnbdSetDebug(UINT32 LogLevel)
         Status = GetLastError();
         printf("Could not get WNBD driver handle. Can not send requests.\n");
         printf("The driver maybe is not installed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
         goto Exit;
     }
 
-    Command.IoCode = IOCTL_WNBDVM_DEBUG;
+    Command.IoCode = IOCTL_WNBD_DEBUG;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
@@ -345,7 +349,7 @@ WnbdSetDebug(UINT32 LogLevel)
     if (!DevStatus) {
         Status = GetLastError();
         printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
-        GLAToString("wnbd-client");
+        GLAToString();
     }
 
 Exit:

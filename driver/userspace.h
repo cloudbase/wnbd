@@ -21,7 +21,7 @@ typedef struct _USER_ENTRY {
     BOOLEAN                            Connected;
     UINT64                             DiskSize;
     UINT16                             BlockSize;
-    USER_IN                            UserInformation;
+    CONNECTION_INFO                    UserInformation;
 } USER_ENTRY, *PUSER_ENTRY;
 
 typedef struct _SCSI_DEVICE_INFORMATION
@@ -52,12 +52,12 @@ WnbdParseUserIOCTL(_In_ PVOID GlobalHandle,
 
 BOOLEAN
 WnbdFindConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                   _In_ PUSER_IN Info,
+                   _In_ PCONNECTION_INFO Info,
                    _Maybenull_ PUSER_ENTRY* Entry);
 
 NTSTATUS
 WnbdCreateConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                     _In_ PUSER_IN Info);
+                     _In_ PCONNECTION_INFO Info);
 
 NTSTATUS
 WnbdDeleteConnectionEntry(_In_ PUSER_ENTRY Entry);
