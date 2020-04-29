@@ -55,7 +55,7 @@ int main(int argc, PCHAR argv[])
         InstanceName = argv[2];
         WnbdUnmap(InstanceName);
     } else if (argc == 2 && !strcmp(Command, "list")) {
-        PGET_LIST_OUT Output = NULL;
+        PDISK_INFO_LIST Output = NULL;
         DWORD Status = WnbdList(&Output);
         std::cout << "Status: " << Status << std::endl;
         if (!Output) {

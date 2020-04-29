@@ -31,7 +31,7 @@ VOID WnbdInitScsiIds()
 _Use_decl_annotations_
 BOOLEAN
 WnbdFindConnection(PGLOBAL_INFORMATION GInfo,
-                   PUSER_IN Info,
+                   PCONNECTION_INFO Info,
                    PUSER_ENTRY* Entry)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -184,7 +184,7 @@ Exit:
 }
 
 VOID
-WnbdSetNullUserInput(PUSER_IN Info)
+WnbdSetNullUserInput(PCONNECTION_INFO Info)
 {
     Info->InstanceName[MAX_NAME_LENGTH - 1] = '\0';
     Info->Hostname[MAX_NAME_LENGTH - 1] = '\0';
@@ -196,7 +196,7 @@ WnbdSetNullUserInput(PUSER_IN Info)
 _Use_decl_annotations_
 NTSTATUS
 WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
-                     PUSER_IN Info)
+                     PCONNECTION_INFO Info)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(GInfo);
@@ -227,7 +227,7 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
     }
 
     RtlZeroMemory(NewEntry,sizeof(USER_ENTRY));
-    RtlCopyMemory(&NewEntry->UserInformation, Info, sizeof(USER_IN));
+    RtlCopyMemory(&NewEntry->UserInformation, Info, sizeof(CONNECTION_INFO));
     InsertTailList(&GInfo->ConnectionList, &NewEntry->ListEntry);
     Added = TRUE;
 
@@ -390,7 +390,7 @@ WnbdSetDeviceMissing(_In_ PVOID Handle,
 
 NTSTATUS
 WnbdDeleteConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                     _In_ PUSER_IN Info)
+                     _In_ PCONNECTION_INFO Info)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(GInfo);
@@ -454,22 +454,22 @@ WnbdEnumerateActiveConnections(PGLOBAL_INFORMATION GInfo,
 
     PUSER_ENTRY SearchEntry;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
-    PGET_LIST_OUT OutList = (PGET_LIST_OUT) Irp->AssociatedIrp.SystemBuffer;
-    PLIST_ENTRY_OUT OutEntry = &OutList->ActiveEntry[0];
+    PDISK_INFO_LIST OutList = (PDISK_INFO_LIST) Irp->AssociatedIrp.SystemBuffer;
+    PDISK_INFO OutEntry = &OutList->ActiveEntry[0];
     ULONG Remaining;
     NTSTATUS status = STATUS_BUFFER_OVERFLOW;
 
     OutList->ActiveListCount = 0;
 
     Remaining = (IoLocation->Parameters.DeviceIoControl.OutputBufferLength -
-        sizeof(ULONG))/sizeof(LIST_ENTRY_OUT);
+        sizeof(ULONG))/sizeof(DISK_INFO);
 
     SearchEntry = (PUSER_ENTRY)GInfo->ConnectionList.Flink;
 
     while((SearchEntry != (PUSER_ENTRY) &GInfo->ConnectionList.Flink) && Remaining) {
         OutEntry = &OutList->ActiveEntry[OutList->ActiveListCount];
-        RtlZeroMemory(OutEntry, sizeof(LIST_ENTRY_OUT));
-        RtlCopyMemory(OutEntry, &SearchEntry->UserInformation, sizeof(USER_IN));
+        RtlZeroMemory(OutEntry, sizeof(DISK_INFO));
+        RtlCopyMemory(OutEntry, &SearchEntry->UserInformation, sizeof(CONNECTION_INFO));
 
         OutEntry->BusNumber = (USHORT)SearchEntry->BusIndex;
         OutEntry->TargetId = (USHORT)SearchEntry->TargetIndex;
@@ -491,7 +491,7 @@ WnbdEnumerateActiveConnections(PGLOBAL_INFORMATION GInfo,
         status = STATUS_SUCCESS;
     }
 
-    Irp->IoStatus.Information = (OutList->ActiveListCount * sizeof(LIST_ENTRY_OUT)) + sizeof(ULONG);
+    Irp->IoStatus.Information = (OutList->ActiveListCount * sizeof(DISK_INFO)) + sizeof(ULONG);
     WNBD_LOG_LOUD(": Exit");
 
     return status;
@@ -534,8 +534,8 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         case IOCTL_WNBD_MAP:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_MAP");
-            PUSER_IN Info = (PUSER_IN) Irp->AssociatedIrp.SystemBuffer;
-            if(NULL == Info || CHECK_I_LOCATION(IoLocation, USER_IN)) {
+            PCONNECTION_INFO Info = (PCONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
+            if(NULL == Info || CHECK_I_LOCATION(IoLocation, CONNECTION_INFO)) {
                 WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad input buffer",
                     IoLocation->Parameters.DeviceIoControl.IoControlCode);
                 Status = STATUS_INVALID_PARAMETER;
@@ -568,9 +568,9 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         case IOCTL_WNBD_UNMAP:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_UNMAP");
-            PUSER_IN Info = (PUSER_IN) Irp->AssociatedIrp.SystemBuffer;
+            PCONNECTION_INFO Info = (PCONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
 
-            if(!Info || CHECK_I_LOCATION(IoLocation, USER_IN)) {
+            if(!Info || CHECK_I_LOCATION(IoLocation, CONNECTION_INFO)) {
                 WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad input buffer",
                     IoLocation->Parameters.DeviceIoControl.IoControlCode);
                 Status = STATUS_INVALID_PARAMETER;
@@ -604,7 +604,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         case IOCTL_WNBD_LIST:
             {
             WNBD_LOG_LOUD("IOCTL_WNBDVM_LIST");
-            if(!Irp->AssociatedIrp.SystemBuffer || CHECK_O_LOCATION(IoLocation, GET_LIST_OUT)) {
+            if(!Irp->AssociatedIrp.SystemBuffer || CHECK_O_LOCATION(IoLocation, DISK_INFO_LIST)) {
                 WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad output buffer",
                     IoLocation->Parameters.DeviceIoControl.IoControlCode);
                 break;
