@@ -25,12 +25,18 @@ UCHAR DrainDeviceQueue(PVOID DeviceExtension,
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_SCSI_DEVICE Device;
     PWNBD_LU_EXTENSION LuExtension;
+    PWNBD_EXTENSION DevExtension = (PWNBD_EXTENSION)DeviceExtension;
     KIRQL Irql;
-    KeAcquireSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, &Irql);
+    KSPIN_LOCK DevLock = DevExtension->DeviceListLock;
+    KeAcquireSpinLock(&DevLock, &Irql);
 
-    WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-        WnbdToStringSrbCdbOperation(SrbGetCdb(Srb)->AsByte[0]),
-        Srb, SrbGetCdb(Srb)->AsByte[0], Srb->PathId, Srb->TargetId, Srb->Lun);
+    if (SrbGetCdb(Srb)) {
+        BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
+
+        WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+            WnbdToStringSrbCdbOperation(CdbValue),
+            Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+    }
 
     LuExtension = (PWNBD_LU_EXTENSION)
         StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun);
@@ -78,7 +84,7 @@ UCHAR DrainDeviceQueue(PVOID DeviceExtension,
     SrbStatus = SRB_STATUS_SUCCESS;
 
 Exit:
-    KeReleaseSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, Irql);
+    KeReleaseSpinLock(&DevLock, Irql);
 
     WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
@@ -151,19 +157,23 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     ASSERT(Srb);
     ASSERT(Complete);
 
+    NTSTATUS Status = STATUS_SUCCESS;
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_SCSI_DEVICE Device;
     PWNBD_LU_EXTENSION LuExtension;
-    NTSTATUS Status = STATUS_SUCCESS;
+    PWNBD_EXTENSION DevExtension = (PWNBD_EXTENSION)DeviceExtension;
     KIRQL Irql;
-    KeAcquireSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, &Irql);
-
+    KSPIN_LOCK DevLock = DevExtension->DeviceListLock;
+    KeAcquireSpinLock(&DevLock, &Irql);
     *Complete = TRUE;
 
-    WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-                  WnbdToStringSrbCdbOperation(SrbGetCdb(Srb)->AsByte[0]),
-                  Srb, SrbGetCdb(Srb)->AsByte[0], Srb->PathId, Srb->TargetId, Srb->Lun);
+    if (SrbGetCdb(Srb)) {
+        BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
+        WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+            WnbdToStringSrbCdbOperation(CdbValue),
+            Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+    }
     LuExtension = (PWNBD_LU_EXTENSION)
         StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun );
 
@@ -203,7 +213,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     }
 
 Exit:
-    KeReleaseSpinLock(&((PWNBD_EXTENSION)DeviceExtension)->DeviceListLock, Irql);
+    KeReleaseSpinLock(&DevLock, Irql);
     WNBD_LOG_LOUD(": Exit");
 
     return SrbStatus;

@@ -11,6 +11,7 @@ ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Provider=%wnbd%
 DriverVer = 02/17/2020,2.24.28.428
 CatalogFile = wnbd.cat
+PnpLockdown = 1
 
 [DestinationDirs]
 DefaultDestDir = 12
@@ -50,8 +51,8 @@ LoadOrderGroup = SCSI Miniport
 AddReg         = pnpsafe_isa_addreg
 
 [pnpsafe_isa_addreg]
-HKR,,"BreakOnEntry", %REG_DWORD%,  0x00000000
-HKR,"Parameters","BusType",%REG_DWORD%,0x0000000E
+HKR, "Parameters\PnpInterface", "5", %REG_DWORD%, 0x00000001
+HKR, "Parameters", "BusType", %REG_DWORD%, 0x0000000E
 
 [Strings]
 wnbd                   = "SUSE LLC"
