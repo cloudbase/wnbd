@@ -33,6 +33,6 @@ if ($status -eq $false) {
 & $devconBin remove "root\wnbd"
 
 pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
-    % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] }
+    % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] /force }
 
 & $devconBin install $wnbdInf root\wnbd
