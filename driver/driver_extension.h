@@ -21,6 +21,7 @@ typedef struct _PGLOBAL_INFORMATION
 
 VOID
 WnbdDeleteGlobalInformation(_Inout_ PVOID PGlobalInformation);
+#pragma alloc_text (PAGE, WnbdDeleteGlobalInformation)
 
 NTSTATUS
 WnbdInitializeGlobalInformation(_In_ PVOID Handle,

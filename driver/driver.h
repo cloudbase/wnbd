@@ -18,7 +18,6 @@
 #define WNBD_INQUIRY_PRODUCT_REVISION    "V0.1"
 #define WNBD_INQUIRY_VENDOR_SPECIFIC     "WNBD_DISK_SPECIFIC_VENDOR_STRING"
 
-_Use_decl_annotations_
 BOOLEAN
 WNBDReadRegistryValue(_In_ PUNICODE_STRING RegistryPath,
                       _In_ PWSTR Key,

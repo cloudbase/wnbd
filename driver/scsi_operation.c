@@ -338,6 +338,7 @@ WnbdPendElement(_In_ PVOID DeviceExtension,
     WNBD_LOG_LOUD(": Enter");
     NTSTATUS Status = STATUS_SUCCESS;
     PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION)ScsiDeviceExtension;
+
     PSRB_QUEUE_ELEMENT Element = (PSRB_QUEUE_ELEMENT)ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(SRB_QUEUE_ELEMENT), 'DBNs');
     if (NULL == Element) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -350,9 +351,9 @@ WnbdPendElement(_In_ PVOID DeviceExtension,
     Element->Srb = Srb;
     Element->StartingLbn = StartingLbn;
     Element->ReadLength = (ULONG)DataLength;
-    ExInterlockedInsertTailList(&ScsiInfo->ListHead, &Element->Link, &ScsiInfo->ListLock);
-
-    KeSetEvent(&ScsiInfo->DeviceEvent, (KPRIORITY)0, FALSE);
+    Element->Aborted = 0;
+    ExInterlockedInsertTailList(&ScsiInfo->RequestListHead, &Element->Link, &ScsiInfo->RequestListLock);
+    KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
     Status = STATUS_PENDING;
 
 Exit:
@@ -392,6 +393,13 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
         UINT32 Access = 0;
         SrbCdbGetRange(Cdb, &BlockAddress, &BlockCount, &Access);
         DataLength = BlockCount * ScsiInfo->UserEntry->BlockSize;
+        if (DataLength < Srb->DataTransferLength &&
+            (Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE || Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE16)) {
+            WNBD_LOG_ERROR("STATUS_BUFFER_TOO_SMALL");
+            Srb->SrbStatus = SRB_STATUS_ABORTED;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
         Status = WnbdPendElement(DeviceExtension, ScsiDeviceExtension, Srb,
             BlockAddress * ScsiInfo->UserEntry->BlockSize, DataLength);
         }
@@ -420,13 +428,13 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
     PCDB Cdb = (PCDB) &Srb->Cdb;
     NTSTATUS status = STATUS_SUCCESS;
     PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)ScsiDeviceExtension;
-    UINT16 BlockSize = Info->UserEntry->BlockSize;
-    UINT64 BlockCount = WnbdGetBlockCount(Info->UserEntry->DiskSize, BlockSize);
-
-    if (Info->SoftTerminateDevice || Info->HardTerminateDevice) {
+    if (!Info || !Info->UserEntry || Info->SoftTerminateDevice || Info->HardTerminateDevice) {
         Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         return status;
     }
+    UINT16 BlockSize = Info->UserEntry->BlockSize;
+    UINT64 BlockCount = WnbdGetBlockCount(Info->UserEntry->DiskSize, BlockSize);
+
 
     WNBD_LOG_LOUD("Processing %s command",
                   WnbdToStringSrbCdbOperation(Cdb->AsByte[0]));

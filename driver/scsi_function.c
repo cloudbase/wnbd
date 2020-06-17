@@ -14,11 +14,72 @@
 #include "util.h"
 #include "userspace.h"
 
-UCHAR DrainDeviceQueue(PVOID DeviceExtension,
-                       PSCSI_REQUEST_BLOCK Srb)
+VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
+                      PKSPIN_LOCK ListLock, PSCSI_DEVICE_INFORMATION DeviceInformation)
+{
+    WNBD_LOG_LOUD(": Enter");
+
+    PLIST_ENTRY Request;
+    PSRB_QUEUE_ELEMENT Element;
+
+    while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
+        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
+
+        Element->Srb->DataTransferLength = 0;
+        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+        Element->Aborted = 1;
+
+        InterlockedDecrement(&Device->OutstandingIoCount);
+        WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
+            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
+            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+        StorPortNotification(RequestComplete, Element->DeviceExtension,
+                             Element->Srb);
+        ExFreePool(Element);
+
+        KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
+    }
+}
+
+
+VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
+                             PSCSI_DEVICE_INFORMATION DeviceInformation)
+{
+    WNBD_LOG_LOUD(": Enter");
+
+    PSRB_QUEUE_ELEMENT Element;
+    PLIST_ENTRY ItemLink, ItemNext;
+    KIRQL Irql = { 0 };
+
+    KeAcquireSpinLock(ListLock, &Irql);
+    LIST_FORALL_SAFE(ListHead, ItemLink, ItemNext) {
+        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
+
+        Element->Srb->DataTransferLength = 0;
+        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+
+        // If it's marked as aborted, it means that Storport was already notified.
+        // Double completion leads to a crash.
+        if(!Element->Aborted) {
+            WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
+            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
+            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+            StorPortNotification(RequestComplete, Element->DeviceExtension,
+                                 Element->Srb);
+            Element->Aborted = 1;
+
+            // TODO: should we release the semaphore for aborted but still pending requests?
+            KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
+        }
+    }
+    KeReleaseSpinLock(ListLock, Irql);
+}
+
+UCHAR DrainDeviceQueues(PVOID DeviceExtension,
+                        PSCSI_REQUEST_BLOCK Srb)
 
 {
-    WNBD_LOG_ERROR(": Enter");
+    WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
@@ -60,26 +121,22 @@ UCHAR DrainDeviceQueue(PVOID DeviceExtension,
         goto Exit;
     }
     if (Device->Missing) {
+        PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
         WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
             Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+        /// Drain the queue here because the device doesn't theoretically exist;
+        DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
+        DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock, Info);
         goto Exit;
     }
     PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
-    PLIST_ENTRY Request;
-    PSRB_QUEUE_ELEMENT Element;
 
-    while ((Request = ExInterlockedRemoveHeadList(&Info->ListHead, &Info->ListLock)) != NULL) {
-        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
-
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-
-        InterlockedDecrement(&Device->OutstandingIoCount);
-        WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
-            Element->Srb, Element->Srb->SrbStatus, WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-        StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
-        ExFreePool(Element);
-    }
+    DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
+    // Should we set those in-flight requests to SRB_STATUS_ABORT_FAILED?
+    // We can't set them to SRB_STATUS_ABORTED because those requests have been
+    // submitted and will most probably complete.
+    // DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock);
+    SendAbortFailedForQueue(&Info->ReplyListHead, &Info->ReplyListLock, Info);
 
     SrbStatus = SRB_STATUS_SUCCESS;
 
@@ -100,7 +157,7 @@ WnbdAbortFunction(_In_ PVOID DeviceExtension,
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
-    UCHAR SrbStatus = DrainDeviceQueue(DeviceExtension, Srb);
+    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
 
     WNBD_LOG_LOUD(": Exit");
 
@@ -117,7 +174,7 @@ WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
-    UCHAR SrbStatus = DrainDeviceQueue(DeviceExtension, Srb);
+    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
 
     WNBD_LOG_LOUD(": Exit");
 

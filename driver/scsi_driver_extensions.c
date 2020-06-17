@@ -113,7 +113,10 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     /*
      * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/drivers/ff563901(v%3Dvs.85)
      */
-    ConfigInfo->MaximumTransferLength = SP_UNINITIALIZED_VALUE;
+    // We're receiving 0 lengths for SCSIOP_READ|SCSIOP_WRITE when setting
+    // MaximumTransferLength to SP_UNINITIALIZED_VALUE. Keeping transfer lengths
+    // smaller than 32MB avoids this issue.
+    ConfigInfo->MaximumTransferLength = WNBD_MAX_TRANSFER_LENGTH;
     ConfigInfo->NumberOfPhysicalBreaks = SP_UNINITIALIZED_VALUE;
     ConfigInfo->AlignmentMask = FILE_BYTE_ALIGNMENT;
     ConfigInfo->NumberOfBuses = MAX_NUMBER_OF_SCSI_BUSES;
