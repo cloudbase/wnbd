@@ -217,6 +217,10 @@ WnbdProcessDeviceThreadRequestsReads(_In_ PSCSI_DEVICE_INFORMATION DeviceInforma
                 &Status,
                 Element->Tag);
 
+    InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
+    InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
+    InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
+
     WNBD_LOG_LOUD(": Exit");
     return Status;
 }
@@ -245,6 +249,10 @@ WnbdProcessDeviceThreadRequestsWrites(_In_ PSCSI_DEVICE_INFORMATION DeviceInform
                      &DeviceInformation->WritePreallocatedBufferLength,
                      Element->Tag);
     }
+
+    InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
+    InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
+    InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
@@ -540,9 +548,13 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
     }
 
+    InterlockedIncrement64(&DeviceInformation->Stats.TotalReceivedIOReplies);
+    InterlockedDecrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
+
     if(Element->Aborted) {
         WNBD_LOG_WARN("Got reply for aborted request: %p 0x%llx.",
                       Element->Srb, Element->Tag);
+        InterlockedIncrement64(&DeviceInformation->Stats.CompletedAbortedIORequests);
     }
     else {
         WNBD_LOG_LOUD("Successfully completed request %p 0x%llx.",
