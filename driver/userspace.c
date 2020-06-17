@@ -204,6 +204,8 @@ WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
     Status = ObReferenceObjectByHandle(reply_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
         &ScsiInfo->DeviceReplyThread, NULL);
 
+    RtlZeroMemory(&ScsiInfo->Stats, sizeof(WNBD_STATS));
+
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
@@ -468,6 +470,7 @@ Reply:
                     Element->Srb);
             }
             ExFreePool(Element);
+            InterlockedDecrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
         }
         Element = NULL;
     }
@@ -719,6 +722,59 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
                 (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT), &temp)) {
                 WnbdSetLogLevel(temp);
             }
+        }
+        break;
+
+        case IOCTL_WNBD_STATS:
+        {
+            // Retrieve per mapping stats. TODO: consider providing global stats.
+            WNBD_LOG_LOUD("IOCTL_WNBDVM_STATS");
+            PCONNECTION_INFO Info = (PCONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
+
+            if(!Info || CHECK_I_LOCATION(IoLocation, CONNECTION_INFO)) {
+                WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad input buffer",
+                    IoLocation->Parameters.DeviceIoControl.IoControlCode);
+                Status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            if(!wcslen((PWSTR) &Info->InstanceName)) {
+                WNBD_LOG_ERROR(": IOCTL = 0x%x. InstanceName Error",
+                    IoLocation->Parameters.DeviceIoControl.IoControlCode);
+                Status = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            KeEnterCriticalRegion();
+            ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
+            if(!Irp->AssociatedIrp.SystemBuffer || CHECK_O_LOCATION(IoLocation, WNBD_STATS)) {
+                WNBD_LOG_ERROR(": IOCTL = 0x%x. Bad output buffer",
+                    IoLocation->Parameters.DeviceIoControl.IoControlCode);
+
+                Irp->IoStatus.Information = sizeof(WNBD_STATS);
+                ExReleaseResourceLite(&GInfo->ConnectionMutex);
+                KeLeaveCriticalRegion();
+                break;
+            }
+
+            PUSER_ENTRY DiskEntry = NULL;
+            if(!WnbdFindConnection(GInfo, Info, &DiskEntry)) {
+                ExReleaseResourceLite(&GInfo->ConnectionMutex);
+                KeLeaveCriticalRegion();
+                Status = STATUS_OBJECT_NAME_NOT_FOUND;
+                WNBD_LOG_ERROR(": IOCTL = 0x%x. Connection does not exist",
+                    IoLocation->Parameters.DeviceIoControl.IoControlCode);
+                break;
+            }
+
+            PWNBD_STATS OutStatus = (PWNBD_STATS) Irp->AssociatedIrp.SystemBuffer;
+            RtlCopyMemory(OutStatus, &DiskEntry->ScsiInformation->Stats, sizeof(WNBD_STATS));
+
+            Irp->IoStatus.Information = sizeof(WNBD_STATS);
+            ExReleaseResourceLite(&GInfo->ConnectionMutex);
+            KeLeaveCriticalRegion();
+
+            Status = STATUS_SUCCESS;
         }
         break;
 

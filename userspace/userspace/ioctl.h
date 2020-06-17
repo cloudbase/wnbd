@@ -31,6 +31,9 @@ DWORD
 WnbdUnmap(PCHAR instanceName);
 
 DWORD
+WnbdStats(PCHAR instanceName);
+
+DWORD
 WnbdMap(PCHAR InstanceName,
         PCHAR HostName,
         PCHAR PortName,

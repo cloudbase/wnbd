@@ -47,6 +47,9 @@ int main(int argc, PCHAR argv[])
     } else if (argc == 3 && !strcmp(Command, "unmap")) {
         InstanceName = argv[2];
         WnbdUnmap(InstanceName);
+    } else if (argc == 3 && !strcmp(Command, "stats")) {
+        InstanceName = argv[2];
+        WnbdStats(InstanceName);
     } else if (argc == 2 && !strcmp(Command, "list")) {
         PDISK_INFO_LIST Output = NULL;
         DWORD Status = WnbdList(&Output);

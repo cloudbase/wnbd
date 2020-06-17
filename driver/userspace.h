@@ -61,6 +61,7 @@ typedef struct _SCSI_DEVICE_INFORMATION
     BOOLEAN                     HardTerminateDevice;
     BOOLEAN                     SoftTerminateDevice;
 
+    WNBD_STATS                  Stats;
     PVOID                       ReadPreallocatedBuffer;
     ULONG                       ReadPreallocatedBufferLength;
     PVOID                       WritePreallocatedBuffer;

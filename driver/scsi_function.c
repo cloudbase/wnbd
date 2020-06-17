@@ -37,6 +37,8 @@ VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
                              Element->Srb);
         ExFreePool(Element);
 
+        InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
+
         KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
     }
 }
@@ -67,6 +69,8 @@ VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
             StorPortNotification(RequestComplete, Element->DeviceExtension,
                                  Element->Srb);
             Element->Aborted = 1;
+
+            InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
 
             // TODO: should we release the semaphore for aborted but still pending requests?
             KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
