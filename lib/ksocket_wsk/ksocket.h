@@ -74,6 +74,12 @@ KsCreateDatagramSocket(
 
 NTSTATUS
 NTAPI
+KsDisconnectSocket(
+	_In_ PKSOCKET Socket
+);
+
+NTSTATUS
+NTAPI
 KsCloseSocket(
   _In_ PKSOCKET Socket
   );
