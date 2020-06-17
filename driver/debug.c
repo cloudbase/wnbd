@@ -20,6 +20,10 @@ _Use_decl_annotations_
 VOID
 WnbdSetLogLevel(UINT32 Level)
 {
+    // FIXME: This will actually override the log level of every log record.
+    // It's ok when you want to get debug messages, but can be confusing if you want
+    // to avoid info messages. If we set it to "1", all log messages become error messages.
+    // If we set it to "3", all messages become INFO messages.
     GlobalLogLevel = Level;
 }
 
@@ -31,8 +35,17 @@ WnbdLog(UINT32 Level,
         PCHAR Format,
         ...)
 {
+    UNREFERENCED_PARAMETER(Level);
+    UNREFERENCED_PARAMETER(FuncName);
+    UNREFERENCED_PARAMETER(Line);
+    UNREFERENCED_PARAMETER(Format);
+
     va_list Args;
     CHAR Buf[WNBD_LOG_BUFFER_SIZE];
+
+    if(GlobalLogLevel) {
+        Level = GlobalLogLevel - 1;
+    }
 
     if (Level > WnbdLogLevel) {
         return;
@@ -43,9 +56,5 @@ WnbdLog(UINT32 Level,
     RtlStringCbVPrintfA(Buf, sizeof(Buf), Format, Args);
     va_end(Args);
 
-    if (!GlobalLogLevel) {
-        DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
-    } else {
-        DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, GlobalLogLevel - 1, "%s:%lu %s\n", FuncName, Line, Buf);
-    }
+    DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
 }
