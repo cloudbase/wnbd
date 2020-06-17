@@ -8,6 +8,7 @@
 #define UTIL_H 1
 
 #include "common.h"
+#include "userspace.h"
 
 static const int MultiplyDeBruijnBitPosition2[32] =
 {
@@ -32,10 +33,22 @@ typedef struct _SRB_QUEUE_ELEMENT {
     UINT64 StartingLbn;
     ULONG ReadLength;
     PVOID DeviceExtension;
+    UINT64 Tag;
+    BOOLEAN Aborted;
 } SRB_QUEUE_ELEMENT, * PSRB_QUEUE_ELEMENT;
 
 VOID
-WnbdDeviceThread(_In_ PVOID Context);
+WnbdDeviceRequestThread(_In_ PVOID Context);
+#pragma alloc_text (PAGE, WnbdDeviceRequestThread)
+VOID
+WnbdDeviceReplyThread(_In_ PVOID Context);
+#pragma alloc_text (PAGE, WnbdDeviceReplyThread)
+BOOLEAN
+IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
+VOID
+WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
+VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
+VOID DisconnectConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
 
 #define LIST_FORALL_SAFE(_headPtr, _itemPtr, _nextPtr)                \
     for (_itemPtr = (_headPtr)->Flink, _nextPtr = (_itemPtr)->Flink;  \

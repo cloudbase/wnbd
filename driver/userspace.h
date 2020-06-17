@@ -11,6 +11,13 @@
 #include "driver_extension.h"
 #include "scsi_driver_extensions.h"
 #include "userspace_shared.h"
+#include "rbd_protocol.h"
+
+// TODO: make this configurable.
+#define WNBD_MAX_IN_FLIGHT_REQUESTS 255
+// For transfers larger than 32MB, we'll receive 0 sized buffers.
+#define WNBD_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
+#define WNBD_PREALLOC_BUFF_SZ (WNBD_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
 
 typedef struct _USER_ENTRY {
     LIST_ENTRY                         ListEntry;
@@ -26,7 +33,7 @@ typedef struct _USER_ENTRY {
 
 typedef struct _SCSI_DEVICE_INFORMATION
 {
-    PVOID                       Device;
+    PWNBD_SCSI_DEVICE           Device;
     PGLOBAL_INFORMATION         GlobalInformation;
 
     ULONG                       BusIndex;
@@ -36,14 +43,29 @@ typedef struct _SCSI_DEVICE_INFORMATION
 
     PUSER_ENTRY                 UserEntry;
     INT                         Socket;
+    INT                         SocketToClose;
+    ERESOURCE                   SocketLock;
 
-    LIST_ENTRY                  ListHead;
-    KSPIN_LOCK                  ListLock;
+    // TODO: rename as PendingReqListHead
+    LIST_ENTRY                  RequestListHead;
+    KSPIN_LOCK                  RequestListLock;
 
-    KEVENT                      DeviceEvent;
-    PVOID                       DeviceThread;
+    // TODO: rename as SubmittedReqListHead
+    LIST_ENTRY                  ReplyListHead;
+    KSPIN_LOCK                  ReplyListLock;
+
+    KSEMAPHORE                  RequestSemaphore;
+
+    KSEMAPHORE                  DeviceEvent;
+    PVOID                       DeviceRequestThread;
+    PVOID                       DeviceReplyThread;
     BOOLEAN                     HardTerminateDevice;
     BOOLEAN                     SoftTerminateDevice;
+
+    PVOID                       ReadPreallocatedBuffer;
+    ULONG                       ReadPreallocatedBufferLength;
+    PVOID                       WritePreallocatedBuffer;
+    ULONG                       WritePreallocatedBufferLength;
 } SCSI_DEVICE_INFORMATION, *PSCSI_DEVICE_INFORMATION;
 
 NTSTATUS
