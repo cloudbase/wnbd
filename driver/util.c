@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "rbd_protocol.h"
 #include "scsi_driver_extensions.h"
+#include "scsi_function.h"
 #include "scsi_trace.h"
 #include "srb_helper.h"
 #include "userspace.h"
@@ -32,6 +33,15 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
         Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
         PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)ScsiInfo->Device;
         InterlockedDecrement(&Device->OutstandingIoCount);
+        ExFreePool(Element);
+    }
+
+    while ((Request = ExInterlockedRemoveHeadList(&ScsiInfo->ReplyListHead, &ScsiInfo->ReplyListLock)) != NULL) {
+        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
+        Element->Srb->DataTransferLength = 0;
+        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+        PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)ScsiInfo->Device;
+        InterlockedDecrement(&Device->OutstandingIoCount);
         WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
             Element->Srb, Element->Srb->SrbStatus, WnbdToStringSrbStatus(Element->Srb->SrbStatus));
         StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
@@ -42,6 +52,8 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
         ExFreePool(ScsiInfo->InquiryData);
         ScsiInfo->InquiryData = NULL;
     }
+
+    ExDeleteResourceLite(&ScsiInfo->SocketMutex);
 
     if(ScsiInfo->UserEntry) {
         ExFreePool(ScsiInfo->UserEntry);
@@ -247,10 +259,10 @@ WnbdProcessDeviceThreadRequestsWrites(_In_ PSCSI_DEVICE_INFORMATION DeviceInform
 }
 
 VOID DisconnectConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(
+        &DeviceInformation->SocketMutex, TRUE);
     if (-1 != DeviceInformation->SocketToClose) {
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(
-            &DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);
         WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
         if (-1 != DeviceInformation->Socket) {
             Close(DeviceInformation->Socket);
@@ -260,16 +272,16 @@ VOID DisconnectConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
         DeviceInformation->Socket = -1;
         DeviceInformation->SocketToClose = -1;
         DeviceInformation->Device->Missing = TRUE;
-        ExReleaseResourceLite(&DeviceInformation->GlobalInformation->ConnectionMutex);
-        KeLeaveCriticalRegion();
     }
+    ExReleaseResourceLite(&DeviceInformation->SocketMutex);
+    KeLeaveCriticalRegion();
 }
 
 VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(
+        &DeviceInformation->SocketMutex, TRUE);
     if (-1 != DeviceInformation->Socket) {
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(
-            &DeviceInformation->GlobalInformation->ConnectionMutex, TRUE);
         WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
         DeviceInformation->SocketToClose = DeviceInformation->Socket;
         Disconnect(DeviceInformation->Socket);
@@ -277,9 +289,9 @@ VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
         if (DeviceInformation->Device) {
             DeviceInformation->Device->Missing = TRUE;
         }
-        ExReleaseResourceLite(&DeviceInformation->GlobalInformation->ConnectionMutex);
-        KeLeaveCriticalRegion();
     }
+    ExReleaseResourceLite(&DeviceInformation->SocketMutex);
+    KeLeaveCriticalRegion();
 }
 
 VOID
@@ -362,8 +374,6 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
                 STATUS_CONNECTION_ABORTED == Status) {
                 CloseConnection(DeviceInformation);
             }
-
-            StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
             ExFreePool(Element);
         }
     }
@@ -552,7 +562,8 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     else {
         WNBD_LOG_LOUD("Successfully completed request %p 0x%llx.",
                       Element->Srb, Element->Tag);
-        KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
+
+        WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
     }
 
 Exit:

@@ -44,6 +44,7 @@ typedef struct _SCSI_DEVICE_INFORMATION
     PUSER_ENTRY                 UserEntry;
     INT                         Socket;
     INT                         SocketToClose;
+    ERESOURCE                   SocketMutex;
 
     // TODO: rename as PendingReqListHead
     LIST_ENTRY                  RequestListHead;

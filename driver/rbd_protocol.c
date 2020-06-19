@@ -271,6 +271,7 @@ RbdNegotiate(_In_ INT* Pfd,
 
             case NBD_REP_ERR_POLICY:
                 if (Reply->Datasize > 0) {
+                    Reply->Data[255] = '\0';
                     WNBD_LOG_ERROR("Connection not allowed by server policy. Server said: %s", Reply->Data);
                 } else {
                     WNBD_LOG_ERROR("Connection not allowed by server policy.");
@@ -280,6 +281,7 @@ RbdNegotiate(_In_ INT* Pfd,
 
             default:
                 if (Reply->Datasize > 0) {
+                    Reply->Data[255] = '\0';
                     WNBD_LOG_INFO("Unknown error returned by server. Server said: %s", Reply->Data);
                 }
                 else {

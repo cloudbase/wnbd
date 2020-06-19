@@ -14,8 +14,27 @@
 #include "util.h"
 #include "userspace.h"
 
+_Use_decl_annotations_
+VOID WnbdReleaseSemaphore(PKSEMAPHORE RequestSemaphore,
+                          KPRIORITY Increment,
+                          LONG Adjustment,
+                          BOOLEAN Wait)
+{
+    WNBD_LOG_LOUD(": Enter");
+    __try
+    {
+        KeReleaseSemaphore(RequestSemaphore, Increment, Adjustment, Wait);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        WNBD_LOG_ERROR("RequestSemaphore failed with status: %x", GetExceptionCode());
+    }
+    WNBD_LOG_LOUD(": Exit");
+}
+
 VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
-                      PKSPIN_LOCK ListLock, PSCSI_DEVICE_INFORMATION DeviceInformation)
+                      PKSPIN_LOCK ListLock, PSCSI_DEVICE_INFORMATION DeviceInformation,
+                      BOOLEAN CompleteRequest)
 {
     WNBD_LOG_LOUD(": Enter");
 
@@ -30,19 +49,19 @@ VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
         Element->Aborted = 1;
 
         InterlockedDecrement(&Device->OutstandingIoCount);
-        WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
-            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
-            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-        StorPortNotification(RequestComplete, Element->DeviceExtension,
-                             Element->Srb);
+        if (CompleteRequest) {
+            WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
+                Element->Srb, Element->Tag, Element->Srb->SrbStatus,
+                WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+            StorPortNotification(RequestComplete, Element->DeviceExtension,
+                Element->Srb);
+        }
         ExFreePool(Element);
 
         InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
-
-        KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
+        WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
     }
 }
-
 
 VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
                              PSCSI_DEVICE_INFORMATION DeviceInformation)
@@ -73,7 +92,7 @@ VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
             InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
 
             // TODO: should we release the semaphore for aborted but still pending requests?
-            KeReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
+            WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
         }
     }
     KeReleaseSpinLock(ListLock, Irql);
@@ -128,18 +147,17 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
         PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
         WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
             Device, Srb->PathId, Srb->TargetId, Srb->Lun);
-        /// Drain the queue here because the device doesn't theoretically exist;
-        DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
-        DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock, Info);
+        // Drain the queue here because the device doesn't theoretically exist;
+        DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info, FALSE);
+        DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock, Info, TRUE);
         goto Exit;
     }
     PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
 
-    DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
+    DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info, FALSE);
     // Should we set those in-flight requests to SRB_STATUS_ABORT_FAILED?
     // We can't set them to SRB_STATUS_ABORTED because those requests have been
     // submitted and will most probably complete.
-    // DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock);
     SendAbortFailedForQueue(&Info->ReplyListHead, &Info->ReplyListLock, Info);
 
     SrbStatus = SRB_STATUS_SUCCESS;

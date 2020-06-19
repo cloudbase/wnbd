@@ -7,6 +7,7 @@
 #include "common.h"
 #include "debug.h"
 #include "scsi_operation.h"
+#include "scsi_function.h"
 #include "scsi_trace.h"
 #include "srb_helper.h"
 #include "userspace.h"
@@ -356,7 +357,7 @@ WnbdPendElement(_In_ PVOID DeviceExtension,
     Element->ReadLength = (ULONG)DataLength;
     Element->Aborted = 0;
     ExInterlockedInsertTailList(&ScsiInfo->RequestListHead, &Element->Link, &ScsiInfo->RequestListLock);
-    KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
+    WnbdReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
     Status = STATUS_PENDING;
 
 Exit:

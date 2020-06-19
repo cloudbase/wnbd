@@ -10,6 +10,7 @@
 #include "debug.h"
 #include "driver_extension.h"
 #include "rbd_protocol.h"
+#include "scsi_function.h"
 #include "userspace.h"
 #include "util.h"
 
@@ -163,6 +164,11 @@ WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
     InitializeListHead(&ScsiInfo->ReplyListHead);
     KeInitializeSpinLock(&ScsiInfo->ReplyListLock);
     KeInitializeSemaphore(&ScsiInfo->DeviceEvent, 0, 1 << 30);
+    Status = ExInitializeResourceLite(&ScsiInfo->SocketMutex);
+    if (!NT_SUCCESS(Status)) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto Exit;
+    }
 
     ScsiInfo->HardTerminateDevice = FALSE;
     ScsiInfo->SoftTerminateDevice = FALSE;
@@ -221,7 +227,7 @@ SoftTerminate:
     if(reply_thread_handle)
         ZwClose(reply_thread_handle);
     ScsiInfo->SoftTerminateDevice = TRUE;
-    KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
+    WnbdReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
     Status = STATUS_INSUFFICIENT_RESOURCES;
     goto Exit;
 }
@@ -502,7 +508,7 @@ WnbdDeleteConnection(PGLOBAL_INFORMATION GInfo,
         TargetIndex = ScsiInfo->TargetIndex;
         BusIndex = ScsiInfo->BusIndex;
         ScsiInfo->SoftTerminateDevice = TRUE;
-        KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
+        WnbdReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
         LARGE_INTEGER Timeout;
         // TODO: consider making this configurable, currently 120s.
         Timeout.QuadPart = (-120 * 1000 * 10000);
