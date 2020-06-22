@@ -229,6 +229,7 @@ UCHAR
 WnbdSetModeSense(_In_ PVOID Data,
                  _In_ PCDB Cdb,
                  _In_ ULONG MaxLength,
+                 _In_ BOOLEAN ReadOnly,
                  _Out_ PVOID Page,
                  _Out_ PULONG Length)
 {
@@ -255,7 +256,7 @@ WnbdSetModeSense(_In_ PVOID Data,
         ModeParameterHeader->ModeDataLength = (UCHAR)(*Length -
             RTL_SIZEOF_THROUGH_FIELD(MODE_PARAMETER_HEADER, ModeDataLength));
         ModeParameterHeader->MediumType = 0;
-        ModeParameterHeader->DeviceSpecificParameter = (0) | (0);
+        ModeParameterHeader->DeviceSpecificParameter = ReadOnly ? MODE_DSP_WRITE_PROTECT : 0;
         ModeParameterHeader->BlockDescriptorLength = 0;
         }
         break;
@@ -275,7 +276,7 @@ WnbdSetModeSense(_In_ PVOID Data,
         ModeParameterHeader->ModeDataLength[1] = (UCHAR)(*Length -
             RTL_SIZEOF_THROUGH_FIELD(MODE_PARAMETER_HEADER10, ModeDataLength));
         ModeParameterHeader->MediumType = 0;
-        ModeParameterHeader->DeviceSpecificParameter = (0) | (0);
+        ModeParameterHeader->DeviceSpecificParameter = ReadOnly ? MODE_DSP_WRITE_PROTECT : 0;
         ModeParameterHeader->BlockDescriptorLength[0] = 0;
         ModeParameterHeader->BlockDescriptorLength[1] = 0;
         }
@@ -292,7 +293,8 @@ Exit:
 }
 
 UCHAR
-WnbdModeSense(_In_ PSCSI_REQUEST_BLOCK Srb,
+WnbdModeSense(_In_ PSCSI_DEVICE_INFORMATION Info,
+              _In_ PSCSI_REQUEST_BLOCK Srb,
               _In_ PCDB Cdb)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -310,7 +312,10 @@ WnbdModeSense(_In_ PSCSI_REQUEST_BLOCK Srb,
         goto Exit;
     }
 
-    SrbStatus = WnbdSetModeSense(DataBuffer, Cdb, DataTransferLength, Page, &Length);
+    SrbStatus = WnbdSetModeSense(
+        DataBuffer, Cdb, DataTransferLength,
+        Info->UserEntry->ReadOnly,
+        Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
         goto Exit;
     }
@@ -464,7 +469,7 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
 
     case SCSIOP_MODE_SENSE:
     case SCSIOP_MODE_SENSE10:
-        Srb->SrbStatus = WnbdModeSense(Srb, Cdb);
+        Srb->SrbStatus = WnbdModeSense(Info, Srb, Cdb);
         break;
 
     case SCSIOP_READ_CAPACITY:

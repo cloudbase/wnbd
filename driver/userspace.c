@@ -311,10 +311,10 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
         goto ExitInquiryData;
     }
 
+    UINT16 RbdFlags = 0;
     if (Info->MustNegotiate) {
         WNBD_LOG_INFO("Trying to negotiate handshake with RBD Server");
         Info->DiskSize = 0;
-        UINT16 RbdFlags = 0;
         Status = RbdNegotiate(&Sock, &Info->DiskSize, &RbdFlags, Info->ExportName, 1, 1);
         if (!NT_SUCCESS(Status)) {
             goto ExitInquiryData;
@@ -322,6 +322,12 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
         WNBD_LOG_INFO("Negotiated disk size: %llu", Info->DiskSize);
         NewEntry->DiskSize = Info->DiskSize;
     }
+
+    NewEntry->NbdFlags = Info->NbdFlags | RbdFlags;
+    // For convenience, we'll use another field.
+    NewEntry->ReadOnly = NewEntry->NbdFlags & (
+        NBD_FLAG_HAS_FLAGS | NBD_FLAG_READ_ONLY);
+
     ULONG TargetId = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
     ULONG BusId = bitNumber / MAX_NUMBER_OF_SCSI_TARGETS;
 

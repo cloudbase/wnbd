@@ -315,6 +315,26 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         WNBD_LOG_INFO("Processing request. Address: %p Tag: 0x%llx",
                       Status, Element->Srb, Element->Tag);
 
+        if(DeviceInformation->UserEntry->ReadOnly) {
+            switch (Cdb->AsByte[0]) {
+                case SCSIOP_WRITE6:
+                case SCSIOP_WRITE:
+                case SCSIOP_WRITE12:
+                case SCSIOP_WRITE16:
+                case SCSIOP_SYNCHRONIZE_CACHE:
+                case SCSIOP_SYNCHRONIZE_CACHE16:
+                    Element->Srb->DataTransferLength = 0;
+                    Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+                    WNBD_LOG_LOUD("Write or flush requested on a read-only disk.",
+                                  Status, Element->Srb, Element->Tag);
+                    StorPortNotification(RequestComplete,
+                                         Element->DeviceExtension,
+                                         Element->Srb);
+                    ExFreePool(Element);
+                    continue;
+            }
+        }
+
         switch (Cdb->AsByte[0]) {
         case SCSIOP_READ6:
         case SCSIOP_READ:
