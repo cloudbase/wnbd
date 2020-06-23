@@ -490,7 +490,6 @@ KsDisconnectSocket(
 
   if (!NT_SUCCESS(Status))
   {
-    KspAsyncContextFree(&AsyncContext);
     return Status;
   }
 
@@ -522,8 +521,7 @@ KsCloseSocket(
 
   if (!NT_SUCCESS(Status))
   {
-    KspAsyncContextFree(&AsyncContext);
-    return Status;
+    goto Exit;
   }
 
   //
@@ -537,10 +535,11 @@ KsCloseSocket(
   //
   // Free the async context.
   //
+  KspAsyncContextFree(&AsyncContext);
 
+Exit:
   KspAsyncContextFree(&Socket->AsyncContextRead);
   KspAsyncContextFree(&Socket->AsyncContextWrite);
-  KspAsyncContextFree(&AsyncContext);
 
   //
   // Free memory for the socket structure.

@@ -108,7 +108,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     WNBD_LOG_LOUD(": Enter");
     PWNBD_EXTENSION Ext = (PWNBD_EXTENSION) DeviceExtension;
     NTSTATUS Status = STATUS_SUCCESS;
-    HANDLE DeviceCleanerHandle;
+    HANDLE DeviceCleanerHandle = NULL;
 
     /*
      * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/drivers/ff563901(v%3Dvs.85)
@@ -132,7 +132,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     Status = ExInitializeResourceLite(&Ext->DeviceResourceLock);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CleanThread;
+        goto Clean;
     }
 
     /*
@@ -151,13 +151,13 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
                                   WnbdDeviceCleanerThread, Ext);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CleanThread;
+        goto CleanLock;
     }
     Status = ObReferenceObjectByHandle(DeviceCleanerHandle, THREAD_ALL_ACCESS, NULL,
         KernelMode, &Ext->DeviceCleaner, NULL);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CleanThread;
+        goto CleanAdapter;
     }
 
     /*
@@ -174,17 +174,19 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     Status = WnbdInitializeGlobalInformation(DeviceExtension, &Ext->GlobalInformation);
 
     if (!NT_SUCCESS(Status)) {
-        goto Clean;
+        goto Exit;
     }
 
     WNBD_LOG_LOUD(": Exit SP_RETURN_FOUND");
     return SP_RETURN_FOUND;
-Clean:
+Exit:
     RtlFreeUnicodeString(&Ext->DeviceInterface);
 CleanAdapter:
     Ext->StopDeviceCleaner = TRUE;
-    KeSetEvent(&Ext->DeviceCleanerEvent, IO_NO_INCREMENT, FALSE);
-CleanThread:
+    KeSetEvent(&Ext->DeviceCleanerEvent, IO_NO_INCREMENT, TRUE);
+CleanLock:
+    ExDeleteResourceLite(&Ext->DeviceResourceLock);
+Clean:
     WNBD_LOG_ERROR(": Failing with SP_RETURN_NOT_FOUND");
     WNBD_LOG_LOUD(": Exit");
     return SP_RETURN_NOT_FOUND;

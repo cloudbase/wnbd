@@ -53,6 +53,8 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
         ScsiInfo->InquiryData = NULL;
     }
 
+    DisconnectConnection(ScsiInfo);
+
     ExDeleteResourceLite(&ScsiInfo->SocketLock);
 
     if(ScsiInfo->UserEntry) {
@@ -68,12 +70,6 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
     if (ScsiInfo->WritePreallocatedBuffer) {
         ExFreePool(ScsiInfo->WritePreallocatedBuffer);
         ScsiInfo->WritePreallocatedBuffer = NULL;
-    }
-
-    if (-1 != ScsiInfo->Socket) {
-        WNBD_LOG_INFO("Closing socket FD: %d", ScsiInfo->Socket);
-        Close(ScsiInfo->Socket);
-        ScsiInfo->Socket = -1;
     }
 
     ExReleaseResourceLite(&ScsiInfo->GlobalInformation->ConnectionMutex);
@@ -93,6 +89,9 @@ WnbdDeleteDevices(_In_ PWNBD_EXTENSION Ext,
     ASSERT(Ext);
     PWNBD_SCSI_DEVICE Device = NULL;
     PLIST_ENTRY Link, Next;
+    if (NULL == Ext->GlobalInformation) {
+        return;
+    }
     KeEnterCriticalRegion();
     ExAcquireResourceSharedLite(&Ext->DeviceResourceLock, TRUE);
     ExAcquireResourceExclusiveLite(&((PGLOBAL_INFORMATION)Ext->GlobalInformation)->ConnectionMutex, TRUE);

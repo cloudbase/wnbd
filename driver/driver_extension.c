@@ -36,6 +36,7 @@ WnbdInitializeGlobalInformation(PVOID Handle,
     InitializeListHead(&Info->ConnectionList);
     if (!NT_SUCCESS(ExInitializeResourceLite(&Info->ConnectionMutex))) {
         WNBD_LOG_ERROR(": Error allocating Info->ConnectionMutex");
+        ExFreePool(Info);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 

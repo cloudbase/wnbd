@@ -101,14 +101,6 @@ PVOID WnbdCreateScsiDevice(_In_ PVOID Extension,
     Dev->Missing = FALSE;
     Dev->DriverExtension = (PVOID) Ext;
 
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite(&Ext->DeviceResourceLock, TRUE);
-
-    InsertTailList(&Ext->DeviceList, &Dev->ListEntry);
-
-    ExReleaseResourceLite(&Ext->DeviceResourceLock);
-    KeLeaveCriticalRegion();
-
     WNBD_LOG_LOUD(": Exit");
 
     return Dev;
@@ -175,13 +167,13 @@ WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
     ScsiInfo->ReadPreallocatedBuffer = MallocT(((UINT)WNBD_PREALLOC_BUFF_SZ));
     if (!ScsiInfo->ReadPreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
+        goto SoftTerminate;
     }
     ScsiInfo->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
     ScsiInfo->WritePreallocatedBuffer = MallocT(((UINT)WNBD_PREALLOC_BUFF_SZ));
     if (!ScsiInfo->WritePreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
+        goto SoftTerminate;
     }
     ScsiInfo->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
 
@@ -189,7 +181,7 @@ WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
                                   NULL, NULL, WnbdDeviceRequestThread, ScsiInfo);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
+        goto SoftTerminate;
     }
 
     Status = ObReferenceObjectByHandle(request_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
@@ -217,19 +209,26 @@ WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
         goto SoftTerminate;
     }
 
-Exit:
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 
 SoftTerminate:
-    if(request_thread_handle)
+    ExDeleteResourceLite(&ScsiInfo->SocketLock);
+    if (ScsiInfo->ReadPreallocatedBuffer) {
+        ExFreePool(ScsiInfo->ReadPreallocatedBuffer);
+    }
+    if (ScsiInfo->WritePreallocatedBuffer) {
+        ExFreePool(ScsiInfo->WritePreallocatedBuffer);
+    }
+    if (request_thread_handle)
         ZwClose(request_thread_handle);
-    if(reply_thread_handle)
+    if (reply_thread_handle)
         ZwClose(reply_thread_handle);
     ScsiInfo->SoftTerminateDevice = TRUE;
     WnbdReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
-    Status = STATUS_INSUFFICIENT_RESOURCES;
-    goto Exit;
+
+Exit:
+    WNBD_LOG_LOUD(": Exit");
+    return Status;
 }
 
 VOID
@@ -364,6 +363,15 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
     NewEntry->TargetIndex = TargetId;
     NewEntry->LunIndex = LunId;
 
+    PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION)GInfo->Handle;
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(&Ext->DeviceResourceLock, TRUE);
+
+    InsertTailList(&Ext->DeviceList, &ScsiInfo->Device->ListEntry);
+
+    ExReleaseResourceLite(&Ext->DeviceResourceLock);
+    KeLeaveCriticalRegion();
+
     InterlockedIncrement(&GInfo->ConnectionCount);
     StorPortNotification(BusChangeDetected, GInfo->Handle, 0);
 
@@ -376,6 +384,9 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
 
 ExitScsiInfo:
     if (ScsiInfo) {
+        if (ScsiInfo->Device) {
+            ExFreePool(ScsiInfo->Device);
+        }
         ExFreePool(ScsiInfo);
     }
 ExitInquiryData:
@@ -441,12 +452,14 @@ WnbdSetDeviceMissing(_In_ PVOID Handle,
 VOID
 WnbdDrainQueueOnClose(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
 {
-    if (IsListEmpty(&DeviceInformation->RequestListHead))
-        goto Reply;
     PLIST_ENTRY ItemLink, ItemNext;
     KIRQL Irql = { 0 };
     PSRB_QUEUE_ELEMENT Element = NULL;
+
     KeAcquireSpinLock(&DeviceInformation->RequestListLock, &Irql);
+    if (IsListEmpty(&DeviceInformation->RequestListHead))
+        goto Reply;
+
     LIST_FORALL_SAFE(&DeviceInformation->RequestListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         if (Element) {
@@ -459,13 +472,13 @@ WnbdDrainQueueOnClose(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         }
         Element = NULL;
     }
-    KeReleaseSpinLock(&DeviceInformation->RequestListLock, Irql);
 Reply:
-    if (IsListEmpty(&DeviceInformation->ReplyListHead))
-        return;
+    KeReleaseSpinLock(&DeviceInformation->RequestListLock, Irql);
     KeAcquireSpinLock(&DeviceInformation->ReplyListLock, &Irql);
-    LIST_FORALL_SAFE(&DeviceInformation->ReplyListHead, ItemLink, ItemNext) {
+    if (IsListEmpty(&DeviceInformation->ReplyListHead))
+        goto Exit;
 
+    LIST_FORALL_SAFE(&DeviceInformation->ReplyListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         if (Element) {
             RemoveEntryList(&Element->Link);
@@ -480,6 +493,7 @@ Reply:
         }
         Element = NULL;
     }
+Exit:
     KeReleaseSpinLock(&DeviceInformation->ReplyListLock, Irql);
 }
 
