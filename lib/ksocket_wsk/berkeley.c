@@ -616,7 +616,6 @@ int Send(int sockfd, const void* buf, size_t len, int flags, PNTSTATUS error)
 {
   NTSTATUS Status;
   PKSOCKET Socket = KsArray[FROM_SOCKETFD(sockfd)];
-  flags |= WSK_FLAG_NODELAY;
 
   ULONG Length = (ULONG)len;
   Status = KsSend(Socket, (PVOID)buf, &Length, flags);
@@ -670,6 +669,18 @@ int RecvFrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_
   return NT_SUCCESS(Status)
     ? (int)Length
     : -1;
+}
+
+int Disconnect(int sockfd)
+{
+  NTSTATUS Status;
+  PKSOCKET Socket = KsArray[FROM_SOCKETFD(sockfd)];
+
+  Status = KsDisconnectSocket(Socket);
+
+  return NT_SUCCESS(Status)
+      ? 0
+      : -1;
 }
 
 int Close(int sockfd)

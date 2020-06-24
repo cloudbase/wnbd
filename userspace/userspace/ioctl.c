@@ -15,6 +15,7 @@ int Syntax(void)
     printf("wnbd-client unmap <InstanceName>\n");
     printf("wnbd-client list \n");
     printf("wnbd-client set-debug <int>\n");
+    printf("wnbd-client stats <InstanceName>\n");
 
     return -1;
 }
@@ -221,6 +222,53 @@ WnbdUnmap(PCHAR InstanceName)
         printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
         GLAToString();
     }
+
+    CloseHandle(WnbdDriverHandle);
+Exit:
+    return Status;
+}
+
+DWORD
+WnbdStats(PCHAR InstanceName)
+{
+    CONNECTION_INFO ConnInfo = { 0 };
+    HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+    BOOL DevStatus = FALSE;
+    WNBD_STATS Stats = { 0 };
+
+    WnbdDriverHandle = GetWnbdDriverHandle();
+    if (WnbdDriverHandle == INVALID_HANDLE_VALUE) {
+        Status = GetLastError();
+        printf("Could not get WNBD driver handle. Can not send requests.\n");
+        printf("The driver maybe is not installed\n");
+        GLAToString();
+        goto Exit;
+    }
+
+    memcpy(&ConnInfo.InstanceName[0], InstanceName, min(strlen(InstanceName), MAX_NAME_LENGTH));
+    ConnInfo.IoControlCode = IOCTL_WNBD_STATS;
+
+    DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &ConnInfo, sizeof(CONNECTION_INFO), &Stats, sizeof(Stats), &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        printf("IOCTL_MINIPORT_PROCESS_SERVICE_IRP failed\n");
+        GLAToString();
+    }
+
+    printf("Device stats:\n");
+    printf("TotalReceivedIORequests: %llu\n", Stats.TotalReceivedIORequests);
+    printf("TotalSubmittedIORequests: %llu\n", Stats.TotalSubmittedIORequests);
+    printf("TotalReceivedIOReplies: %llu\n", Stats.TotalReceivedIOReplies);
+    printf("UnsubmittedIORequests: %llu\n", Stats.UnsubmittedIORequests);
+    printf("PendingSubmittedIORequests: %llu\n", Stats.PendingSubmittedIORequests);
+    printf("AbortedSubmittedIORequests: %llu\n", Stats.AbortedSubmittedIORequests);
+    printf("AbortedUnsubmittedIORequests: %llu\n", Stats.AbortedUnsubmittedIORequests);
+    printf("CompletedAbortedIORequests: %llu\n", Stats.CompletedAbortedIORequests);
+
 
     CloseHandle(WnbdDriverHandle);
 Exit:

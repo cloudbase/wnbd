@@ -31,8 +31,9 @@ typedef struct _KSOCKET
     PWSK_PROVIDER_STREAM_DISPATCH WskStreamDispatch;
 #endif
   };
-
-  KSOCKET_ASYNC_CONTEXT AsyncContext;
+  LONG operation;
+  KSOCKET_ASYNC_CONTEXT AsyncContextRead;
+  KSOCKET_ASYNC_CONTEXT AsyncContextWrite;
 } KSOCKET, *PKSOCKET;
 
 //////////////////////////////////////////////////////////////////////////
@@ -225,10 +226,8 @@ KspAsyncContextWaitForCompletion(
   _Inout_ PNTSTATUS Status
   )
 {
-  /* Timeout default value of 120 seconds */
-  // TODO make the timeout configurable
-  LARGE_INTEGER	Timeout;
-  Timeout.QuadPart = (-120 * 1000 * 10000);
+  // TODO: accept a timeout value and make it configurable,
+  // where applicable.
   if (*Status == STATUS_PENDING)
   {
     KeWaitForSingleObject(
@@ -236,8 +235,8 @@ KspAsyncContextWaitForCompletion(
       Executive,
       KernelMode,
       FALSE,
-      &Timeout
-      );
+      NULL
+    );
 
     *Status = AsyncContext->Irp->IoStatus.Status;
   }
@@ -392,7 +391,14 @@ KsCreateSocket(
   //
   // Allocate async context for the socket.
   //
-  Status = KspAsyncContextAllocate(&NewSocket->AsyncContext);
+  Status = KspAsyncContextAllocate(&NewSocket->AsyncContextRead);
+
+  if (!NT_SUCCESS(Status))
+  {
+    return Status;
+  }
+
+  Status = KspAsyncContextAllocate(&NewSocket->AsyncContextWrite);
 
   if (!NT_SUCCESS(Status))
   {
@@ -414,10 +420,10 @@ KsCreateSocket(
     NULL,                       // OwningProcess
     NULL,                       // OwningThread
     NULL,                       // SecurityDescriptor
-    NewSocket->AsyncContext.Irp // Irp
+    NewSocket->AsyncContextRead.Irp // Irp
     );
 
-  KspAsyncContextWaitForCompletion(&NewSocket->AsyncContext, &Status);
+  KspAsyncContextWaitForCompletion(&NewSocket->AsyncContextRead, &Status);
 
   //
   // Save the socket instance and the socket dispatch table.
@@ -425,9 +431,9 @@ KsCreateSocket(
 
   if (NT_SUCCESS(Status))
   {
-    NewSocket->WskSocket = (PWSK_SOCKET)NewSocket->AsyncContext.Irp->IoStatus.Information;
+    NewSocket->WskSocket = (PWSK_SOCKET)NewSocket->AsyncContextRead.Irp->IoStatus.Information;
     NewSocket->WskDispatch = (PVOID)NewSocket->WskSocket->Dispatch;
-
+    NewSocket->operation = 0;
     *Socket = NewSocket;
   }
 
@@ -470,6 +476,38 @@ KsCreateDatagramSocket(
   return KsCreateSocket(Socket, AddressFamily, SocketType, Protocol, WSK_FLAG_DATAGRAM_SOCKET);
 }
 
+
+NTSTATUS
+NTAPI
+KsDisconnectSocket(
+    _In_ PKSOCKET Socket
+)
+{
+  NTSTATUS Status = STATUS_UNSUCCESSFUL;
+
+  KSOCKET_ASYNC_CONTEXT AsyncContext;
+  Status = KspAsyncContextAllocate(&AsyncContext);
+
+  if (!NT_SUCCESS(Status))
+  {
+    return Status;
+  }
+
+  //
+  // Close the WSK socket.
+  //
+  Status = Socket->WskConnectionDispatch->WskDisconnect(
+    Socket->WskSocket,
+    NULL,
+    0,
+    AsyncContext.Irp
+  );
+  KspAsyncContextWaitForCompletion(&AsyncContext, &Status);
+  KspAsyncContextFree(&AsyncContext);
+
+  return Status;
+}
+
 NTSTATUS
 NTAPI
 KsCloseSocket(
@@ -478,28 +516,30 @@ KsCloseSocket(
 {
   NTSTATUS Status = STATUS_UNSUCCESSFUL;
 
-  PIRP Irp = ExAllocatePoolWithTag(NonPagedPoolNx, IoSizeOfIrp(1), MEMORY_TAG);;
-  if (!Irp) {
-    return STATUS_INSUFFICIENT_RESOURCES;
+  KSOCKET_ASYNC_CONTEXT AsyncContext;
+  Status = KspAsyncContextAllocate(&AsyncContext);
+
+  if (!NT_SUCCESS(Status))
+  {
+    goto Exit;
   }
-  IoInitializeIrp(Irp, IoSizeOfIrp(1), 1);
-  IoSetCompletionRoutine(Irp, KspNoWaitCompletionRoutine, NULL, TRUE, TRUE, TRUE);
 
   //
   // Close the WSK socket.
   //
-
-
   Status = Socket->WskConnectionDispatch->WskCloseSocket(
     Socket->WskSocket,
-    Irp
-    );
-
+    AsyncContext.Irp
+  );
+  KspAsyncContextWaitForCompletion(&AsyncContext, &Status);
   //
   // Free the async context.
   //
+  KspAsyncContextFree(&AsyncContext);
 
-  KspAsyncContextFree(&Socket->AsyncContext);
+Exit:
+  KspAsyncContextFree(&Socket->AsyncContextRead);
+  KspAsyncContextFree(&Socket->AsyncContextWrite);
 
   //
   // Free memory for the socket structure.
@@ -523,7 +563,7 @@ KsBind(
   // Reset the async context.
   //
 
-  KspAsyncContextReset(&Socket->AsyncContext);
+  KspAsyncContextReset(&Socket->AsyncContextRead);
 
   //
   // Bind the socket.
@@ -533,10 +573,10 @@ KsBind(
     Socket->WskSocket,          // Socket
     LocalAddress,               // LocalAddress
     0,                          // Flags (reserved)
-    Socket->AsyncContext.Irp    // Irp
+    Socket->AsyncContextRead.Irp    // Irp
     );
 
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
+  KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
 
   return Status;
 }
@@ -556,7 +596,7 @@ KsAccept(
   // Reset the async context.
   //
 
-  KspAsyncContextReset(&Socket->AsyncContext);
+  KspAsyncContextReset(&Socket->AsyncContextRead);
 
   //
   // Accept the connection.
@@ -569,10 +609,10 @@ KsAccept(
     NULL,                       // AcceptSocketDispatch
     LocalAddress,               // LocalAddress
     RemoteAddress,              // RemoteAddress
-    Socket->AsyncContext.Irp    // Irp
+    Socket->AsyncContextRead.Irp    // Irp
     );
 
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
+  KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
 
   //
   // Save the socket instance and the socket dispatch table.
@@ -587,16 +627,23 @@ KsAccept(
       return STATUS_INSUFFICIENT_RESOURCES;
     }
 
-    KNewSocket->WskSocket = (PWSK_SOCKET)Socket->AsyncContext.Irp->IoStatus.Information;
+    KNewSocket->WskSocket = (PWSK_SOCKET)Socket->AsyncContextRead.Irp->IoStatus.Information;
     KNewSocket->WskDispatch = (PVOID)KNewSocket->WskSocket->Dispatch;
-    KspAsyncContextAllocate(&KNewSocket->AsyncContext);
 
-    Status = KspAsyncContextAllocate(&KNewSocket->AsyncContext);
+    Status = KspAsyncContextAllocate(&KNewSocket->AsyncContextRead);
 
     if (!NT_SUCCESS(Status))
     {
         ExFreePoolWithTag(KNewSocket, MEMORY_TAG);
         return Status;
+    }
+
+    Status = KspAsyncContextAllocate(&KNewSocket->AsyncContextWrite);
+
+    if (!NT_SUCCESS(Status))
+    {
+      ExFreePoolWithTag(KNewSocket, MEMORY_TAG);
+      return Status;
     }
 
     *NewSocket = KNewSocket;
@@ -618,7 +665,7 @@ KsConnect(
   // Reset the async context.
   //
 
-  KspAsyncContextReset(&Socket->AsyncContext);
+  KspAsyncContextReset(&Socket->AsyncContextRead);
 
   //
   // Bind the socket to the local address.
@@ -633,10 +680,10 @@ KsConnect(
     Socket->WskSocket,          // Socket
     (PSOCKADDR)&LocalAddress,   // LocalAddress
     0,                          // Flags (reserved)
-    Socket->AsyncContext.Irp    // Irp
+    Socket->AsyncContextRead.Irp    // Irp
     );
 
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
+  KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
 
   if (!NT_SUCCESS(Status))
   {
@@ -647,7 +694,7 @@ KsConnect(
   // Reset the async context (again).
   //
 
-  KspAsyncContextReset(&Socket->AsyncContext);
+  KspAsyncContextReset(&Socket->AsyncContextRead);
 
   //
   // Connect to the remote host.
@@ -660,10 +707,10 @@ KsConnect(
     Socket->WskSocket,          // Socket
     RemoteAddress,              // RemoteAddress
     0,                          // Flags (reserved)
-    Socket->AsyncContext.Irp    // Irp
+    Socket->AsyncContextRead.Irp    // Irp
     );
 
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
+  KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
 
   return Status;
 }
@@ -705,43 +752,45 @@ KsSendRecv(
   }
 
   //
-  // Reset the async context.
-  //
-
-  KspAsyncContextReset(&Socket->AsyncContext);
-
-  //
   // Send / receive the data.
   //
-
+  InterlockedIncrement(&Socket->operation);
   if (Send)
   {
+    KspAsyncContextReset(&Socket->AsyncContextWrite);
     Status = Socket->WskConnectionDispatch->WskSend(
       Socket->WskSocket,        // Socket
       &WskBuffer,               // Buffer
       Flags,                    // Flags
-      Socket->AsyncContext.Irp  // Irp
+      Socket->AsyncContextWrite.Irp  // Irp
       );
+    KspAsyncContextWaitForCompletion(&Socket->AsyncContextWrite, &Status);
   }
   else
   {
+    KspAsyncContextReset(&Socket->AsyncContextRead);
     Status = Socket->WskConnectionDispatch->WskReceive(
       Socket->WskSocket,        // Socket
       &WskBuffer,               // Buffer
       Flags,                    // Flags
-      Socket->AsyncContext.Irp  // Irp
+      Socket->AsyncContextRead.Irp  // Irp
       );
+    KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
   }
 
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
-
+  InterlockedDecrement(&Socket->operation);
   //
   // Set the number of bytes sent / received.
   //
 
   if (NT_SUCCESS(Status))
   {
-    *Length = (ULONG)Socket->AsyncContext.Irp->IoStatus.Information;
+    if (Send) {
+      *Length = (ULONG)Socket->AsyncContextWrite.Irp->IoStatus.Information;
+    }
+    else {
+      *Length = (ULONG)Socket->AsyncContextRead.Irp->IoStatus.Information;
+    }
   }
 
   //
@@ -794,17 +843,12 @@ KsSendRecvUdp(
   }
 
   //
-  // Reset the async context.
-  //
-
-  KspAsyncContextReset(&Socket->AsyncContext);
-
-  //
   // Send / receive the data.
   //
 
   if (Send)
   {
+    KspAsyncContextReset(&Socket->AsyncContextWrite);
     Status = Socket->WskDatagramDispatch->WskSendTo(
       Socket->WskSocket,        // Socket
       &WskBuffer,               // Buffer
@@ -812,8 +856,9 @@ KsSendRecvUdp(
       RemoteAddress,            // RemoteAddress
       0,                        // ControlInfoLength
       NULL,                     // ControlInfo
-      Socket->AsyncContext.Irp  // Irp
+      Socket->AsyncContextWrite.Irp  // Irp
       );
+    KspAsyncContextWaitForCompletion(&Socket->AsyncContextWrite, &Status);
   }
   else
   {
@@ -828,7 +873,7 @@ KsSendRecvUdp(
     //   ... This pointer is optional and can be NULL.  If the ControlInfoLength
     //   parameter is NULL, the ControlInfo parameter should be NULL.
     //
-
+    KspAsyncContextReset(&Socket->AsyncContextRead);
 #pragma prefast (                                                                           \
     suppress:__WARNING_INVALID_PARAM_VALUE_1,                                               \
     "If the ControlInfoLength parameter is NULL, the ControlInfo parameter should be NULL." \
@@ -843,12 +888,11 @@ KsSendRecvUdp(
       NULL,                     // ControlInfoLength
       NULL,                     // ControlInfo
       NULL,                     // ControlFlags
-      Socket->AsyncContext.Irp  // Irp
+      Socket->AsyncContextRead.Irp  // Irp
       );
+    KspAsyncContextWaitForCompletion(&Socket->AsyncContextRead, &Status);
 #pragma warning(default:6387)
   }
-
-  KspAsyncContextWaitForCompletion(&Socket->AsyncContext, &Status);
 
   //
   // Set the number of bytes sent / received.
@@ -856,7 +900,14 @@ KsSendRecvUdp(
 
   if (NT_SUCCESS(Status))
   {
-    *Length = (ULONG)Socket->AsyncContext.Irp->IoStatus.Information;
+      if (Send)
+      {
+        *Length = (ULONG)Socket->AsyncContextWrite.Irp->IoStatus.Information;
+      }
+      else
+      {
+        *Length = (ULONG)Socket->AsyncContextRead.Irp->IoStatus.Information;
+      }
   }
 
   //

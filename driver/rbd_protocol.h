@@ -27,7 +27,7 @@ __pragma(pack(push, 1))
 typedef struct _NBD_REQUEST {
     UINT32 Magic;
     UINT32 Type;
-    UINT8  Handle[8];
+    UINT64 Handle;
     UINT64 From;
     UINT32 Length;
 } NBD_REQUEST, *PNBD_REQUEST;
@@ -37,7 +37,7 @@ __pragma(pack(push, 1))
 typedef struct _NBD_REPLY {
     UINT32 Magic;
     UINT32 Error;
-    UINT8  Handle[8];
+    UINT64 Handle;
 } NBD_REPLY, *PNBD_REPLY;
 __pragma(pack(pop))
 
@@ -76,19 +76,30 @@ __pragma(pack(pop))
 
 #define NBDC_DO_LIST 1
 
+#define RBD_PROTOCOL_TAG      'pDBR'
+#define BUF_SIZE              1024
+#define INIT_PASSWD           "NBDMAGIC"
+#define NbdMalloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, RBD_PROTOCOL_TAG)
+#define NbdFree(S) ExFreePool(S)
+
 VOID
 NbdReadStat(_In_ INT Fd,
             _In_ UINT64 Offset,
             _In_ ULONG Length,
             _Out_ PNTSTATUS IoStatus,
-            _Inout_ PVOID SystemBuffer);
+            _In_ UINT64 Handle);
+#pragma alloc_text (PAGE, NbdReadStat)
 
 VOID
 NbdWriteStat(_In_ INT Fd,
              _In_ UINT64 Offset,
              _In_ ULONG Length,
              _Out_ PNTSTATUS IoStatus,
-             _In_ PVOID SystemBuffer);
+             _In_ PVOID SystemBuffer,
+             _In_ PVOID *PreallocatedBuffer,
+             _In_ PULONG PreallocatedLength,
+             _In_ UINT64 Handle);
+#pragma alloc_text (PAGE, NbdWriteStat)
 
 INT
 NbdOpenAndConnect(_In_ PCHAR HostName,
@@ -101,5 +112,16 @@ RbdNegotiate(_In_ INT* Pfd,
              _In_ PCHAR Name,
              _In_ UINT32 ClientFlags,
              _In_ BOOLEAN Go);
+
+NTSTATUS
+NbdReadReply(_In_ INT Fd,
+             _Out_ PNBD_REPLY Reply);
+#pragma alloc_text (PAGE, NbdReadReply)
+
+INT
+RbdReadExact(_In_ INT Fd,
+             _Inout_ PVOID Data,
+             _In_ size_t Length,
+             _Inout_ PNTSTATUS error);
 
 #endif

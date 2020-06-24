@@ -32,6 +32,7 @@ int SendTo(int sockfd, const void *buf, size_t len, int flags, const struct sock
 int Recv(int sockfd, void* buf, size_t len, int flags, PNTSTATUS error);
 int RecvFrom(int sockfd, void *buf, size_t len, int flags, struct sockaddr *src_addr, socklen_t *addrlen);
 int Close(int sockfd);
+int Disconnect(int sockfd);
 
 #ifdef __cplusplus
 }
