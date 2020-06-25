@@ -41,6 +41,7 @@ typedef struct _CONNECTION_INFO {
     INT             Pid;
     UINT64          DiskSize;
     UINT16          BlockSize;
+    UINT16          NbdFlags;
 } CONNECTION_INFO, * PCONNECTION_INFO;
 
 typedef struct _WNBD_COMMAND {

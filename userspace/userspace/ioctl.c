@@ -5,13 +5,14 @@
  */
 
 #include "ioctl.h"
+#include "rbd_protocol.h"
 
 #pragma comment(lib, "Setupapi.lib")
 
 int Syntax(void)
 {
     printf("Syntax:\n");
-    printf("wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> <DoNotNegotiate>\n");
+    printf("wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> <DoNotNegotiate> <ReadOnly>\n");
     printf("wnbd-client unmap <InstanceName>\n");
     printf("wnbd-client list \n");
     printf("wnbd-client set-debug <int>\n");
@@ -149,7 +150,8 @@ WnbdMap(PCHAR InstanceName,
         PCHAR PortName,
         PCHAR ExportName,
         UINT64 DiskSize,
-        BOOLEAN MustNegotiate)
+        BOOLEAN MustNegotiate,
+        BOOLEAN ReadOnly)
 {
     CONNECTION_INFO ConnectIn = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
@@ -157,6 +159,10 @@ WnbdMap(PCHAR InstanceName,
     DWORD BytesReturned = 0;
     BOOL DevStatus = 0;
     INT Pid = _getpid();
+    UINT16 NbdFlags = 0;
+    if(ReadOnly) {
+        NbdFlags |= (NBD_FLAG_HAS_FLAGS & NBD_FLAG_READ_ONLY);
+    }
 
     WnbdDriverHandle = GetWnbdDriverHandle();
     if (WnbdDriverHandle == INVALID_HANDLE_VALUE) {
@@ -177,6 +183,7 @@ WnbdMap(PCHAR InstanceName,
     ConnectIn.Pid = Pid;
     ConnectIn.MustNegotiate = MustNegotiate;
     ConnectIn.BlockSize = 0;
+    ConnectIn.NbdFlags = NbdFlags;
 
     DevStatus = DeviceIoControl(WnbdDriverHandle, IOCTL_MINIPORT_PROCESS_SERVICE_IRP, &ConnectIn, sizeof(CONNECTION_INFO),
         NULL, 0, &BytesReturned, NULL);

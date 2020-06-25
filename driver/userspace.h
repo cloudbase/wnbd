@@ -28,6 +28,8 @@ typedef struct _USER_ENTRY {
     BOOLEAN                            Connected;
     UINT64                             DiskSize;
     UINT16                             BlockSize;
+    UINT16                             NbdFlags;
+    BOOLEAN                            ReadOnly;
     CONNECTION_INFO                    UserInformation;
 } USER_ENTRY, *PUSER_ENTRY;
 

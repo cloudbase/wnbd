@@ -7,13 +7,24 @@
 #ifndef RBD_PROTOCOL_H
 #define RBD_PROTOCOL_H 1
 
-#include "common.h"
-
 #define NBD_REQUEST_MAGIC 0x25609513
 #define NBD_REPLY_MAGIC   0x67446698
 
 #define NBD_REQUEST_MAGIC 0x25609513
 #define NBD_REPLY_MAGIC   0x67446698
+
+/* values for flags field, these are server interaction specific. */
+#define NBD_FLAG_HAS_FLAGS  (1 << 0) /* nbd-server supports flags */
+#define NBD_FLAG_READ_ONLY  (1 << 1) /* device is read-only */
+#define NBD_FLAG_SEND_FLUSH (1 << 2) /* can flush writeback cache */
+#define NBD_FLAG_SEND_FUA   (1 << 3) /* send FUA (forced unit access) */
+/* there is a gap here to match userspace */
+#define NBD_FLAG_SEND_TRIM  (1 << 5) /* send trim/discard */
+#define NBD_FLAG_CAN_MULTI_CONN (1 << 8) /* Server supports multiple connections per export. */
+
+/* values for cmd flags in the upper 16 bits of request type */
+#define NBD_CMD_FLAG_FUA    (1 << 16) /* FUA (forced unit access) op */
+
 
 enum {
     NBD_CMD_READ = 0,
