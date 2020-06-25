@@ -84,7 +84,7 @@ How to install
 Ceph integration
 ----------------
 
-Mapping an umapping RDB images is straighforward, just use [rbd-nbd](https://docs.ceph.com/docs/master/man/8/rbd-nbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
+Mapping and umapping RBD images is straighforward, just use [rbd-nbd](https://docs.ceph.com/docs/master/man/8/rbd-nbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
 
     rbd-nbd map img1
     rbd-nbd unmap img1    
