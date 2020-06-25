@@ -161,7 +161,8 @@ WnbdMap(PCHAR InstanceName,
     INT Pid = _getpid();
     UINT16 NbdFlags = 0;
     if(ReadOnly) {
-        NbdFlags |= (NBD_FLAG_HAS_FLAGS & NBD_FLAG_READ_ONLY);
+        NbdFlags = NBD_FLAG_HAS_FLAGS;
+        NbdFlags |= NBD_FLAG_READ_ONLY;
     }
 
     WnbdDriverHandle = GetWnbdDriverHandle();
