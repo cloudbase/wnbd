@@ -81,12 +81,18 @@ How to install
 
   For convenience, we included <a href="vstudio/reinstall.ps1">reinstall.ps1</a> which uninstalls (ignoring the error) and installs the driver again.
 
-[Ceph integration](https://docs.ceph.com/docs/master/man/8/rbd-nbd/) [`rbd-nbd`](https://github.com/cloudbase/ceph/tree/windows)
---------------------------
+Ceph integration
+----------------
 
+Mapping an umapping RDB images is straighforward, just use [rbd-nbd](https://docs.ceph.com/docs/master/man/8/rbd-nbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
+
+    rbd-nbd map img1
+    rbd-nbd unmap img1    
 
 Testing with NBD (Network Block Device)
 ---------------------------------------
+
+Please note that the following is not needed for Ceph and is mostly intended to be used in development scenarios.
 
 We assume you are familiar with <a href="https://github.com/NetworkBlockDevice/nbd#using-nbd">using NBD</a>.
 
