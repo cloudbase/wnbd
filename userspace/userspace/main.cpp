@@ -48,11 +48,11 @@ int main(int argc, PCHAR argv[])
         BOOLEAN MustNegotiate = TRUE;
         BOOLEAN ReadOnly = FALSE;
 
-        if (argc > 6 && arg_to_bool(argv[6])) {
-            MustNegotiate = FALSE;
+        if (argc > 6) {
+            MustNegotiate = arg_to_bool(argv[6]);
         }
-        if (argc > 7 && arg_to_bool(argv[7])) {
-            ReadOnly = FALSE;
+        if (argc > 7) {
+            ReadOnly = arg_to_bool(argv[7]);
         }
         WnbdMap(InstanceName, HostName, PortName, ExportName, 50000,
                 MustNegotiate, ReadOnly);
