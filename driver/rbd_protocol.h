@@ -25,14 +25,25 @@
 /* values for cmd flags in the upper 16 bits of request type */
 #define NBD_CMD_FLAG_FUA    (1 << 16) /* FUA (forced unit access) op */
 
+#define CHECK_NBD_FLAG(nbd_flags, flag) \
+    !!(nbd_flags & NBD_FLAG_HAS_FLAGS && nbd_flags & flag)
+#define CHECK_NBD_READONLY(nbd_flags) \
+    CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_READ_ONLY)
+#define CHECK_NBD_SEND_FUA(nbd_flags) \
+    CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_SEND_FUA)
+#define CHECK_NBD_SEND_TRIM(nbd_flags) \
+    CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_SEND_TRIM)
+#define CHECK_NBD_SEND_FLUSH(nbd_flags) \
+    CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_SEND_FLUSH)
 
-enum {
+
+typedef enum {
     NBD_CMD_READ = 0,
     NBD_CMD_WRITE = 1,
     NBD_CMD_DISC = 2, //DISCONNECT
     NBD_CMD_FLUSH = 3,
     NBD_CMD_TRIM = 4
-};
+} NbdRequestType;
 
 __pragma(pack(push, 1))
 typedef struct _NBD_REQUEST {
@@ -94,12 +105,13 @@ __pragma(pack(pop))
 #define NbdFree(S) ExFreePool(S)
 
 VOID
-NbdReadStat(_In_ INT Fd,
+NbdRequest(_In_ INT Fd,
             _In_ UINT64 Offset,
             _In_ ULONG Length,
             _Out_ PNTSTATUS IoStatus,
-            _In_ UINT64 Handle);
-#pragma alloc_text (PAGE, NbdReadStat)
+            _In_ UINT64 Handle,
+            _In_ NbdRequestType RequestType);
+#pragma alloc_text (PAGE, NbdRequest)
 
 VOID
 NbdWriteStat(_In_ INT Fd,
@@ -109,7 +121,8 @@ NbdWriteStat(_In_ INT Fd,
              _In_ PVOID SystemBuffer,
              _In_ PVOID *PreallocatedBuffer,
              _In_ PULONG PreallocatedLength,
-             _In_ UINT64 Handle);
+             _In_ UINT64 Handle,
+             _In_ UINT32 NbdTransmissionFlags);
 #pragma alloc_text (PAGE, NbdWriteStat)
 
 INT
@@ -134,5 +147,7 @@ RbdReadExact(_In_ INT Fd,
              _Inout_ PVOID Data,
              _In_ size_t Length,
              _Inout_ PNTSTATUS error);
+
+char* NbdRequestTypeStr(NbdRequestType RequestType);
 
 #endif
