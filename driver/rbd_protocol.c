@@ -384,11 +384,13 @@ err:
 
 _Use_decl_annotations_
 VOID
-NbdReadStat(INT Fd,
-            UINT64 Offset,
-            ULONG Length,
-            PNTSTATUS IoStatus,
-            UINT64 Handle)
+NbdRequest(
+    INT Fd,
+    UINT64 Offset,
+    ULONG Length,
+    PNTSTATUS IoStatus,
+    UINT64 Handle,
+    NbdRequestType RequestType)
 {
     WNBD_LOG_LOUD(": Enter");
     NTSTATUS Status = STATUS_SUCCESS;
@@ -404,13 +406,14 @@ NbdReadStat(INT Fd,
     NTSTATUS error;
 
     Request.Magic = RtlUlongByteSwap(NBD_REQUEST_MAGIC);
-    Request.Type = RtlUlongByteSwap(NBD_CMD_READ);
+    Request.Type = RtlUlongByteSwap(RequestType);
     Request.Length = RtlUlongByteSwap(Length);
     Request.From = RtlUlonglongByteSwap(Offset);
     Request.Handle = Handle;
 
     if (-1 == RbdWriteExact(Fd, &Request, sizeof(NBD_REQUEST), &error)) {
-        WNBD_LOG_INFO("Could not send request for NBD_CMD_READ");
+        WNBD_LOG_INFO("Could not send request for %s.",
+                      NbdRequestTypeStr(RequestType));
         Status = error;
         goto Exit;
     }
@@ -428,7 +431,8 @@ NbdWriteStat(INT Fd,
              PVOID SystemBuffer,
              PVOID *PreallocatedBuffer,
              PULONG PreallocatedLength,
-             UINT64 Handle)
+             UINT64 Handle,
+             UINT32 NbdTransmissionFlags)
 {
     WNBD_LOG_LOUD(": Enter");
 
@@ -443,10 +447,11 @@ NbdWriteStat(INT Fd,
     NTSTATUS error;
 
     Request.Magic = RtlUlongByteSwap(NBD_REQUEST_MAGIC);
-    Request.Type = RtlUlongByteSwap(NBD_CMD_WRITE);
+    Request.Type = RtlUlongByteSwap(NBD_CMD_WRITE | NbdTransmissionFlags);
     Request.Length = RtlUlongByteSwap(Length);
     Request.From = RtlUlonglongByteSwap(Offset);
     Request.Handle = Handle;
+
     UINT Needed = Length + sizeof(NBD_REQUEST);
     if (*PreallocatedLength < Needed) {
         PCHAR Buf = NULL;
@@ -502,4 +507,21 @@ NbdReadReply(INT Fd,
 
     WNBD_LOG_LOUD(": Exit");
     return STATUS_SUCCESS;
+}
+
+char* NbdRequestTypeStr(NbdRequestType RequestType) {
+    switch(RequestType) {
+    case NBD_CMD_READ:
+        return "NBD_CMD_READ";
+    case NBD_CMD_WRITE:
+        return "NBD_CMD_WRITE";
+    case NBD_CMD_DISC:
+        return "NBD_CMD_DISC";
+    case NBD_CMD_FLUSH:
+        return "NBD_CMD_FLUSH";
+    case NBD_CMD_TRIM:
+        return "NBD_CMD_TRIM";
+    default:
+        return "UNKNOWN";
+    }
 }

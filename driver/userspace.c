@@ -118,6 +118,7 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
     InquiryData->DeviceTypeQualifier = DEVICE_QUALIFIER_ACTIVE;
     InquiryData->DeviceTypeModifier = 0;
     InquiryData->RemovableMedia = 0;
+    // TODO: consider bumping to SPC-4 or SPC-5.
     InquiryData->Versions = 5;
     InquiryData->ResponseDataFormat = 2;
     InquiryData->Wide32Bit = TRUE;
@@ -324,13 +325,16 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
     }
 
     NewEntry->NbdFlags = Info->NbdFlags | RbdFlags;
-    // For convenience, we'll use another field.
-    if (NewEntry->NbdFlags & NBD_FLAG_HAS_FLAGS) {
-        NewEntry->ReadOnly = NewEntry->NbdFlags & NBD_FLAG_READ_ONLY;
-    }
-
     ULONG TargetId = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
     ULONG BusId = bitNumber / MAX_NUMBER_OF_SCSI_TARGETS;
+
+    WNBD_LOG_INFO("Retrieved NBD flags: %d. Read-only: %d, TRIM enabled: %d, "
+                  "FLUSH enabled: %d, FUA enabled: %d.",
+                   NewEntry->NbdFlags,
+                   CHECK_NBD_READONLY(NewEntry->NbdFlags),
+                   CHECK_NBD_SEND_TRIM(NewEntry->NbdFlags),
+                   CHECK_NBD_SEND_FLUSH(NewEntry->NbdFlags),
+                   CHECK_NBD_SEND_FUA(NewEntry->NbdFlags));
 
     PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION) Malloc(sizeof(SCSI_DEVICE_INFORMATION));
     if(!ScsiInfo) {

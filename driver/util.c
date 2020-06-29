@@ -202,31 +202,9 @@ WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
 }
 
 NTSTATUS
-WnbdProcessDeviceThreadRequestsReads(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
-                                     _In_ PSRB_QUEUE_ELEMENT Element)
-{
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(DeviceInformation);
-    ASSERT(Element);
-    NTSTATUS Status = STATUS_SUCCESS;
-
-    NbdReadStat(DeviceInformation->Socket,
-                Element->StartingLbn,
-                Element->ReadLength,
-                &Status,
-                Element->Tag);
-
-    InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
-    InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
-    InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
-
-    WNBD_LOG_LOUD(": Exit");
-    return Status;
-}
-
-NTSTATUS
-WnbdProcessDeviceThreadRequestsWrites(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
-                                      _In_ PSRB_QUEUE_ELEMENT Element)
+WnbdRequestWrite(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
+                 _In_ PSRB_QUEUE_ELEMENT Element,
+                 _In_ DWORD NbdTransmissionFlags)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceInformation);
@@ -246,12 +224,9 @@ WnbdProcessDeviceThreadRequestsWrites(_In_ PSCSI_DEVICE_INFORMATION DeviceInform
                      Buffer,
                      &DeviceInformation->WritePreallocatedBuffer,
                      &DeviceInformation->WritePreallocatedBufferLength,
-                     Element->Tag);
+                     Element->Tag,
+                     NbdTransmissionFlags);
     }
-
-    InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
-    InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
-    InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
@@ -314,72 +289,58 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
         WNBD_LOG_INFO("Processing request. Address: %p Tag: 0x%llx",
                       Status, Element->Srb, Element->Tag);
+        int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
 
-        if(DeviceInformation->UserEntry->ReadOnly) {
-            switch (Cdb->AsByte[0]) {
-                case SCSIOP_WRITE6:
-                case SCSIOP_WRITE:
-                case SCSIOP_WRITE12:
-                case SCSIOP_WRITE16:
-                case SCSIOP_SYNCHRONIZE_CACHE:
-                case SCSIOP_SYNCHRONIZE_CACHE16:
-                    Element->Srb->DataTransferLength = 0;
-                    Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
-                    WNBD_LOG_LOUD("Write or flush requested on a read-only disk.",
-                                  Status, Element->Srb, Element->Tag);
-                    StorPortNotification(RequestComplete,
-                                         Element->DeviceExtension,
-                                         Element->Srb);
-                    ExFreePool(Element);
-                    continue;
-            }
+        if(!ValidateScsiRequest(DeviceInformation, Element)) {
+            Element->Srb->DataTransferLength = 0;
+            Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+            StorPortNotification(RequestComplete,
+                                 Element->DeviceExtension,
+                                 Element->Srb);
+            ExFreePool(Element);
+            InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
+            continue;
         }
 
-        switch (Cdb->AsByte[0]) {
-        case SCSIOP_READ6:
-        case SCSIOP_READ:
-        case SCSIOP_READ12:
-        case SCSIOP_READ16:
-            KeWaitForSingleObject(&DeviceInformation->RequestSemaphore, Executive, KernelMode, FALSE, NULL);
-            if(DeviceInformation->SoftTerminateDevice || DeviceInformation->HardTerminateDevice) {
+        DWORD NbdTransmissionFlags = 0;
+        switch (NbdReqType) {
+        case NBD_CMD_WRITE:
+        case NBD_CMD_TRIM:
+            if (Element->FUA && CHECK_NBD_SEND_FUA(DeviceInformation->UserEntry->NbdFlags)) {
+                NbdTransmissionFlags |= NBD_CMD_FLAG_FUA;
+            }
+        case NBD_CMD_READ:
+        case NBD_CMD_FLUSH:
+            KeWaitForSingleObject(
+                &DeviceInformation->RequestSemaphore,
+                Executive, KernelMode, FALSE, NULL);
+            if(DeviceInformation->SoftTerminateDevice ||
+                    DeviceInformation->HardTerminateDevice) {
                 return;
             }
             ExInterlockedInsertTailList(
                 &DeviceInformation->ReplyListHead,
                 &Element->Link, &DeviceInformation->ReplyListLock);
-            WNBD_LOG_LOUD("Pending request. Address: %p Tag: 0x%llx",
-                          Element->Srb, Element->Tag);
-            Status = WnbdProcessDeviceThreadRequestsReads(DeviceInformation, Element);
-            break;
+            WNBD_LOG_LOUD("Sending %s request. Address: %p Tag: 0x%llx. FUA: %d",
+                          NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag,
+                          Element->FUA);
 
-        case SCSIOP_WRITE6:
-        case SCSIOP_WRITE:
-        case SCSIOP_WRITE12:
-        case SCSIOP_WRITE16:
-            KeWaitForSingleObject(&DeviceInformation->RequestSemaphore, Executive, KernelMode, FALSE, NULL);
-            if(DeviceInformation->SoftTerminateDevice || DeviceInformation->HardTerminateDevice) {
-                return;
+            if(NbdReqType == NBD_CMD_WRITE){
+                Status = WnbdRequestWrite(DeviceInformation, Element,
+                                          NbdTransmissionFlags);
+            } else {
+                NbdRequest(
+                    DeviceInformation->Socket,
+                    Element->StartingLbn,
+                    Element->ReadLength,
+                    &Status,
+                    Element->Tag,
+                    NbdReqType | NbdTransmissionFlags);
             }
-            ExInterlockedInsertTailList(
-                &DeviceInformation->ReplyListHead,
-                &Element->Link, &DeviceInformation->ReplyListLock);
-            WNBD_LOG_LOUD("Pending request. Address: %p Tag: 0x%llx",
-                          Element->Srb, Element->Tag);
-            Status = WnbdProcessDeviceThreadRequestsWrites(DeviceInformation, Element);
-            break;
 
-        case SCSIOP_SYNCHRONIZE_CACHE:
-        case SCSIOP_SYNCHRONIZE_CACHE16:
-            /*
-             * TODO: consider sending an actual NBD flush.
-             */
-            Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
-            StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
-            ExFreePool(Element);
-            return;
-        default:
-            Status = STATUS_DRIVER_INTERNAL_ERROR;
+            InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
+            InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
+            InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
             break;
         }
 
@@ -472,6 +433,31 @@ IsReadSrb(PSCSI_REQUEST_BLOCK Srb)
     }
 }
 
+_Use_decl_annotations_
+inline int
+ScsiOpToNbdReqType(int ScsiOp)
+{
+    switch (ScsiOp) {
+    case SCSIOP_READ6:
+    case SCSIOP_READ:
+    case SCSIOP_READ12:
+    case SCSIOP_READ16:
+        return NBD_CMD_READ;
+    case SCSIOP_WRITE6:
+    case SCSIOP_WRITE:
+    case SCSIOP_WRITE12:
+    case SCSIOP_WRITE16:
+        return NBD_CMD_WRITE;
+    case SCSIOP_UNMAP:
+        return NBD_CMD_TRIM;
+    case SCSIOP_SYNCHRONIZE_CACHE:
+    case SCSIOP_SYNCHRONIZE_CACHE16:
+        return NBD_CMD_FLUSH;
+    default:
+        return -1;
+    }
+}
+
 VOID
 WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
 {
@@ -513,18 +499,28 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         CloseConnection(DeviceInformation);
         goto Exit;
     }
-    WNBD_LOG_LOUD("Received reply header for %p 0x%llx.", Element->Srb, Element->Tag);
 
     ULONG StorResult;
     if(!Element->Aborted) {
-        StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
-        if (STOR_STATUS_SUCCESS != StorResult) {
-            WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
-                           Element->Srb, Element->Tag, error);
-            Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-            CloseConnection(DeviceInformation);
-            goto Exit;
+        // We need to avoid accessing aborted or already completed SRBs.
+        PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+        int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
+        WNBD_LOG_LOUD("Received reply header for %s %p 0x%llx.",
+                      NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag);
+
+        if(IsReadSrb(Element->Srb)) {
+            StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
+            if (STOR_STATUS_SUCCESS != StorResult) {
+                WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
+                               Element->Srb, Element->Tag, error);
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                CloseConnection(DeviceInformation);
+                goto Exit;
+            }
         }
+    } else {
+        WNBD_LOG_WARN("Received reply header for aborted request: %p 0x%llx.",
+                      Element->Srb, Element->Tag);
     }
 
     if(!Reply.Error && IsReadSrb(Element->Srb)) {
@@ -571,8 +567,6 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     InterlockedDecrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
 
     if(Element->Aborted) {
-        WNBD_LOG_WARN("Got reply for aborted request: %p 0x%llx.",
-                      Element->Srb, Element->Tag);
         InterlockedIncrement64(&DeviceInformation->Stats.CompletedAbortedIORequests);
     }
     else {
@@ -594,4 +588,43 @@ Exit:
         }
         ExFreePool(Element);
     }
+}
+
+BOOLEAN
+ValidateScsiRequest(
+    _In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
+    _In_ PSRB_QUEUE_ELEMENT Element)
+{
+    PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+    int ScsiOp = Cdb->AsByte[0];
+    int NbdReqType = ScsiOpToNbdReqType(ScsiOp);
+
+    switch (NbdReqType) {
+    case NBD_CMD_TRIM:
+    case NBD_CMD_WRITE:
+    case NBD_CMD_FLUSH:
+        if(CHECK_NBD_READONLY(DeviceInformation->UserEntry->NbdFlags)) {
+            WNBD_LOG_LOUD(
+                "Write, flush or trim requested on a read-only disk.");
+            return FALSE;
+        }
+    case NBD_CMD_READ:
+        break;
+    default:
+        WNBD_LOG_LOUD("Unsupported SCSI operation: %d.", ScsiOp);
+        return FALSE;
+    }
+
+    if (NbdReqType == NBD_CMD_TRIM &&
+            !CHECK_NBD_SEND_TRIM(DeviceInformation->UserEntry->NbdFlags)) {
+        WNBD_LOG_LOUD("The NBD server doesn't accept TRIM/UNMAP.");
+        return FALSE;
+    }
+    if(NbdReqType == NBD_CMD_FLUSH &&
+            !CHECK_NBD_SEND_FLUSH(DeviceInformation->UserEntry->NbdFlags)) {
+        WNBD_LOG_LOUD("The NBD server doesn't accept flush requests");
+        return FALSE;
+    }
+
+    return TRUE;
 }

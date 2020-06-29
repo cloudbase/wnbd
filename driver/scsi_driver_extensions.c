@@ -483,8 +483,10 @@ WnbdHwStartIo(PVOID DeviceExtension,
      * If the operation is not pending notify the Storport of completion
      */
     if (Complete) {
-        WNBD_LOG_LOUD("RequestComplete of %p status: 0x%x(%s)",
-                      Srb, SrbStatus, WnbdToStringSrbStatus(SrbStatus));
+        WNBD_LOG_LOUD("RequestComplete of %s status: 0x%x(%s)",
+                      WnbdToStringSrbFunction(Srb->Function),
+                      SrbStatus,
+                      WnbdToStringSrbStatus(SrbStatus));
         Srb->SrbStatus = SrbStatus;
         StorPortNotification(RequestComplete, DeviceExtension, Srb);
     }
