@@ -87,7 +87,7 @@ Ceph integration
 Mapping and umapping RBD images is straighforward, just use [rbd-nbd](https://docs.ceph.com/docs/master/man/8/rbd-nbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
 
     rbd-nbd map img1
-    rbd-nbd unmap img1    
+    rbd-nbd unmap img1
 
 Testing with NBD (Network Block Device)
 ---------------------------------------
@@ -112,7 +112,7 @@ We assume you are familiar with <a href="https://github.com/NetworkBlockDevice/n
   # If you want to run everything as root rather than the nbd user, you
   # may either say "root" in the two following lines, or remove them
   # altogether. Do not remove the [generic] section, however.
-          port = 9000
+          port = 10809
           user = nbd
           group = nbd
           includedir = /etc/nbd-server/conf.d
@@ -121,8 +121,8 @@ We assume you are familiar with <a href="https://github.com/NetworkBlockDevice/n
   # you want, but the section header has to be unique.
 
   [foo]
-      exportname = /blaz/bla.img
-      port = 9000
+      exportname = /image/path.img
+      port = 10809
       copyonwrite = true
   root@ubuntu-Virtual-Machine:/home/ubuntu# ifconfig eth0 | grep 172
           inet 172.17.160.251  netmask 255.255.255.240  broadcast 172.17.160.255
@@ -130,10 +130,10 @@ We assume you are familiar with <a href="https://github.com/NetworkBlockDevice/n
 
   * Mapping an export:
   ```
-  PS C:\workspace> .\wnbd-client.exe map test2 172.17.160.251 9000 foo
+  PS C:\workspace> .\wnbd-client.exe map test2 172.17.160.251 10809 foo
   InstanceName=test2
   HostName=172.17.160.251
-  PortName=9000
+  PortName=10809
   ExportName=foo
   MustNegociate=1
   PS C:\workspace> Get-Disk
