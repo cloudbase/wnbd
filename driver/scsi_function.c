@@ -118,9 +118,8 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
-        WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-            WnbdToStringSrbCdbOperation(CdbValue),
-            Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+        WNBD_LOG_INFO(": Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+            CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
 
     LuExtension = (PWNBD_LU_EXTENSION)
@@ -250,9 +249,8 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
-        WNBD_LOG_INFO(": Received %s command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-            WnbdToStringSrbCdbOperation(CdbValue),
-            Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+        WNBD_LOG_INFO(": Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+            CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
     LuExtension = (PWNBD_LU_EXTENSION)
         StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun );

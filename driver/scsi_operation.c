@@ -631,8 +631,7 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
     UINT64 BlockCount = WnbdGetBlockCount(Info->UserEntry->DiskSize, BlockSize);
 
 
-    WNBD_LOG_LOUD("Processing %s command",
-                  WnbdToStringSrbCdbOperation(Cdb->AsByte[0]));
+    WNBD_LOG_LOUD("Processing %#02x command", Cdb->AsByte[0]);
 
     switch (Cdb->AsByte[0]) {
     case SCSIOP_READ6:
