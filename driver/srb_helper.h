@@ -13,6 +13,8 @@ Abstract:
 
 --*/
 
+// TODO: just include srbhelper.h and drop redundant definitions.
+
 #ifndef _NTSRBHELPER_
 #define _NTSRBHELPER_
 
@@ -1654,13 +1656,15 @@ SrbCdbGetRange(
     }
 }
 
-#define CHECK_MODE_SENSE(Cdb) MODE_SENSE_CHANGEABLE_VALUES == (Cdb)->MODE_SENSE.Pc || \
-                              MODE_PAGE_CACHING != (Cdb)->MODE_SENSE.PageCode && \
-                              MODE_SENSE_RETURN_ALL != (Cdb)->MODE_SENSE.PageCode
+#define CHECK_MODE_SENSE(Cdb, Page) \
+    (MODE_SENSE_CHANGEABLE_VALUES == (Cdb)->MODE_SENSE.Pc || \
+     (Page != (Cdb)->MODE_SENSE.PageCode && \
+      MODE_SENSE_RETURN_ALL != (Cdb)->MODE_SENSE.PageCode))
 
-#define CHECK_MODE_SENSE10(Cdb) MODE_SENSE_CHANGEABLE_VALUES == (Cdb)->MODE_SENSE10.Pc || \
-                                MODE_PAGE_CACHING != (Cdb)->MODE_SENSE10.PageCode && \
-                                MODE_SENSE_RETURN_ALL != (Cdb)->MODE_SENSE10.PageCode
+#define CHECK_MODE_SENSE10(Cdb, Page) \
+    (MODE_SENSE_CHANGEABLE_VALUES == (Cdb)->MODE_SENSE10.Pc || \
+     (Page != (Cdb)->MODE_SENSE10.PageCode && \
+      MODE_SENSE_RETURN_ALL != (Cdb)->MODE_SENSE10.PageCode))
 
 #endif // (NTDDI_VERSION >= NTDDI_WIN8)
 
