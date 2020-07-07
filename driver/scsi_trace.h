@@ -13,9 +13,6 @@ PCHAR
 WnbdToStringSrbFunction(_In_ UCHAR SrbFunction);
 
 PCHAR
-WnbdToStringSrbCdbOperation(_In_ UCHAR SrbOperation);
-
-PCHAR
 WnbdToStringSrbStatus(_In_ UCHAR SrbStatus);
 
 #endif
