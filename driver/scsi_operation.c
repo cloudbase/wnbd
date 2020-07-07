@@ -343,7 +343,7 @@ WnbdSetModeSense(_In_ PVOID Data,
                  _In_ ULONG MaxLength,
                  _In_ BOOLEAN ReadOnly,
                  _In_ BOOLEAN AcceptFUA,
-                 _Out_ PVOID Page,
+                 _Out_ PVOID* Page,
                  _Out_ PULONG Length)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -352,19 +352,25 @@ WnbdSetModeSense(_In_ PVOID Data,
 
     UCHAR SrbStatus = SRB_STATUS_SUCCESS;
     *Length = 0;
-    Page = NULL;
+    *Page = NULL;
 
     switch (Cdb->AsByte[0]) {
     case SCSIOP_MODE_SENSE:
         {
         *Length = sizeof(MODE_PARAMETER_HEADER) + sizeof(MODE_CACHING_PAGE);
 
-        if (CHECK_MODE_SENSE(Cdb) || (*Length > MaxLength)) {
+        if (CHECK_MODE_SENSE(Cdb, MODE_PAGE_CACHING)) {
+            SrbStatus = SRB_STATUS_INVALID_REQUEST;
+            goto Exit;
+        }
+        if(*Length > MaxLength) {
+            WNBD_LOG_ERROR("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
             SrbStatus = SRB_STATUS_DATA_OVERRUN;
             goto Exit;
         }
+
         PMODE_PARAMETER_HEADER ModeParameterHeader = Data;
-        Page = (PVOID)(ModeParameterHeader + 1);
+        *Page = (PVOID)(ModeParameterHeader + 1);
 
         ModeParameterHeader->ModeDataLength = (UCHAR)(*Length -
             RTL_SIZEOF_THROUGH_FIELD(MODE_PARAMETER_HEADER, ModeDataLength));
@@ -379,13 +385,18 @@ WnbdSetModeSense(_In_ PVOID Data,
         {
         *Length = sizeof(MODE_PARAMETER_HEADER10) + sizeof(MODE_CACHING_PAGE);
 
-        if (CHECK_MODE_SENSE10(Cdb) || (*Length > MaxLength)) {
+        if (CHECK_MODE_SENSE10(Cdb, MODE_PAGE_CACHING)) {
+            SrbStatus = SRB_STATUS_INVALID_REQUEST;
+            goto Exit;
+        }
+        if(*Length > MaxLength) {
+            WNBD_LOG_ERROR("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
             SrbStatus = SRB_STATUS_DATA_OVERRUN;
             goto Exit;
         }
 
         PMODE_PARAMETER_HEADER10 ModeParameterHeader = Data;
-        Page = (PVOID)(ModeParameterHeader + 1);
+        *Page = (PVOID)(ModeParameterHeader + 1);
 
         ModeParameterHeader->ModeDataLength[0] = 0;
         ModeParameterHeader->ModeDataLength[1] = (UCHAR)(*Length -
@@ -400,12 +411,12 @@ WnbdSetModeSense(_In_ PVOID Data,
         break;
     default:
         WNBD_LOG_ERROR("Unknown MODE_SENSE byte: %u", Cdb->AsByte[0]);
-        SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+        SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
+    WNBD_LOG_LOUD(": Exit: %#02x", SrbStatus);
     return SrbStatus;
 }
 
@@ -433,8 +444,9 @@ WnbdModeSense(_In_ PSCSI_DEVICE_INFORMATION Info,
         DataBuffer, Cdb, DataTransferLength,
         CHECK_NBD_READONLY(Info->UserEntry->NbdFlags),
         CHECK_NBD_SEND_FUA(Info->UserEntry->NbdFlags),
-        Page, &Length);
+        &Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
+        WNBD_LOG_ERROR("Could not set mode sense.");
         goto Exit;
     }
 
