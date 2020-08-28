@@ -17,33 +17,43 @@ UCHAR
 WnbdReadCapacity(_In_ PSCSI_DEVICE_INFORMATION Info,
                  _In_ PSCSI_REQUEST_BLOCK Srb,
                  _In_ PCDB Cdb,
-                 _In_ UINT64 BlockSize,
+                 _In_ UINT BlockSize,
                  _In_ UINT64 BlockCount)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(Cdb);
-    WNBD_LOG_INFO("Using BlockCount: %llu", BlockCount);
+    WNBD_LOG_INFO("Using BlockSize: %u, BlockCount: %llu", BlockSize, BlockCount);
 
     PVOID DataBuffer = SrbGetDataBuffer(Srb);
     ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
-    UCHAR SrbStatus = SRB_STATUS_DATA_OVERRUN;
+    UCHAR SrbStatus = SRB_STATUS_INVALID_REQUEST;
 
-    if (0 == DataBuffer) {
+    if (0 == DataBuffer || 0 == BlockCount) {
+        SrbStatus = SRB_STATUS_INTERNAL_ERROR;
         goto Exit;
     }
+    UINT64 maxLba = BlockCount - 1;
 
     RtlZeroMemory(DataBuffer, DataTransferLength);
 
-    switch (Cdb->AsByte[0])
+    switch (Cdb->CDB10.OperationCode)
     {
     case SCSIOP_READ_CAPACITY:
         {
         if (sizeof(READ_CAPACITY_DATA) > DataTransferLength) {
             goto Exit;
         }
+
         PREAD_CAPACITY_DATA ReadCapacityData = DataBuffer;
-        REVERSE_BYTES_4(&ReadCapacityData->LogicalBlockAddress, &BlockCount);
+
+        if (maxLba >= MAXULONG) {
+            ReadCapacityData->LogicalBlockAddress = MAXULONG;
+        }
+        else {
+            REVERSE_BYTES_4(&ReadCapacityData->LogicalBlockAddress, &maxLba);
+        }
+
         REVERSE_BYTES_4(&ReadCapacityData->BytesPerBlock, &BlockSize);
         SrbSetDataTransferLength(Srb, sizeof(READ_CAPACITY_DATA));
         SrbStatus = SRB_STATUS_SUCCESS;
@@ -51,21 +61,41 @@ WnbdReadCapacity(_In_ PSCSI_DEVICE_INFORMATION Info,
         break;
     case SCSIOP_READ_CAPACITY16:
         {
-        if (sizeof(READ_CAPACITY16_DATA) > DataTransferLength) {
+        if (Cdb->READ_CAPACITY16.ServiceAction != SERVICE_ACTION_READ_CAPACITY16) {
             goto Exit;
         }
-        PREAD_CAPACITY16_DATA ReadCapacityData16 = DataBuffer;
-        REVERSE_BYTES_8(&ReadCapacityData16->LogicalBlockAddress, &BlockCount);
-        REVERSE_BYTES_8(&ReadCapacityData16->BytesPerBlock, &BlockSize);
-        if (Info->UserEntry->Properties.Flags.UnmapSupported) {
-            ReadCapacityData16->LBPME = 1;
+
+        if (sizeof(READ_CAPACITY_DATA_EX) > DataTransferLength) {
+            goto Exit;
         }
-        SrbSetDataTransferLength(Srb, sizeof(READ_CAPACITY16_DATA));
+
+        ULONG ReturnDataLength = 0;
+        PREAD_CAPACITY16_DATA ReadCapacityData16 = DataBuffer;
+        REVERSE_BYTES_8(&ReadCapacityData16->LogicalBlockAddress, &maxLba);
+        REVERSE_BYTES_4(&ReadCapacityData16->BytesPerBlock, &BlockSize);
+
+        if (DataTransferLength >= (ULONG)FIELD_OFFSET(READ_CAPACITY16_DATA, Reserved3)) {
+            if (Info->UserEntry->Properties.Flags.UnmapSupported) {
+                ReadCapacityData16->LBPME = 1;
+            }
+
+            if (DataTransferLength >= sizeof(READ_CAPACITY16_DATA)) {
+                ReturnDataLength = sizeof(READ_CAPACITY16_DATA);
+            }
+            else {
+                ReturnDataLength = FIELD_OFFSET(READ_CAPACITY16_DATA, Reserved3);
+            }
+        }
+        else {
+            ReturnDataLength = sizeof(READ_CAPACITY_DATA_EX);
+        }
+
+        SrbSetDataTransferLength(Srb, ReturnDataLength);
         SrbStatus = SRB_STATUS_SUCCESS;
         }
         break;
     default:
-        WNBD_LOG_ERROR("Unknown read capacity operation: %u", Cdb->AsByte[0]);
+        WNBD_LOG_ERROR("Unknown read capacity operation: %u", Cdb->CDB10.OperationCode);
         break;
     }
 
@@ -660,9 +690,15 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
         break;
 
     case SCSIOP_READ_CAPACITY:
-    case SCSIOP_READ_CAPACITY16:
-        WNBD_LOG_INFO("Using BlockSize: %u", BlockSize);
         Srb->SrbStatus = WnbdReadCapacity(Info, Srb, Cdb, BlockSize, BlockCount);
+        break;
+    case SCSIOP_READ_CAPACITY16:
+        if (Cdb->READ_CAPACITY16.ServiceAction == SERVICE_ACTION_READ_CAPACITY16) {
+            Srb->SrbStatus = WnbdReadCapacity(Info, Srb, Cdb, BlockSize, BlockCount);
+        }
+        else {
+            Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+        }
         break;
 
     case SCSIOP_VERIFY:
