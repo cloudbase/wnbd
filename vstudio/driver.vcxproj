@@ -159,7 +159,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\lib\ksocket_wsk;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\lib\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link />
     <Link />
@@ -169,7 +169,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\lib\ksocket_wsk;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\lib\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -192,6 +192,7 @@
     <ClCompile Include="..\driver\scsi_trace.c" />
     <ClCompile Include="..\driver\userspace.c" />
     <ClCompile Include="..\driver\util.c" />
+    <ClCompile Include="..\driver\wnbd_dispatch.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\driver\common.h" />
@@ -205,8 +206,8 @@
     <ClInclude Include="..\driver\scsi_trace.h" />
     <ClInclude Include="..\driver\srb_helper.h" />
     <ClInclude Include="..\driver\userspace.h" />
-    <ClInclude Include="..\driver\userspace_shared.h" />
     <ClInclude Include="..\driver\util.h" />
+    <ClInclude Include="..\driver\wnbd_dispatch.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -29,9 +29,4 @@ WnbdExecuteScsiFunction(_In_ PVOID DeviceExtension,
 UCHAR
 WnbdPNPFunction(_In_ PSCSI_REQUEST_BLOCK Srb);
 
-VOID WnbdReleaseSemaphore(_In_ PKSEMAPHORE RequestSemaphore,
-                          _In_ KPRIORITY Increment,
-                          _In_ LONG Adjustment,
-                          _In_ _Literal_ BOOLEAN Wait);
-
 #endif

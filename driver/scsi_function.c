@@ -14,26 +14,6 @@
 #include "util.h"
 #include "userspace.h"
 
-_Use_decl_annotations_
-VOID WnbdReleaseSemaphore(PKSEMAPHORE RequestSemaphore,
-                          KPRIORITY Increment,
-                          LONG Adjustment,
-                          BOOLEAN Wait)
-{
-    WNBD_LOG_LOUD(": Enter");
-    /* STATUS_SEMAPHORE_LIMIT_EXCEEDED, can be raised.
-     * https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-kereleasesemaphore */
-    __try
-    {
-        KeReleaseSemaphore(RequestSemaphore, Increment, Adjustment, Wait);
-    }
-    __except (EXCEPTION_EXECUTE_HANDLER)
-    {
-        WNBD_LOG_ERROR("RequestSemaphore failed with status: %x", GetExceptionCode());
-    }
-    WNBD_LOG_LOUD(": Exit");
-}
-
 VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
                       PKSPIN_LOCK ListLock, PSCSI_DEVICE_INFORMATION DeviceInformation)
 {
@@ -58,8 +38,6 @@ VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
         ExFreePool(Element);
 
         InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
-
-        WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
     }
 }
 
@@ -91,9 +69,6 @@ VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
             Element->Aborted = 1;
 
             InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
-
-            // TODO: should we release the semaphore for aborted but still pending requests?
-            WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
         }
     }
     KeReleaseSpinLock(ListLock, Irql);
@@ -131,7 +106,8 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
         goto Exit;
     }
 
-    Device = WnbdFindDevice(LuExtension, DeviceExtension, Srb);
+    Device = WnbdFindDevice(LuExtension, DeviceExtension,
+                            Srb->PathId, Srb->TargetId, Srb->Lun);
     if (NULL == Device) {
         WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
             Srb->PathId, Srb->TargetId, Srb->Lun);
@@ -261,7 +237,8 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
         goto Exit;
     }
 
-    Device = WnbdFindDevice(LuExtension, DeviceExtension, Srb);
+    Device = WnbdFindDevice(LuExtension, DeviceExtension,
+                            Srb->PathId, Srb->TargetId, Srb->Lun);
     if (NULL == Device) {
         WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
                       Srb->PathId, Srb->TargetId, Srb->Lun);
@@ -315,6 +292,8 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
             ASSERT(DataBuffer);
 
             PSTOR_DEVICE_CAPABILITIES_EX DeviceCapabilitiesEx = DataBuffer;
+            // TODO: check why zero-ing the entire structure leads to a crash
+            // on WS 2016.
             RtlZeroMemory(DeviceCapabilitiesEx, sizeof(PSTOR_DEVICE_CAPABILITIES_EX));
             DeviceCapabilitiesEx->DefaultWriteCacheEnabled = 1;
             DeviceCapabilitiesEx->SilentInstall = 1;

@@ -11,12 +11,6 @@
 #include "userspace.h"
 #include "rbd_protocol.h"
 
-static const int MultiplyDeBruijnBitPosition2[32] =
-{
-  0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
-  31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
-};
-
 VOID
 WnbdDeviceCleanerThread(_In_ PVOID Context);
 
@@ -26,7 +20,16 @@ WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation);
 PWNBD_SCSI_DEVICE
 WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
                _In_ PWNBD_EXTENSION DeviceExtension,
-               _In_ PSCSI_REQUEST_BLOCK Srb);
+               _In_ UCHAR PathId,
+               _In_ UCHAR TargetId,
+               _In_ UCHAR Lun);
+
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceEx(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ UCHAR PathId,
+    _In_ UCHAR TargetId,
+    _In_ UCHAR Lun);
 
 typedef struct _SRB_QUEUE_ELEMENT {
     LIST_ENTRY Link;
@@ -63,3 +66,5 @@ BOOLEAN ValidateScsiRequest(
          _itemPtr = _nextPtr, _nextPtr = (_itemPtr)->Flink)
 
 #endif
+
+UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status);

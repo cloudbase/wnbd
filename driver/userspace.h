@@ -10,26 +10,27 @@
 #include "driver.h"
 #include "driver_extension.h"
 #include "scsi_driver_extensions.h"
-#include "userspace_shared.h"
 #include "rbd_protocol.h"
+#include "wnbd_ioctl.h"
 
-// TODO: make this configurable.
-#define WNBD_MAX_IN_FLIGHT_REQUESTS 255
-// For transfers larger than 32MB, we'll receive 0 sized buffers.
-#define WNBD_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
-#define WNBD_PREALLOC_BUFF_SZ (WNBD_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
+// TODO: make this configurable. 1024 is the Storport default.
+#define WNBD_MAX_IN_FLIGHT_REQUESTS 1024
+#define WNBD_PREALLOC_BUFF_SZ (WNBD_DEFAULT_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
+
+// The connection id provided to the user is meant to be opaque. We're currently
+// using the disk address, but that might change.
+#define WNBD_CONNECTION_ID_FROM_ADDR(PathId, TargetId, Lun) \
+    ((1 << 24 | (PathId) << 16) | ((TargetId) << 8) | (Lun))
 
 typedef struct _USER_ENTRY {
     LIST_ENTRY                         ListEntry;
     struct _SCSI_DEVICE_INFORMATION*   ScsiInformation;
-    ULONG                              BusIndex;
-    ULONG                              TargetIndex;
-    ULONG                              LunIndex;
+    USHORT                             BusIndex;
+    USHORT                             TargetIndex;
+    USHORT                             LunIndex;
     BOOLEAN                            Connected;
-    UINT64                             DiskSize;
-    UINT16                             BlockSize;
-    UINT16                             NbdFlags;
-    CONNECTION_INFO                    UserInformation;
+    WNBD_PROPERTIES                    Properties;
+    WNBD_CONNECTION_ID                 ConnectionId;
 } USER_ENTRY, *PUSER_ENTRY;
 
 typedef struct _SCSI_DEVICE_INFORMATION
@@ -37,9 +38,6 @@ typedef struct _SCSI_DEVICE_INFORMATION
     PWNBD_SCSI_DEVICE           Device;
     PGLOBAL_INFORMATION         GlobalInformation;
 
-    ULONG                       BusIndex;
-    ULONG                       TargetIndex;
-    ULONG                       LunIndex;
     PINQUIRYDATA                InquiryData;
 
     PUSER_ENTRY                 UserEntry;
@@ -55,15 +53,19 @@ typedef struct _SCSI_DEVICE_INFORMATION
     LIST_ENTRY                  ReplyListHead;
     KSPIN_LOCK                  ReplyListLock;
 
-    KSEMAPHORE                  RequestSemaphore;
-
     KSEMAPHORE                  DeviceEvent;
     PVOID                       DeviceRequestThread;
     PVOID                       DeviceReplyThread;
     BOOLEAN                     HardTerminateDevice;
     BOOLEAN                     SoftTerminateDevice;
+    KEVENT                      TerminateEvent;
+    // The rundown protection provides device reference counting, preventing
+    // it from being deallocated while still being accessed. This is
+    // especially important for IO dispatching.
+    EX_RUNDOWN_REF              RundownProtection;
 
-    WNBD_STATS                  Stats;
+
+    WNBD_DRV_STATS              Stats;
     PVOID                       ReadPreallocatedBuffer;
     ULONG                       ReadPreallocatedBufferLength;
     PVOID                       WritePreallocatedBuffer;
@@ -76,12 +78,17 @@ WnbdParseUserIOCTL(_In_ PVOID GlobalHandle,
 
 BOOLEAN
 WnbdFindConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                   _In_ PCONNECTION_INFO Info,
+                   _In_ PCHAR InstanceName,
                    _Maybenull_ PUSER_ENTRY* Entry);
+
+PUSER_ENTRY
+WnbdFindConnectionEx(_In_ PGLOBAL_INFORMATION GInfo,
+                     _In_ UINT64 ConnectionId);
 
 NTSTATUS
 WnbdCreateConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                     _In_ PCONNECTION_INFO Info);
+                     _In_ PWNBD_PROPERTIES Properties,
+                     _In_ PWNBD_CONNECTION_INFO ConnectionInfo);
 
 NTSTATUS
 WnbdDeleteConnectionEntry(_In_ PUSER_ENTRY Entry);
@@ -92,7 +99,7 @@ WnbdEnumerateActiveConnections(_In_ PGLOBAL_INFORMATION GInfo,
 
 NTSTATUS
 WnbdDeleteConnection(_In_ PGLOBAL_INFORMATION GInfo,
-                     _In_ PCONNECTION_INFO Info);
+                     _In_ PCHAR InstanceName);
 
 VOID
 WnbdInitScsiIds();

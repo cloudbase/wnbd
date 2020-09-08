@@ -102,7 +102,7 @@ WnbdDeleteDevices(_In_ PWNBD_EXTENSION Ext,
                 Device, Device->PathId, Device->TargetId, Device->Lun);
             PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
             WnbdDeleteConnection((PGLOBAL_INFORMATION)Ext->GlobalInformation,
-                                 &Info->UserEntry->UserInformation);
+                                 Info->UserEntry->Properties.InstanceName);
             RemoveEntryList(&Device->ListEntry);
             WnbdDeleteScsiInformation(Device->ScsiDeviceExtension);
             ExFreePool(Device);
@@ -173,12 +173,13 @@ WnbdReportMissingDevice(_In_ PWNBD_EXTENSION DeviceExtension,
 PWNBD_SCSI_DEVICE
 WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
                _In_ PWNBD_EXTENSION DeviceExtension,
-               _In_ PSCSI_REQUEST_BLOCK Srb)
+               _In_ UCHAR PathId,
+               _In_ UCHAR TargetId,
+               _In_ UCHAR Lun)
 {
     WNBD_LOG_LOUD(": Entered");
     ASSERT(LuExtension);
     ASSERT(DeviceExtension);
-    ASSERT(Srb);
 
     PWNBD_SCSI_DEVICE Device = NULL;
 
@@ -187,9 +188,9 @@ WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
 
         Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
 
-        if (Device->PathId == Srb->PathId
-            && Device->TargetId == Srb->TargetId
-            && Device->Lun == Srb->Lun) {
+        if (Device->PathId == PathId
+            && Device->TargetId == TargetId
+            && Device->Lun == Lun) {
             WnbdReportMissingDevice(DeviceExtension, Device, LuExtension);
             break;
         }
@@ -198,6 +199,50 @@ WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
 
     WNBD_LOG_LOUD(": Exit");
 
+    return Device;
+}
+
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceEx(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ UCHAR PathId,
+    _In_ UCHAR TargetId,
+    _In_ UCHAR Lun)
+{
+    WNBD_LOG_LOUD(": Enter");
+    ASSERT(DeviceExtension);
+
+    PWNBD_SCSI_DEVICE Device = NULL;
+    PWNBD_LU_EXTENSION LuExtension;
+    KIRQL Irql;
+    KSPIN_LOCK DevLock = DeviceExtension->DeviceListLock;
+    KeAcquireSpinLock(&DevLock, &Irql);
+
+    LuExtension = (PWNBD_LU_EXTENSION)
+        StorPortGetLogicalUnit(DeviceExtension, PathId, TargetId, Lun);
+
+    if (!LuExtension) {
+        WNBD_LOG_ERROR(": Unable to get LUN extension for device PathId: %d TargetId: %d LUN: %d",
+            PathId, TargetId, Lun);
+        goto Exit;
+    }
+
+    Device = WnbdFindDevice(LuExtension, DeviceExtension,
+                            PathId, TargetId, Lun);
+    if (!Device) {
+        WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
+            PathId, TargetId, Lun);
+        goto Exit;
+    }
+
+    if (!Device->ScsiDeviceExtension) {
+        WNBD_LOG_ERROR("%p has no ScsiDeviceExtension. PathId = %d. TargetId = %d. LUN = %d",
+            Device, PathId, TargetId, Lun);
+        goto Exit;
+    }
+
+Exit:
+    KeReleaseSpinLock(&DevLock, Irql);
     return Device;
 }
 
@@ -255,6 +300,11 @@ VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(
         &DeviceInformation->SocketLock, TRUE);
+    // TODO: is SocketToClose actually necessary? We're closing both
+    // SocketToClose and Socket. This logic seems very convoluted.
+    // Also, "Close" is calling the socket "Disconnect" function and
+    // Disconnect is actually calling "Close" ?! 
+    DeviceInformation->SocketToClose = -1;
     if (-1 != DeviceInformation->Socket) {
         WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
         DeviceInformation->SocketToClose = DeviceInformation->Socket;
@@ -303,17 +353,15 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         }
 
         DWORD NbdTransmissionFlags = 0;
+        PWNBD_PROPERTIES DevProps = &DeviceInformation->UserEntry->Properties;
         switch (NbdReqType) {
         case NBD_CMD_WRITE:
         case NBD_CMD_TRIM:
-            if (Element->FUA && CHECK_NBD_SEND_FUA(DeviceInformation->UserEntry->NbdFlags)) {
+            if (Element->FUA && DevProps->Flags.UnmapSupported) {
                 NbdTransmissionFlags |= NBD_CMD_FLAG_FUA;
             }
         case NBD_CMD_READ:
         case NBD_CMD_FLUSH:
-            KeWaitForSingleObject(
-                &DeviceInformation->RequestSemaphore,
-                Executive, KernelMode, FALSE, NULL);
             if(DeviceInformation->SoftTerminateDevice ||
                     DeviceInformation->HardTerminateDevice) {
                 return;
@@ -373,6 +421,7 @@ WnbdDeviceRequestThread(_In_ PVOID Context)
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
     while (TRUE) {
+        // TODO: should this be moved in the WnbdProcessDeviceThreadRequests loop?
         KeWaitForSingleObject(&DeviceInformation->DeviceEvent, Executive, KernelMode, FALSE, NULL);
 
         if (DeviceInformation->HardTerminateDevice) {
@@ -382,6 +431,8 @@ WnbdDeviceRequestThread(_In_ PVOID Context)
 
         WnbdProcessDeviceThreadRequests(DeviceInformation);
 
+        // TODO: should we continue processing requests on soft termination until
+        // we drain our queues?
         if (DeviceInformation->SoftTerminateDevice) {
             WNBD_LOG_INFO("Soft terminate thread: %p", DeviceInformation);
             PsTerminateSystemThread(STATUS_SUCCESS);
@@ -572,8 +623,6 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     else {
         WNBD_LOG_LOUD("Successfully completed request %p 0x%llx.",
                       Element->Srb, Element->Tag);
-
-        WnbdReleaseSemaphore(&DeviceInformation->RequestSemaphore, 0, 1, FALSE);
     }
 
 Exit:
@@ -598,12 +647,13 @@ ValidateScsiRequest(
     PCDB Cdb = (PCDB)&Element->Srb->Cdb;
     int ScsiOp = Cdb->AsByte[0];
     int NbdReqType = ScsiOpToNbdReqType(ScsiOp);
+    PWNBD_PROPERTIES DevProps = &DeviceInformation->UserEntry->Properties;
 
     switch (NbdReqType) {
     case NBD_CMD_TRIM:
     case NBD_CMD_WRITE:
     case NBD_CMD_FLUSH:
-        if(CHECK_NBD_READONLY(DeviceInformation->UserEntry->NbdFlags)) {
+        if (DevProps->Flags.ReadOnly) {
             WNBD_LOG_LOUD(
                 "Write, flush or trim requested on a read-only disk.");
             return FALSE;
@@ -615,16 +665,44 @@ ValidateScsiRequest(
         return FALSE;
     }
 
-    if (NbdReqType == NBD_CMD_TRIM &&
-            !CHECK_NBD_SEND_TRIM(DeviceInformation->UserEntry->NbdFlags)) {
+    if (NbdReqType == NBD_CMD_TRIM && !DevProps->Flags.UnmapSupported) {
         WNBD_LOG_LOUD("The NBD server doesn't accept TRIM/UNMAP.");
         return FALSE;
     }
-    if(NbdReqType == NBD_CMD_FLUSH &&
-            !CHECK_NBD_SEND_FLUSH(DeviceInformation->UserEntry->NbdFlags)) {
+    if (NbdReqType == NBD_CMD_FLUSH && !DevProps->Flags.FlushSupported) {
         WNBD_LOG_LOUD("The NBD server doesn't accept flush requests");
         return FALSE;
     }
 
     return TRUE;
+}
+
+UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
+{
+    UCHAR SrbStatus = SRB_STATUS_ERROR;
+    PSENSE_DATA SenseInfoBuffer = SrbGetSenseInfoBuffer(Srb);
+    UCHAR SenseInfoBufferLength = SrbGetSenseInfoBufferLength(Srb);
+
+    if (SenseInfoBuffer && sizeof(SENSE_DATA) <= SenseInfoBufferLength &&
+        !(SrbGetSrbFlags(Srb) & SRB_FLAGS_DISABLE_AUTOSENSE))
+    {
+        RtlZeroMemory(SenseInfoBuffer, SenseInfoBufferLength);
+        SenseInfoBuffer->ErrorCode = SCSI_SENSE_ERRORCODE_FIXED_CURRENT;
+        SenseInfoBuffer->SenseKey = Status->SenseKey;
+        SenseInfoBuffer->AdditionalSenseCode = Status->ASC;
+        SenseInfoBuffer->AdditionalSenseCodeQualifier = Status->ASCQ;
+        SenseInfoBuffer->AdditionalSenseLength = sizeof(SENSE_DATA) -
+            RTL_SIZEOF_THROUGH_FIELD(SENSE_DATA, AdditionalSenseLength);
+        if (Status->InformationValid)
+        {
+            // TODO: should we use REVERSE_BYTES_8? What's the expected endianness?
+            (*(PUINT64)SenseInfoBuffer->Information) = Status->Information;
+            SenseInfoBuffer->Valid = 1;
+        }
+
+        SrbSetScsiStatus(Srb, SCSISTAT_CHECK_CONDITION);
+        SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
+    }
+
+    return SrbStatus;
 }
