@@ -13,19 +13,6 @@
 #include "userspace.h"
 #include "util.h"
 
-UINT16
-WnbdGetShiftBlockSize(_In_ UINT16 BlockSize)
-{
-    ASSERT(BlockSize && !(BlockSize & (BlockSize - 1)));
-    return (UINT16) MultiplyDeBruijnBitPosition2[(UINT32)(BlockSize * 0x077CB531U) >> 27];
-}
-
-UINT64
-WnbdGetBlockCount(_In_ UINT64 DiskSize, UINT16 BlockSize)
-{
-    return (DiskSize >> WnbdGetShiftBlockSize(BlockSize));
-}
-
 UCHAR
 WnbdReadCapacity(_In_ PSCSI_DEVICE_INFORMATION Info,
                  _In_ PSCSI_REQUEST_BLOCK Srb,
@@ -70,7 +57,7 @@ WnbdReadCapacity(_In_ PSCSI_DEVICE_INFORMATION Info,
         PREAD_CAPACITY16_DATA ReadCapacityData16 = DataBuffer;
         REVERSE_BYTES_8(&ReadCapacityData16->LogicalBlockAddress, &BlockCount);
         REVERSE_BYTES_8(&ReadCapacityData16->BytesPerBlock, &BlockSize);
-        if (CHECK_NBD_SEND_TRIM(Info->UserEntry->NbdFlags)) {
+        if (Info->UserEntry->Properties.Flags.UnmapSupported) {
             ReadCapacityData16->LBPME = 1;
         }
         SrbSetDataTransferLength(Srb, sizeof(READ_CAPACITY16_DATA));
@@ -160,12 +147,13 @@ WnbdSetVpdBlockLimits(_In_ PVOID Data,
     BlockLimits->PageLength[1] = sizeof(VPD_BLOCK_LIMITS_PAGE) -
         RTL_SIZEOF_THROUGH_FIELD(VPD_BLOCK_LIMITS_PAGE, PageLength);
 
-    UINT32 MaximumTransferBlocks = MaximumTransferLength / Info->UserEntry->BlockSize;
+    UINT32 MaximumTransferBlocks = MaximumTransferLength / Info->UserEntry->Properties.BlockSize;
     REVERSE_BYTES_4(&BlockLimits->MaximumTransferLength,
                     &MaximumTransferBlocks);
-    if (CHECK_NBD_SEND_TRIM(Info->UserEntry->NbdFlags))
+    if (Info->UserEntry->Properties.Flags.UnmapSupported)
     {
         // To keep it simple, we'll have one UNMAP descriptor per SRB.
+        // TODO: allow passing multiple unmap descriptors.
         UINT32 MaximumUnmapBlockDescCount = 1;
         UINT32 MaximumUnmapLBACount = 0xffffffff;
         REVERSE_BYTES_4(&BlockLimits->MaximumUnmapLBACount, &MaximumUnmapLBACount);
@@ -192,7 +180,7 @@ WnbdSetVpdLogicalBlockProvisioning(
     LogicalBlockProvisioning->PageCode = VPD_LOGICAL_BLOCK_PROVISIONING;
     LogicalBlockProvisioning->PageLength[1] = sizeof(VPD_LOGICAL_BLOCK_PROVISIONING_PAGE) -
         RTL_SIZEOF_THROUGH_FIELD(VPD_LOGICAL_BLOCK_PROVISIONING_PAGE, PageLength);
-    if (CHECK_NBD_SEND_TRIM(Info->UserEntry->NbdFlags))
+    if (Info->UserEntry->Properties.Flags.UnmapSupported)
     {
         LogicalBlockProvisioning->LBPU = 1;
         // TODO: trim support doesn't imply thin provisioning, but there
@@ -222,7 +210,7 @@ WnbdSetVpdBlockDeviceCharacteristics(
     CharacteristicsPage->MediumRotationRateMsb = 0;
     CharacteristicsPage->MediumRotationRateLsb = 0;
     CharacteristicsPage->NominalFormFactor = 0;
-    CharacteristicsPage->FUAB = CHECK_NBD_SEND_FUA(Info->UserEntry->NbdFlags);
+    CharacteristicsPage->FUAB = !!Info->UserEntry->Properties.Flags.FUASupported;
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_BLOCK_DEVICE_CHARACTERISTICS_PAGE));
 
@@ -262,7 +250,7 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
             goto Exit;
         }
         SrbStatus = WnbdSetVpdSerialNumber(Data,
-                                           Info->UserEntry->UserInformation.SerialNumber,
+                                           Info->UserEntry->Properties.SerialNumber,
                                            Srb);
         }
         break;
@@ -270,7 +258,7 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
         if (sizeof(VPD_BLOCK_LIMITS_PAGE) > Length)
             return SRB_STATUS_DATA_OVERRUN;
 
-        WnbdSetVpdBlockLimits(Data, Info, Srb, WNBD_MAX_TRANSFER_LENGTH);
+        WnbdSetVpdBlockLimits(Data, Info, Srb, WNBD_DEFAULT_MAX_TRANSFER_LENGTH);
         break;
     case VPD_LOGICAL_BLOCK_PROVISIONING:
         if (sizeof(VPD_LOGICAL_BLOCK_PROVISIONING_PAGE) > Length)
@@ -442,8 +430,8 @@ WnbdModeSense(_In_ PSCSI_DEVICE_INFORMATION Info,
 
     SrbStatus = WnbdSetModeSense(
         DataBuffer, Cdb, DataTransferLength,
-        CHECK_NBD_READONLY(Info->UserEntry->NbdFlags),
-        CHECK_NBD_SEND_FUA(Info->UserEntry->NbdFlags),
+        !!Info->UserEntry->Properties.Flags.ReadOnly,
+        !!Info->UserEntry->Properties.Flags.FUASupported,
         &Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
         WNBD_LOG_ERROR("Could not set mode sense.");
@@ -454,8 +442,8 @@ WnbdModeSense(_In_ PSCSI_DEVICE_INFORMATION Info,
     Page->PageSavable = 0;
     Page->PageLength = sizeof(MODE_CACHING_PAGE) -
         RTL_SIZEOF_THROUGH_FIELD(MODE_CACHING_PAGE, PageLength);
-    Page->ReadDisableCache = !CHECK_NBD_SEND_FLUSH(Info->UserEntry->NbdFlags);
-    Page->WriteCacheEnable = CHECK_NBD_SEND_FLUSH(Info->UserEntry->NbdFlags);
+    Page->ReadDisableCache = !Info->UserEntry->Properties.Flags.FlushSupported;
+    Page->WriteCacheEnable = !!Info->UserEntry->Properties.Flags.FlushSupported;
 
     SrbSetDataTransferLength(Srb, Length);
 
@@ -494,7 +482,7 @@ WnbdPendElement(_In_ PVOID DeviceExtension,
     Element->Aborted = 0;
     Element->FUA = FUA;
     ExInterlockedInsertTailList(&ScsiInfo->RequestListHead, &Element->Link, &ScsiInfo->RequestListLock);
-    WnbdReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
+    KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
     Status = STATUS_PENDING;
 
 Exit:
@@ -533,7 +521,7 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
         ULONG DataLength = 0;
         UINT32 FUA = 0;
         SrbCdbGetRange(Cdb, &BlockAddress, &BlockCount, &FUA);
-        DataLength = BlockCount * ScsiInfo->UserEntry->BlockSize;
+        DataLength = BlockCount * ScsiInfo->UserEntry->Properties.BlockSize;
         if (DataLength < Srb->DataTransferLength &&
             (Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE || Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE16)) {
             WNBD_LOG_ERROR("STATUS_BUFFER_TOO_SMALL");
@@ -542,10 +530,11 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
             break;
         }
         Status = WnbdPendElement(DeviceExtension, ScsiDeviceExtension, Srb,
-            BlockAddress * ScsiInfo->UserEntry->BlockSize, DataLength, (BOOLEAN)FUA);
+            BlockAddress * ScsiInfo->UserEntry->Properties.BlockSize, DataLength, (BOOLEAN)FUA);
         }
         break;
     case SCSIOP_UNMAP:
+    {
         PUNMAP_LIST_HEADER DataBuffer = SrbGetDataBuffer(Srb);
         ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
         UINT16 BlockDescLength;
@@ -554,8 +543,8 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
             DataTransferLength < sizeof(UNMAP_LIST_HEADER) ||
             DataTransferLength < sizeof(UNMAP_LIST_HEADER) + (
                 BlockDescLength = ((ULONG)DataBuffer->BlockDescrDataLength[0] << 8) |
-                                   (ULONG)DataBuffer->BlockDescrDataLength[1]) ||
-            BlockDescLength > WNBD_MAX_TRANSFER_LENGTH)
+                (ULONG)DataBuffer->BlockDescrDataLength[1]) ||
+            BlockDescLength > WNBD_DEFAULT_MAX_TRANSFER_LENGTH)
         {
             Srb->SrbStatus = SRB_STATUS_ABORTED;
             Status = STATUS_BUFFER_TOO_SMALL;
@@ -580,7 +569,7 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
         }
 
         UINT32 DescriptorCount = BlockDescLength / sizeof(UNMAP_BLOCK_DESCRIPTOR);
-        if(DescriptorCount != 1) {
+        if (DescriptorCount != 1) {
             // Storport should honor the VPD limits.
             WNBD_LOG_ERROR("Cannot send multiple UNMAP descriptors at a time.");
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
@@ -596,8 +585,8 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
         UINT64 LastBlockAddress = BlockAddress + BlockCount;
 
         if (LastBlockAddress < BlockAddress ||
-            LastBlockAddress * ScsiInfo->UserEntry->BlockSize >=
-                ScsiInfo->UserEntry->DiskSize) {
+            LastBlockAddress >= ScsiInfo->UserEntry->Properties.BlockCount)
+        {
             WNBD_LOG_ERROR("Unmap overflow.");
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             Status = STATUS_INVALID_PARAMETER;
@@ -607,9 +596,10 @@ WnbdPendOperation(_In_ PVOID DeviceExtension,
         // TODO: can FUA be requested for UNMAP requests? NBD specs suggest
         // that it can, storport.h and SCSI specs suggest otherwise.
         Status = WnbdPendElement(DeviceExtension, ScsiDeviceExtension, Srb,
-            BlockAddress * ScsiInfo->UserEntry->BlockSize,
-            (UINT64)BlockCount * ScsiInfo->UserEntry->BlockSize,
+            BlockAddress * ScsiInfo->UserEntry->Properties.BlockSize,
+            (UINT64)BlockCount * ScsiInfo->UserEntry->Properties.BlockSize,
             FALSE);
+        }
         break;
     default:
         WNBD_LOG_ERROR("Unknown Pending SCSI Operation received");
@@ -639,8 +629,8 @@ WnbdHandleSrbOperation(PVOID DeviceExtension,
         Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         return status;
     }
-    UINT16 BlockSize = Info->UserEntry->BlockSize;
-    UINT64 BlockCount = WnbdGetBlockCount(Info->UserEntry->DiskSize, BlockSize);
+    UINT32 BlockSize = Info->UserEntry->Properties.BlockSize;
+    UINT64 BlockCount = Info->UserEntry->Properties.BlockCount;
 
 
     WNBD_LOG_LOUD("Processing %#02x command", Cdb->AsByte[0]);

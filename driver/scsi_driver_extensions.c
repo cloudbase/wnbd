@@ -116,7 +116,8 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     // We're receiving 0 lengths for SCSIOP_READ|SCSIOP_WRITE when setting
     // MaximumTransferLength to SP_UNINITIALIZED_VALUE. Keeping transfer lengths
     // smaller than 32MB avoids this issue.
-    ConfigInfo->MaximumTransferLength = WNBD_MAX_TRANSFER_LENGTH;
+    ConfigInfo->MaximumTransferLength = WNBD_DEFAULT_MAX_TRANSFER_LENGTH;
+    ConfigInfo->MaxNumberOfIO = WNBD_MAX_IN_FLIGHT_REQUESTS;
     ConfigInfo->NumberOfPhysicalBreaks = SP_UNINITIALIZED_VALUE;
     ConfigInfo->AlignmentMask = FILE_BYTE_ALIGNMENT;
     ConfigInfo->NumberOfBuses = MAX_NUMBER_OF_SCSI_BUSES;

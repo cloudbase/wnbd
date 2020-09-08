@@ -11,8 +11,7 @@
 #define MAX_NUMBER_OF_SCSI_LOGICAL_UNITS 1
 #define MAX_NUMBER_OF_SCSI_BUSES         1
 
-#define LOGICAL_BLOCK_SIZE 512
-
+// TODO: replace those placeholders
 #define WNBD_INQUIRY_VENDOR_ID           "WNBD Disk"
 #define WNBD_INQUIRY_PRODUCT_ID          "WNBD_DISK_ID"
 #define WNBD_INQUIRY_PRODUCT_REVISION    "V0.1"
