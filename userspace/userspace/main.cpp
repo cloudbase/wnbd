@@ -4,28 +4,13 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
-#include "wmi.h"
-#include "ioctl.h"
-#include <userspace_shared.h>
+#include "cmd.h"
 #include <string>
-#include <codecvt>
-#include <locale>
-
-using convert_t = std::codecvt_utf8<wchar_t>;
-std::wstring_convert<convert_t, wchar_t> strconverter;
-
-std::string to_string(std::wstring wstr)
-{
-    return strconverter.to_bytes(wstr);
-}
-
-std::wstring to_wstring(std::string str)
-{
-    return strconverter.from_bytes(str);
-}
 
 bool arg_to_bool(char* arg) {
     return !_stricmp(arg, "1") ||
+           !_stricmp(arg, "t") ||
+           !_stricmp(arg, "true") ||
            !_stricmp(arg, "yes") ||
            !_stricmp(arg, "y");
 }
@@ -34,7 +19,7 @@ int main(int argc, PCHAR argv[])
 {
     PCHAR Command;
     PCHAR InstanceName = NULL;
-    PCHAR PortName = NULL;
+    DWORD PortNumber = NULL;
     PCHAR ExportName = NULL;
     PCHAR HostName = NULL;
 
@@ -43,57 +28,46 @@ int main(int argc, PCHAR argv[])
     if ((argc >= 6) && !strcmp(Command, "map")) {
         InstanceName = argv[2];
         HostName = argv[3];
-        PortName = argv[4];
+        PortNumber = atoi(argv[4]);
         ExportName = argv[5];
-        BOOLEAN MustNegotiate = TRUE;
+        BOOLEAN SkipNegotiation = FALSE;
         BOOLEAN ReadOnly = FALSE;
+        UINT32 DiskSize = 0;
+        UINT32 BlockSize = 512;
 
+        // TODO: use named arguments.
         if (argc > 6) {
-            MustNegotiate = arg_to_bool(argv[6]);
+            SkipNegotiation = arg_to_bool(argv[6]);
         }
         if (argc > 7) {
             ReadOnly = arg_to_bool(argv[7]);
         }
-        WnbdMap(InstanceName, HostName, PortName, ExportName, 50000,
-                MustNegotiate, ReadOnly);
+        if (argc > 8) {
+            DiskSize = atoi(argv[8]);
+        }
+        if (argc > 9) {
+            BlockSize = atoi(argv[9]);
+        }
+
+        CmdMap(InstanceName, HostName, PortNumber, ExportName, DiskSize,
+               BlockSize, SkipNegotiation, ReadOnly);
     } else if (argc == 3 && !strcmp(Command, "unmap")) {
         InstanceName = argv[2];
-        WnbdUnmap(InstanceName);
+        BOOLEAN HardRemove;
+        if (argc > 3) {
+            HardRemove = arg_to_bool(argv[3]);
+        }
+        CmdUnmap(InstanceName, HardRemove);
     } else if (argc == 3 && !strcmp(Command, "stats")) {
         InstanceName = argv[2];
-        WnbdStats(InstanceName);
+        CmdStats(InstanceName);
     } else if (argc == 2 && !strcmp(Command, "list")) {
-        PDISK_INFO_LIST Output = NULL;
-        DWORD Status = WnbdList(&Output);
-        if (!SUCCEEDED(Status)) {
-            return Status;
-        }
-        if (NULL != Output && ERROR_SUCCESS == Status) {
-            InitWMI();
-            printf("InstanceName\t\tPid\t\tDiskNumber\t\t\n");
-            for (ULONG index = 0; index < Output->ActiveListCount; index++) {
-                std::wstring WideString = to_wstring(Output->ActiveEntry[index].ConnectionInformation.SerialNumber);
-                std::wstring WQL = L"SELECT * FROM Win32_DiskDrive WHERE SerialNumber = '";
-                WQL.append(WideString);
-                WQL.append(L"'");
-                std::vector<DiskInfo> d;
-                bool ret = QueryWMI(bstr_t(WQL.c_str()), d);
-                printf("%s\t\t", Output->ActiveEntry[index].ConnectionInformation.InstanceName);
-                printf("%d\t\t", Output->ActiveEntry[index].ConnectionInformation.Pid);
-                if (d.size() == 1) {
-                    DiskInfo temp = d[0];
-                    printf("%d\t\t\n", temp.Index);
-                } else {
-                    printf("\t\t\n");
-                }
-            }
-            ReleaseWMI();
-        }
+        return CmdList();
     } else if (argc == 3 && !strcmp(Command, "set-debug")) {
-        int Value = atoi(argv[2]);
-        WnbdSetDebug(Value);
+        CmdRaiseLogLevel(arg_to_bool(argv[2]));
     } else {
-        return Syntax();
+        PrintSyntax();
+        return -1;
     }
     
     return 0;
