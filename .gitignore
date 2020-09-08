@@ -25,6 +25,7 @@
 .#*
 .*.cmd
 .*.swp
+*.vcxproj.user
 Module.symvers
 TAGS
 cscope.*
@@ -41,4 +42,4 @@ tags
 /vstudiox64/
 /lib/ksocket_wsk/x64/
 /userspace/userspace/x64/
-
+libwnbd/x64/
