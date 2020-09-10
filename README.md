@@ -3,13 +3,30 @@ Windows Network Block Device (WNBD)
 
 Build Status:
 -------------
+
 [![Build status](https://ci.appveyor.com/api/projects/status/2m73dxm2t7s7jlit/branch/master?svg=true)](https://ci.appveyor.com/project/aserdean/wnbd/branch/master)
 
 
 What is WNBD?
 -------------
 
-WNBD is a client side implementation of [Network Block Device](https://nbd.sourceforge.io/)
+The ``WNBD`` project provides virtual block devices through a Storport Miniport driver. It can
+connect to a [Network Block Device (NBD)](https://nbd.sourceforge.io/) server, which exposes
+device details and acts as an IO channel. As an alternative, it can dispatch IO commands to
+an userspace process using a DeviceIoControl based interface.
+
+The project also provides the ``wnbd.dll`` library, which handles the userspace and driver
+communication. It provides the following features:
+
+* Creating WNBD devices (optionally connecting to a NBD server)
+* Removing WNBD devices
+* Listing WNBD devices
+* Providing IO counters (driver as well as userspace counters)
+* Processing IO requests (when not using NBD)
+
+WNBD provides a low level API (the ``*Ioctl*`` functions), as well as a high level API that
+includes the IO dispatching boilerplate. Please check the [include](include\).
+public headers for more details.
 
 Prerequisites
 -------------
@@ -18,158 +35,177 @@ Visual Studio 2019 build tools or GUI ([Community version](https://visualstudio.
 
 [Windows Driver Kit 1909](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
 
+As an alternative, you may use a [Docker Container](Dockerfile/Readme.md) that provides the build prerequisites.
+
 Folders
 -------
 
-* <a href="Dockerfile/">Dockerfile</a> contains a Dockerfile to create a Docker image that contains needed prerequisites
-
-* <a href="driver/">driver</a> contains the driver sources
-
-* <a href="lib/ksocket_wsk/">ksocket_wsk</a> contains the WSK implementation needed to communicate with the Network Block Device server
-
-* <a href="userspace/userspace/">userspace</a> contains a simple console application `wnbd-client` useful for testing
-
-* <a href="vstudio/">vstudio</a> contains the Visual Studio solution file and its projects
+* [Dockerfile](Dockerfile/) a Dockerfile providing the build prerequisites
+* [driver](driver/) the driver sources
+* [include](include/) public headers
+* [ksocket_wsk](lib/ksocket_wsk/) a WSK wrapper used to communicate with the Network Block Device server
+* [userspace](userspace/userspace/) ``wnbd-client`` - a WNBD CLI client
+* [libwnbd](libwbd/) ``wnbd.dll`` - the WNBD userspace library
+* [vstudio](vstudio/) the Visual Studio solution file and its projects
 
 How to build
 ------------
 
-```
-> git clone https://github.com/cloudbase/wnbd
-> msbuild wnbd\vstudio\wnbd.sln
-> copy wnbd\vstudio\x64\Debug\driver\* .
-> copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
+```PowerShell
+git clone https://github.com/cloudbase/wnbd
+msbuild wnbd\vstudio\wnbd.sln
+copy wnbd\vstudio\x64\Debug\driver\* .
+copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
 ```
 
-* You can download the latest prebuilt packages from Appveyor via the links:
-  * [Debug](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Debug.zip?job=Configuration%3A+Debug)
-  * [Release](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Release.zip?job=Configuration%3A+Release)
+You can download the latest prebuilt packages from Appveyor via the links:
+
+* [Debug](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Debug.zip?job=Configuration%3A+Debug)
+* [Release](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Release.zip?job=Configuration%3A+Release)
 
 How to install
 --------------
 
-* **Prerequisites**.
+### Prerequisites
 
-  After building, the driver is automatically test signed. To install the built driver you must make sure that your target machine is Test Signed enabled first.
-  To enable Test Signing on your target machine, please issue the following from an elevated command prompt:
-  ```
-  > bcdedit.exe /set testsigning yes
-  ```
-  Please note that you can enable driver signing only if Secure Boot is not enabled on the target machine.
-  To check if your target machine does not have Secure Boot enabled issue `Confirm-SecureBootUEFI` from an elevated powershell prompt
-  ```
-  PS C:\WINDOWS\system32> Confirm-SecureBootUEFI
-  False
-  ```
-  **A reboot is required after changing `bcdedit` settings**
+By default, the driver will be "test signed" as part of the build process. In order to install it,
+make sure that your target machine allows "test signed" drivers.
+To enable test signing mode on your target machine, please issue the following from an elevated
+command prompt:
 
-* **Installation/removal**.
+```PowerShell
+bcdedit.exe /set testsigning yes
+```
 
-  We require [devcon.exe](https://cloudbase.it/downloads/devcon.exe) utility to install and uninstall the driver.
+Please note that test signed drivers cannot be used when Secure Boot is enabled on the target
+machine. To check the Secure Boot configuration, issue `Confirm-SecureBootUEFI` from an elevated
+PowerShell prompt
 
-  * To **install** the driver issue the following from an elevated command prompt:
-    ```
-    > .\devcon.exe install .\wnbd.inf root\wnbd
-    ```
-  (The command above assumes that the utility `devcon.exe` and the driver files `wnbd.inf`, `wnbd.cat`, `wnbd.sys` are in the current directory)
+```PowerShell
+Confirm-SecureBootUEFI
+```
 
-  * To **uninstall** the driver issue the following from an elevated command prompt:
-    ```
-    .\devcon.exe remove "root\wnbd"
-    ```
-  (The command above assumes that the utility `devcon.exe` is in the current directory)
+**A reboot is required after changing `bcdedit` settings**
 
-  For convenience, we included <a href="vstudio/reinstall.ps1">reinstall.ps1</a> which uninstalls (ignoring the error) and installs the driver again.
+Those steps are not required when using a certified driver.
+
+### Install / Uninstall
+
+We require the [devcon.exe](https://cloudbase.it/downloads/devcon.exe) utility in order to
+install and uninstall the driver.
+
+To **install** the driver, issue the following from an elevated command prompt:
+
+```PowerShell
+.\devcon.exe install .\wnbd.inf root\wnbd
+```
+
+(The command above assumes that the utility `devcon.exe` and the driver files `wnbd.inf`, `wnbd.cat`, `wnbd.sys` are in the current directory)
+
+To **uninstall** the driver, issue the following from an elevated PowerShell prompt:
+
+```PowerShell
+.\devcon.exe remove "root\wnbd"
+pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
+    % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] /force }
+```
+
+(The command above assumes that the utility `devcon.exe` is in the current directory)
+
+For convenience, we included [reinstall.ps1](vstudio/reinstall.ps1), which reinstalls the driver.
 
 Ceph integration
 ----------------
 
-Mapping and umapping RBD images is straighforward, just use [rbd-nbd](https://docs.ceph.com/docs/master/man/8/rbd-nbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
+Mapping and umapping RBD images is straightforward, just use [rbd](https://docs.ceph.com/docs/master/man/8/rbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
 
-    rbd-nbd map img1
-    rbd-nbd unmap img1
-
-Testing with NBD (Network Block Device)
----------------------------------------
-
-Please note that the following is not needed for Ceph and is mostly intended to be used in development scenarios.
-
-We assume you are familiar with <a href="https://github.com/NetworkBlockDevice/nbd#using-nbd">using NBD</a>.
-
-  * `wnbd-client` syntax
-  ```
-  PS C:\workspace> .\wnbd-client.exe
-  Syntax:
-  wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> <DoNotNegotiate>
-  wnbd-client unmap <InstanceName>
-  wnbd-client list
-  ```
-
-  * NBD server configuration:
-  ```
-  root@ubuntu-Virtual-Machine:/home/ubuntu# cat /etc/nbd-server/config
-  [generic]
-  # If you want to run everything as root rather than the nbd user, you
-  # may either say "root" in the two following lines, or remove them
-  # altogether. Do not remove the [generic] section, however.
-          port = 10809
-          user = nbd
-          group = nbd
-          includedir = /etc/nbd-server/conf.d
-
-  # What follows are export definitions. You may create as much of them as
-  # you want, but the section header has to be unique.
-
-  [foo]
-      exportname = /image/path.img
-      port = 10809
-      copyonwrite = true
-  root@ubuntu-Virtual-Machine:/home/ubuntu# ifconfig eth0 | grep 172
-          inet 172.17.160.251  netmask 255.255.255.240  broadcast 172.17.160.255
-  ```
-
-  * Mapping an export:
-  ```
-  PS C:\workspace> .\wnbd-client.exe map test2 172.17.160.251 10809 foo
-  InstanceName=test2
-  HostName=172.17.160.251
-  PortName=10809
-  ExportName=foo
-  MustNegociate=1
-  PS C:\workspace> Get-Disk
-
-  Number Friendly Name            Serial Number   HealthStatus         OperationalStatus      Total Size Partition
-                                                                                                        Style
-  ------ -------------            -------------   ------------         -----------------      ---------- ----------
-  0      Msft Virtual Disk                        Healthy              Online                     127 GB GPT
-  1      WNBD Dis WNBD_DISK_ID    test2           Healthy              Online                     256 MB RAW
-  ```
-
-  * Listing the mapped device
-  ```
-  PS C:\workspace> .\wnbd-client.exe list
-  Status: 0
-  InstanceName    Pid     DiskNumber
-  test2           6712            1
-  ```
-
-  * Unmapping the device
-  ```
-  PS C:\workspace> .\wnbd-client.exe unmap test2
-  PS C:\workspace> Get-Disk
-
-  Number Friendly Name             Serial Number    HealthStatus         OperationalStatus      Total Size Partition
-                                                                                                          Style
-  ------ -------------             -------------    ------------         -----------------      ---------- ----------
-  0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
-
+```PowerShell
+rbd device map $imageName
+rbd device unmap $imageName
 ```
 
-What other documentation is available?
---------------------------------------
+Mapping NBD devices
+-------------------
 
-Build via docker
+The following samples describe configuring a Linux NBD server and connecting to it using WNBD.
+Please check [this page](https://github.com/NetworkBlockDevice/nbd#using-nbd) for more details
+about using NBD.
 
-- [BUILD.Docker.md]
+### ``wnbd-client`` Syntax
 
-[BUILD.Docker.md]:Dockerfile/Readme.md
+```PowerShell
+wnbd-client.exe -h
+```
+```
+Syntax:
+wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> [<SkipNBDNegotiation> <ReadOnly> <DiskSize> <BlockSize>]
+wnbd-client unmap <InstanceName> [HardRemove]
+wnbd-client list
+wnbd-client set-debug <DebugMode>
+wnbd-client stats <InstanceName>
+```
+
+
+### NBD server configuration
+
+```bash
+cat /etc/nbd-server/config
+```
+
+```ini
+[generic]
+# If you want to run everything as root rather than the nbd user, you
+# may either say "root" in the two following lines, or remove them
+# altogether. Do not remove the [bgeneric] section, however.
+port = 10809
+user = nbd
+group = nbd
+includedir = /etc/nbd-server/conf.d
+
+# What follows are export definitions. You may create as much of them as
+# you want, but the section header has to be unique.
+[foo]
+exportname = /image/path.img
+port = 10809
+copyonwrite = true
+```
+
+
+### Mapping an NBD export
+
+```PowerShell
+# feel free to use a different name for the mapping
+wnbd-client.exe map test2 $nbdServerAddress 10809 foo
+Get-Disk
+```
+```
+Number Friendly Name            Serial Number   HealthStatus         OperationalStatus      Total Size Partition
+                                                                                                      Style
+------ -------------            -------------   ------------         -----------------      ---------- ----------
+0      Msft Virtual Disk                        Healthy              Online                     127 GB GPT
+1      WNBD Dis WNBD_DISK_ID    test2           Healthy              Online                     256 MB RAW
+```
+
+### Listing mapped devices
+
+```PowerShell
+wnbd-client.exe list
+```
+```
+Pid         DiskNumber  Nbd    Owner            InstanceName
+3508        1           true   wnbd-client      test2
+4024        2           false  ceph-rbd-wnbd    rbd/rbd_win_10g
+```
+
+### Unmapping the device
+
+```PowerShell
+wnbd-client.exe unmap test2
+Get-Disk
+```
+```
+Number Friendly Name             Serial Number    HealthStatus         OperationalStatus      Total Size Partition
+                                                                                                            Style
+    ------ -------------             -------------    ------------         -----------------      ---------- ----------
+    0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
+```
