@@ -259,7 +259,7 @@ RbdNegotiate(_In_ INT* Pfd,
         }
         Reply = RbdReadReply(Fd);
         if (!Reply) {
-            return STATUS_ABANDONED;
+            return STATUS_UNSUCCESSFUL;
         }
         if (Reply && (Reply->ReplyType & NBD_REP_FLAG_ERROR)) {
             switch (Reply->ReplyType) {
@@ -505,7 +505,7 @@ NbdReadReply(INT Fd,
 
     if (NBD_REPLY_MAGIC != RtlUlongByteSwap(Reply->Magic)) {
         WNBD_LOG_INFO("Invalid NBD_REPLY_MAGIC.");
-        return STATUS_ABANDONED;
+        return STATUS_UNSUCCESSFUL;
     }
 
     WNBD_LOG_LOUD(": Exit");
