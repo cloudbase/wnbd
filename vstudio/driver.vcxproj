@@ -165,6 +165,7 @@
     <Link />
     <Link>
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;$(DDK_LIB_PATH )libcntpr.lib;$(DDK_LIB_PATH )wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -173,6 +174,7 @@
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

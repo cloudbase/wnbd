@@ -74,6 +74,7 @@
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>wnbd.def</ModuleDefinitionFile>
+      <ProgramDatabaseFile>$(OutDir)\pdb\libwnbd\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -95,6 +96,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>wnbd.def</ModuleDefinitionFile>
+      <ProgramDatabaseFile>$(OutDir)\pdb\libwnbd\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
