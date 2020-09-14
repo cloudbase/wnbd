@@ -21,7 +21,7 @@
     <ClCompile Include="wnbd_wmi.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="wnbd_lib.cpp">
+    <ClCompile Include="libwnbd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
