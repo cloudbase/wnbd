@@ -491,9 +491,10 @@ WnbdDeleteConnectionEntry(PUSER_ENTRY Entry)
     return STATUS_SUCCESS;
 }
 
+_Use_decl_annotations_
 BOOLEAN
-WnbdSetDeviceMissing(_In_ PVOID Handle,
-                     _In_ BOOLEAN Force)
+WnbdSetDeviceMissing(PVOID Handle,
+                     BOOLEAN Force)
 {
     WNBD_LOG_LOUD(": Enter");
     PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)Handle;

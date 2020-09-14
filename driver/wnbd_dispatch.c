@@ -120,9 +120,17 @@ NTSTATUS WnbdDispatchRequest(
         WaitObjects[1] = &DeviceInfo->TerminateEvent;
         NTSTATUS WaitResult = KeWaitForMultipleObjects(
             2, WaitObjects, WaitAny, Executive, KernelMode,
-            FALSE, NULL, NULL);
+            TRUE, NULL, NULL);
         if (STATUS_WAIT_1  == WaitResult)
             break;
+
+        if (STATUS_ALERTED == WaitResult) {
+            // This happens when the calling thread is terminating.
+            // TODO: ensure that we haven't been alerted for some other reason.
+            WNBD_LOG_INFO("Wait alterted, terminating.");
+            WnbdSetDeviceMissing(DeviceInfo->Device, TRUE);
+            break;
+        }
 
         PLIST_ENTRY RequestEntry = ExInterlockedRemoveHeadList(
             &DeviceInfo->RequestListHead,
