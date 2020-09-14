@@ -31,6 +31,7 @@ TAGS
 cscope.*
 tags
 */.vs
+*/x64/
 /vstudio/SDV-default.xml
 /vstudio/runsdvui.cmd
 /vstudio/sdv-user.sdv
@@ -40,6 +41,3 @@ tags
 /vstudio/x64/
 /vstudio/sdv/
 /vstudiox64/
-/lib/ksocket_wsk/x64/
-/userspace/userspace/x64/
-libwnbd/x64/
