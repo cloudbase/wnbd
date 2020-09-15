@@ -28,6 +28,19 @@ WNBD provides a low level API (the ``*Ioctl*`` functions), as well as a high lev
 includes the IO dispatching boilerplate. Please check the [include](include\).
 public headers for more details.
 
+Submitting patches
+------------------
+
+WNBD is [licensed](LICENSE/) under LGPL v2.1.
+
+Code contributions must include a valid "Signed-off-by" acknowledging
+the license for the modified or contributed file.
+
+We do not require assignment of copyright to contribute code; code is
+contributed under the terms of the applicable license.
+
+Please check [SubmittingPatches.rst](SubmittingPatches.rst/) for more details.
+
 Prerequisites
 -------------
 
