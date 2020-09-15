@@ -10,7 +10,7 @@
 #include "driver.h"
 #include "driver_extension.h"
 #include "scsi_driver_extensions.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 #include "wnbd_ioctl.h"
 
 // TODO: make this configurable. 1024 is the Storport default.

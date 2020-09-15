@@ -36,7 +36,7 @@
     <ClCompile Include="..\driver\scsi_function.c">
       <Filter>Driver Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\driver\rbd_protocol.c">
+    <ClCompile Include="..\driver\nbd_protocol.c">
       <Filter>Driver Files</Filter>
     </ClCompile>
     <ClCompile Include="..\driver\userspace.c">
@@ -68,7 +68,7 @@
     <ClInclude Include="..\driver\util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\driver\rbd_protocol.h">
+    <ClInclude Include="..\driver\nbd_protocol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\driver\scsi_driver_extensions.h">

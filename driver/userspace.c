@@ -12,7 +12,7 @@
 #include "common.h"
 #include "debug.h"
 #include "driver_extension.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 #include "scsi_function.h"
 #include "userspace.h"
 #include "wnbd_dispatch.h"
@@ -345,9 +345,9 @@ WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
 
     UINT16 NbdFlags = 0;
     if (Properties->Flags.UseNbd && !Properties->NbdProperties.Flags.SkipNegotiation) {
-        WNBD_LOG_INFO("Trying to negotiate handshake with RBD Server");
+        WNBD_LOG_INFO("Trying to negotiate handshake with NBD Server");
         UINT64 DiskSize = 0;
-        Status = RbdNegotiate(&Sock, &DiskSize, &NbdFlags,
+        Status = NbdNegotiate(&Sock, &DiskSize, &NbdFlags,
                               Properties->NbdProperties.ExportName, 1, 1);
         if (!NT_SUCCESS(Status)) {
             goto ExitInquiryData;

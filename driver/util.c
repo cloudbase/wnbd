@@ -7,7 +7,7 @@
 #include <berkeley.h>
 #include "common.h"
 #include "debug.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 #include "scsi_driver_extensions.h"
 #include "scsi_function.h"
 #include "scsi_trace.h"
@@ -589,7 +589,7 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
             TempBuff = DeviceInformation->ReadPreallocatedBuffer;
         }
 
-        if (-1 == RbdReadExact(DeviceInformation->Socket, TempBuff, Element->ReadLength, &error)) {
+        if (-1 == NbdReadExact(DeviceInformation->Socket, TempBuff, Element->ReadLength, &error)) {
             WNBD_LOG_ERROR("Failed receiving reply %p 0x%llx. Error: %d",
                            Element->Srb, Element->Tag, error);
             Element->Srb->DataTransferLength = 0;

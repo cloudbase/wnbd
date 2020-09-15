@@ -187,7 +187,7 @@
     <ClCompile Include="..\driver\debug.c" />
     <ClCompile Include="..\driver\driver.c" />
     <ClCompile Include="..\driver\driver_extension.c" />
-    <ClCompile Include="..\driver\rbd_protocol.c" />
+    <ClCompile Include="..\driver\nbd_protocol.c" />
     <ClCompile Include="..\driver\scsi_driver_extensions.c" />
     <ClCompile Include="..\driver\scsi_function.c" />
     <ClCompile Include="..\driver\scsi_operation.c" />
@@ -201,7 +201,7 @@
     <ClInclude Include="..\driver\debug.h" />
     <ClInclude Include="..\driver\driver.h" />
     <ClInclude Include="..\driver\driver_extension.h" />
-    <ClInclude Include="..\driver\rbd_protocol.h" />
+    <ClInclude Include="..\driver\nbd_protocol.h" />
     <ClInclude Include="..\driver\scsi_driver_extensions.h" />
     <ClInclude Include="..\driver\scsi_function.h" />
     <ClInclude Include="..\driver\scsi_operation.h" />

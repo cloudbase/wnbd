@@ -9,7 +9,7 @@
 
 #include "common.h"
 #include "userspace.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 
 VOID
 WnbdDeviceCleanerThread(_In_ PVOID Context);

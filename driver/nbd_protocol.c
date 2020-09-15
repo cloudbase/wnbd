@@ -8,14 +8,14 @@
 #include <ws2def.h>
 #include "common.h"
 #include "debug.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 
 const UINT64 CLIENT_MAGIC = 0x00420281861253LL;
 const UINT64 OPTION_MAGIC = 0x49484156454F5054LL;
 const UINT64 REPLY_MAGIC  = 0x3e889045565a9LL;
 
 INT
-RbdReadExact(_In_ INT Fd,
+NbdReadExact(_In_ INT Fd,
              _Inout_ PVOID Data,
              _In_ size_t Length,
              _Inout_ PNTSTATUS error)
@@ -45,7 +45,7 @@ RbdReadExact(_In_ INT Fd,
 }
 
 INT
-RbdWriteExact(_In_ INT Fd,
+NbdWriteExact(_In_ INT Fd,
               _In_ PVOID Data,
               _In_ size_t Length,
               _Inout_ PNTSTATUS error)
@@ -74,27 +74,27 @@ RbdWriteExact(_In_ INT Fd,
 }
 
 VOID
-RbdSendRequest(_In_ INT Fd,
+NbdSendRequest(_In_ INT Fd,
                _In_ UINT32 Option,
                _In_ size_t Datasize,
                _Maybenull_ PVOID Data)
 {
     WNBD_LOG_LOUD(": Enter");
-    REQUEST_HEADER Request;
+    NBD_HANDSHAKE_REQ Request;
     NTSTATUS error;
     Request.Magic = RtlUlonglongByteSwap(OPTION_MAGIC);
     Request.Option = RtlUlongByteSwap(Option);
     Request.Datasize = RtlUlongByteSwap((ULONG)Datasize);
 
-    RbdWriteExact(Fd, &Request, sizeof(Request), &error);
+    NbdWriteExact(Fd, &Request, sizeof(Request), &error);
     if (NULL != Data) {
-        RbdWriteExact(Fd, Data, Datasize, &error);
+        NbdWriteExact(Fd, Data, Datasize, &error);
     }
     WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
-RbdSendInfoRequest(_In_ INT Fd,
+NbdSendInfoRequest(_In_ INT Fd,
                    _In_ UINT32 Options,
                    _In_ INT NumberOfRequests,
                    _Maybenull_ PUINT16 Request,
@@ -106,21 +106,22 @@ RbdSendInfoRequest(_In_ INT Fd,
     NTSTATUS error;
     size_t size = sizeof(UINT32) + strlen(Name) + sizeof(UINT16) + NumberOfRequests * sizeof(UINT16);
 
-    RbdSendRequest(Fd, Options, size, NULL);
-    RbdWriteExact(Fd, &nlen, sizeof(nlen), &error);
-    RbdWriteExact(Fd, Name, strlen(Name), &error);
-    RbdWriteExact(Fd, &rlen, sizeof(rlen), &error);
+    NbdSendRequest(Fd, Options, size, NULL);
+    NbdWriteExact(Fd, &nlen, sizeof(nlen), &error);
+    NbdWriteExact(Fd, Name, strlen(Name), &error);
+    NbdWriteExact(Fd, &rlen, sizeof(rlen), &error);
     if (NumberOfRequests > 0) {
-        RbdWriteExact(Fd, Request, NumberOfRequests * sizeof(UINT16), &error);
+        NbdWriteExact(Fd, Request, NumberOfRequests * sizeof(UINT16), &error);
     }
     WNBD_LOG_LOUD(": Exit");
 }
 
-PREPLY_HEADER
-RbdReadReply(_In_ INT Fd)
+PNBD_HANDSHAKE_RPL
+NbdReadHandshakeReply(_In_ INT Fd)
 {
     WNBD_LOG_LOUD(": Enter");
-    PREPLY_HEADER Retval = NbdMalloc(sizeof(REPLY_HEADER));
+    PNBD_HANDSHAKE_RPL Retval = NbdMalloc(
+        sizeof(NBD_HANDSHAKE_RPL));
 
     if (!Retval) {
         WNBD_LOG_ERROR("Insufficient resources to allocate memory");
@@ -128,8 +129,8 @@ RbdReadReply(_In_ INT Fd)
     }
 
     NTSTATUS error;
-    RtlZeroMemory(Retval, sizeof(REPLY_HEADER));
-    RbdReadExact(Fd, Retval, sizeof(*Retval), &error);
+    RtlZeroMemory(Retval, sizeof(NBD_HANDSHAKE_RPL));
+    NbdReadExact(Fd, Retval, sizeof(*Retval), &error);
 
     Retval->Magic = RtlUlonglongByteSwap(Retval->Magic);
     Retval->Option = RtlUlongByteSwap(Retval->Option);
@@ -137,23 +138,24 @@ RbdReadReply(_In_ INT Fd)
     Retval->Datasize = RtlUlongByteSwap(Retval->Datasize);
 
     if (REPLY_MAGIC != Retval->Magic) {
-        WNBD_LOG_ERROR("Received invalid negotiation magic %llu (expected %llu)", Retval->Magic, REPLY_MAGIC);
+        WNBD_LOG_ERROR("Received invalid negotiation magic %llu (expected %llu)",
+                       Retval->Magic, REPLY_MAGIC);
         NbdFree(Retval);
         return NULL;
     }
     if (Retval->Datasize > 0) {
-        INT NewSize = sizeof(REPLY_HEADER) + Retval->Datasize;
-        PREPLY_HEADER RetvalTemp = NbdMalloc(NewSize);
+        INT NewSize = sizeof(NBD_HANDSHAKE_RPL) + Retval->Datasize;
+        PNBD_HANDSHAKE_RPL RetvalTemp = NbdMalloc(NewSize);
         if (!RetvalTemp) {
             WNBD_LOG_ERROR("Insufficient resources to allocate memory");
             return NULL;
         }
-        RtlCopyMemory(RetvalTemp, Retval, sizeof(REPLY_HEADER));
+        RtlCopyMemory(RetvalTemp, Retval, sizeof(NBD_HANDSHAKE_RPL));
         if (Retval) {
             NbdFree(Retval);
         }
         Retval = NULL;
-        RbdReadExact(Fd, &(RetvalTemp->Data), RetvalTemp->Datasize, &error);
+        NbdReadExact(Fd, &(RetvalTemp->Data), RetvalTemp->Datasize, &error);
         Retval = RetvalTemp;
     }
     WNBD_LOG_LOUD(": Exit");
@@ -161,7 +163,7 @@ RbdReadReply(_In_ INT Fd)
 }
 
 VOID
-RbdParseSizes(_In_ PCHAR Data,
+NbdParseSizes(_In_ PCHAR Data,
               _Inout_ PUINT64 Size,
               _Inout_ PUINT16 Flags)
 {
@@ -177,7 +179,7 @@ RbdParseSizes(_In_ PCHAR Data,
 }
 
 VOID
-RbdSendOptExportName(_In_ INT Fd,
+NbdSendOptExportName(_In_ INT Fd,
                      _In_ PUINT64 Size,
                      _In_ PUINT16 Flags,
                      _In_ BOOLEAN Go,
@@ -188,24 +190,24 @@ RbdSendOptExportName(_In_ INT Fd,
 
     NTSTATUS error;
 
-    RbdSendRequest(Fd, NBD_OPT_EXPORT_NAME, strlen(Name), Name);
+    NbdSendRequest(Fd, NBD_OPT_EXPORT_NAME, strlen(Name), Name);
     CHAR Buf[sizeof(*Flags) + sizeof(*Size)];
-    if (RbdReadExact(Fd, Buf, sizeof(Buf), &error) < 0 && Go) {
+    if (NbdReadExact(Fd, Buf, sizeof(Buf), &error) < 0 && Go) {
         WNBD_LOG_ERROR("Server does not support NBD_OPT_GO and"
             "dropped connection after sending NBD_OPT_EXPORT_NAME.");
         return;
     }
-    RbdParseSizes(Buf, Size, Flags);
+    NbdParseSizes(Buf, Size, Flags);
     if (!(GFlags & NBD_FLAG_NO_ZEROES)) {
         CHAR Temp[125];
-        RbdReadExact(Fd, Temp, 124, &error);
+        NbdReadExact(Fd, Temp, 124, &error);
     }
 
     WNBD_LOG_LOUD(": Exit");
 }
 
 NTSTATUS
-RbdNegotiate(_In_ INT* Pfd,
+NbdNegotiate(_In_ INT* Pfd,
              _In_ PUINT64 Size,
              _In_ PUINT16 Flags,
              _In_ PCHAR Name,
@@ -221,19 +223,19 @@ RbdNegotiate(_In_ INT* Pfd,
     NTSTATUS status = 0;
 
     RtlZeroMemory(Buf, 8);
-    RbdReadExact(Fd, Buf, 8, &status);
+    NbdReadExact(Fd, Buf, 8, &status);
     if (strcmp(Buf, INIT_PASSWD)) {
         WNBD_LOG_ERROR("INIT_PASSWD");
     }
 
-    RbdReadExact(Fd, &Magic, sizeof(Magic), &status);
+    NbdReadExact(Fd, &Magic, sizeof(Magic), &status);
     Magic = RtlUlonglongByteSwap(Magic);
     if (OPTION_MAGIC != Magic
         && CLIENT_MAGIC == Magic) {
         WNBD_LOG_ERROR("Old-style server.");
     }
 
-    RbdReadExact(Fd, &Temp, sizeof(UINT16), &status);
+    NbdReadExact(Fd, &Temp, sizeof(UINT16), &status);
     GFlags = RtlUshortByteSwap(Temp);
 
     if (GFlags & NBD_FLAG_NO_ZEROES) {
@@ -246,18 +248,18 @@ RbdNegotiate(_In_ INT* Pfd,
         return STATUS_FAIL_CHECK;
     }
 
-    PREPLY_HEADER Reply = NULL;
+    PNBD_HANDSHAKE_RPL Reply = NULL;
     if (!Go) {
-        RbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
+        NbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
         return STATUS_SUCCESS;
     }
-    RbdSendInfoRequest(Fd, NBD_OPT_GO, 0, NULL, Name);
+    NbdSendInfoRequest(Fd, NBD_OPT_GO, 0, NULL, Name);
 
     do {
         if (NULL != Reply) {
             NbdFree(Reply);
         }
-        Reply = RbdReadReply(Fd);
+        Reply = NbdReadHandshakeReply(Fd);
         if (!Reply) {
             return STATUS_UNSUCCESSFUL;
         }
@@ -265,7 +267,7 @@ RbdNegotiate(_In_ INT* Pfd,
             switch (Reply->ReplyType) {
             case NBD_REP_ERR_UNSUP:
                 WNBD_LOG_ERROR("NBD_REP_ERR_UNSUP");
-                RbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
+                NbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
                 NbdFree(Reply);
                 return STATUS_SUCCESS;
 
@@ -301,7 +303,7 @@ RbdNegotiate(_In_ INT* Pfd,
             Type = RtlUshortByteSwap(Type);
             switch (Type) {
             case NBD_INFO_EXPORT:
-                RbdParseSizes(Reply->Data + 2, Size, Flags);
+                NbdParseSizes(Reply->Data + 2, Size, Flags);
                 break;
             default:
                 WNBD_LOG_INFO("Ignoring other reply information");
@@ -414,7 +416,7 @@ NbdRequest(
     Request.From = RtlUlonglongByteSwap(Offset);
     Request.Handle = Handle;
 
-    if (-1 == RbdWriteExact(Fd, &Request, sizeof(NBD_REQUEST), &error)) {
+    if (-1 == NbdWriteExact(Fd, &Request, sizeof(NBD_REQUEST), &error)) {
         WNBD_LOG_INFO("Could not send request for %s.",
                       NbdRequestTypeStr(RequestType));
         Status = error;
@@ -479,7 +481,7 @@ NbdWriteStat(INT Fd,
 #pragma warning(default:6386)
     RtlCopyMemory(((PCHAR)*PreallocatedBuffer + sizeof(NBD_REQUEST)), SystemBuffer, Length);
 
-    if (-1 == RbdWriteExact(Fd, *PreallocatedBuffer, sizeof(NBD_REQUEST) + Length, &error)) {
+    if (-1 == NbdWriteExact(Fd, *PreallocatedBuffer, sizeof(NBD_REQUEST) + Length, &error)) {
         WNBD_LOG_ERROR("Could not send request for NBD_CMD_WRITE");
         Status = error;
         goto Exit;
@@ -498,7 +500,7 @@ NbdReadReply(INT Fd,
     PAGED_CODE();
 
     NTSTATUS error;
-    if (-1 == RbdReadExact(Fd, Reply, sizeof(NBD_REPLY), &error)) {
+    if (-1 == NbdReadExact(Fd, Reply, sizeof(NBD_REPLY), &error)) {
         WNBD_LOG_INFO("Could not read command reply.");
         return error;
     }

@@ -4,8 +4,8 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
-#ifndef RBD_PROTOCOL_H
-#define RBD_PROTOCOL_H 1
+#ifndef NBD_PROTOCOL_H
+#define NBD_PROTOCOL_H 1
 
 #define NBD_REQUEST_MAGIC 0x25609513
 #define NBD_REPLY_MAGIC   0x67446698
@@ -64,22 +64,22 @@ typedef struct _NBD_REPLY {
 __pragma(pack(pop))
 
 __pragma(pack(push, 1))
-typedef struct _REQUEST_HEADER {
+typedef struct _NBD_HANDSHAKE_REQ {
     UINT64 Magic;
     UINT32 Option;
     UINT32 Datasize;
-} REQUEST_HEADER, *PREQUEST_HEADER;
+} NBD_HANDSHAKE_REQ, *PNBD_HANDSHAKE_REQ;
 __pragma(pack(pop))
 
 #pragma warning(disable:4200)
 __pragma(pack(push, 1))
-typedef struct _REPLY_HEADER {
+typedef struct _NBD_HANDSHAKE_RPL {
     UINT64 Magic;
     UINT32 Option;
     UINT32 ReplyType;
     UINT32 Datasize;
     CHAR   Data[];
-} REPLY_HEADER, *PREPLY_HEADER;
+} NBD_HANDSHAKE_RPL, *PNBD_HANDSHAKE_RPL;
 __pragma(pack(pop))
 #pragma warning(default:4200)
 
@@ -98,10 +98,10 @@ __pragma(pack(pop))
 
 #define NBDC_DO_LIST 1
 
-#define RBD_PROTOCOL_TAG      'pDBR'
+#define NBD_MEMPOOL_TAG      'pDBN'
 #define BUF_SIZE              1024
 #define INIT_PASSWD           "NBDMAGIC"
-#define NbdMalloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, RBD_PROTOCOL_TAG)
+#define NbdMalloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, NBD_MEMPOOL_TAG)
 #define NbdFree(S) ExFreePool(S)
 
 #ifdef __cplusplus
@@ -134,7 +134,7 @@ NbdOpenAndConnect(_In_ PCHAR HostName,
                   _In_ DWORD PortNumber);
 
 NTSTATUS
-RbdNegotiate(_In_ INT* Pfd,
+NbdNegotiate(_In_ INT* Pfd,
              _In_ PUINT64 Size,
              _In_ PUINT16 Flags,
              _In_ PCHAR Name,
@@ -147,7 +147,7 @@ NbdReadReply(_In_ INT Fd,
 #pragma alloc_text (PAGE, NbdReadReply)
 
 INT
-RbdReadExact(_In_ INT Fd,
+NbdReadExact(_In_ INT Fd,
              _Inout_ PVOID Data,
              _In_ size_t Length,
              _Inout_ PNTSTATUS error);

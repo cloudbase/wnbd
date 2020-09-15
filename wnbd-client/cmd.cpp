@@ -6,7 +6,7 @@
 
 #include "cmd.h"
 #include "wnbd.h"
-#include "rbd_protocol.h"
+#include "nbd_protocol.h"
 
 #include <string>
 #include <codecvt>
