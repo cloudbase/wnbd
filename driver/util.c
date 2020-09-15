@@ -598,7 +598,11 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
             goto Exit;
         } else {
             if(!Element->Aborted) {
+                // SrbBuff can't be NULL
+#pragma warning(push)
+#pragma warning(disable:6387)
                 RtlCopyMemory(SrbBuff, TempBuff, Element->ReadLength);
+#pragma warning(pop)
             }
         }
     }
