@@ -317,7 +317,11 @@ NTSTATUS WnbdHandleResponse(
 
         // TODO: compare data buffer size with the read length
         if (!Element->Aborted) {
+            // SrbBuff can't be NULL
+#pragma warning(push)
+#pragma warning(disable:6387)
             RtlCopyMemory(SrbBuff, LockedUserBuff, Element->ReadLength);
+#pragma warning(pop)
         }
     }
     if (Response->Status.ScsiStatus) {

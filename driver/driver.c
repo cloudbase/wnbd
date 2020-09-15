@@ -22,6 +22,7 @@ extern UINT32 GlobalLogLevel = 0;
 
 extern PGLOBAL_INFORMATION GlobalInformation;
 
+_Use_decl_annotations_
 BOOLEAN
 WNBDReadRegistryValue(PUNICODE_STRING RegistryPath,
                       PWSTR Key,

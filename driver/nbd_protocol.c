@@ -81,7 +81,7 @@ NbdSendRequest(_In_ INT Fd,
 {
     WNBD_LOG_LOUD(": Enter");
     NBD_HANDSHAKE_REQ Request;
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
     Request.Magic = RtlUlonglongByteSwap(OPTION_MAGIC);
     Request.Option = RtlUlongByteSwap(Option);
     Request.Datasize = RtlUlongByteSwap((ULONG)Datasize);
@@ -103,14 +103,14 @@ NbdSendInfoRequest(_In_ INT Fd,
     WNBD_LOG_LOUD(": Enter");
     UINT16 rlen = RtlUshortByteSwap((USHORT)NumberOfRequests);
     UINT32 nlen = RtlUlongByteSwap((ULONG)strlen(Name));
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
     size_t size = sizeof(UINT32) + strlen(Name) + sizeof(UINT16) + NumberOfRequests * sizeof(UINT16);
 
     NbdSendRequest(Fd, Options, size, NULL);
     NbdWriteExact(Fd, &nlen, sizeof(nlen), &error);
     NbdWriteExact(Fd, Name, strlen(Name), &error);
     NbdWriteExact(Fd, &rlen, sizeof(rlen), &error);
-    if (NumberOfRequests > 0) {
+    if (NumberOfRequests > 0 && NULL != Request) {
         NbdWriteExact(Fd, Request, NumberOfRequests * sizeof(UINT16), &error);
     }
     WNBD_LOG_LOUD(": Exit");
@@ -128,7 +128,7 @@ NbdReadHandshakeReply(_In_ INT Fd)
         return NULL;
     }
 
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
     RtlZeroMemory(Retval, sizeof(NBD_HANDSHAKE_RPL));
     NbdReadExact(Fd, Retval, sizeof(*Retval), &error);
 
@@ -188,10 +188,11 @@ NbdSendOptExportName(_In_ INT Fd,
 {
     WNBD_LOG_LOUD(": Enter");
 
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
 
     NbdSendRequest(Fd, NBD_OPT_EXPORT_NAME, strlen(Name), Name);
     CHAR Buf[sizeof(*Flags) + sizeof(*Size)];
+    RtlZeroMemory(Buf, sizeof(*Flags) + sizeof(*Size));
     if (NbdReadExact(Fd, Buf, sizeof(Buf), &error) < 0 && Go) {
         WNBD_LOG_ERROR("Server does not support NBD_OPT_GO and"
             "dropped connection after sending NBD_OPT_EXPORT_NAME.");
@@ -200,6 +201,7 @@ NbdSendOptExportName(_In_ INT Fd,
     NbdParseSizes(Buf, Size, Flags);
     if (!(GFlags & NBD_FLAG_NO_ZEROES)) {
         CHAR Temp[125];
+        RtlZeroMemory(Temp, 125);
         NbdReadExact(Fd, Temp, 124, &error);
     }
 
@@ -344,7 +346,7 @@ NbdOpenAndConnect(PCHAR HostName,
     Hints.ai_protocol = IPPROTO_TCP;
 
     char* PortName[12] = { 0 };
-    _snprintf((char*)PortName, sizeof(PortName), "%d", PortNumber);
+    RtlStringCbPrintfA((char*)PortName, sizeof(PortName), "%d", PortNumber);
 
     Error = GetAddrInfo(HostName, (char*)PortName, &Hints, &Ai);
 
@@ -408,7 +410,7 @@ NbdRequest(
     PAGED_CODE();
 
     NBD_REQUEST Request;
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
 
     Request.Magic = RtlUlongByteSwap(NBD_REQUEST_MAGIC);
     Request.Type = RtlUlongByteSwap(RequestType);
@@ -449,7 +451,7 @@ NbdWriteStat(INT Fd,
     PAGED_CODE();
 
     NBD_REQUEST Request;
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
 
     Request.Magic = RtlUlongByteSwap(NBD_REQUEST_MAGIC);
     Request.Type = RtlUlongByteSwap(NBD_CMD_WRITE | NbdTransmissionFlags);
@@ -499,7 +501,7 @@ NbdReadReply(INT Fd,
     WNBD_LOG_LOUD(": Enter");
     PAGED_CODE();
 
-    NTSTATUS error;
+    NTSTATUS error = STATUS_SUCCESS;
     if (-1 == NbdReadExact(Fd, Reply, sizeof(NBD_REPLY), &error)) {
         WNBD_LOG_INFO("Could not read command reply.");
         return error;

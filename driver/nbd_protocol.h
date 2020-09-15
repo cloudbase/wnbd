@@ -143,7 +143,7 @@ NbdNegotiate(_In_ INT* Pfd,
 
 NTSTATUS
 NbdReadReply(_In_ INT Fd,
-             _Out_ PNBD_REPLY Reply);
+             _Inout_ PNBD_REPLY Reply);
 #pragma alloc_text (PAGE, NbdReadReply)
 
 INT
