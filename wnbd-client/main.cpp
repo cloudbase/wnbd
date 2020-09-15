@@ -53,7 +53,7 @@ int main(int argc, PCHAR argv[])
                BlockSize, SkipNegotiation, ReadOnly);
     } else if (argc == 3 && !strcmp(Command, "unmap")) {
         InstanceName = argv[2];
-        BOOLEAN HardRemove;
+        BOOLEAN HardRemove = FALSE;
         if (argc > 3) {
             HardRemove = arg_to_bool(argv[3]);
         }
