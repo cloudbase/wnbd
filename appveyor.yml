@@ -4,6 +4,7 @@ branches:
   only:
   - master
 configuration:
+  - Analyze
   - Debug
   - Release
 clone_folder: C:\wnbd
