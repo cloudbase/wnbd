@@ -7,6 +7,7 @@
 
 #include "wnbd.h"
 #include "wnbd_wmi.h"
+#include "version.h"
 
 #define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
 
@@ -208,6 +209,35 @@ DWORD WnbdGetDriverStats(
     }
 
     Status = WnbdIoctlStats(Handle, InstanceName, Stats);
+
+    CloseHandle(Handle);
+    return Status;
+}
+
+DWORD WnbdGetLibVersion(PWNBD_VERSION Version)
+{
+    if (!Version) {
+        return ERROR_INVALID_PARAMETER;
+    }
+
+    Version->Major = WNBD_VERSION_MAJOR;
+    Version->Minor = WNBD_VERSION_MINOR;
+    Version->Patch = WNBD_VERSION_PATCH;
+    strncpy_s((char*)&Version->Description, WNBD_MAX_VERSION_STR_LENGTH,
+              WNBD_VERSION_STR,
+              min(strlen(WNBD_VERSION_STR), WNBD_MAX_VERSION_STR_LENGTH - 1));
+    return 0;
+}
+
+DWORD WnbdGetDriverVersion(PWNBD_VERSION Version)
+{
+    HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD Status = WnbdOpenDevice(&Handle);
+    if (Status) {
+        return ERROR_OPEN_FAILED;
+    }
+
+    Status = WnbdIoctlVersion(Handle, Version);
 
     CloseHandle(Handle);
     return Status;

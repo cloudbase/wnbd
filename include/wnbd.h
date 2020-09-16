@@ -136,6 +136,10 @@ DWORD WnbdGetConnectionInfo(
 
 DWORD WnbdRaiseLogLevel(USHORT LogLevel);
 
+// Get libwnbd version.
+DWORD WnbdGetLibVersion(PWNBD_VERSION Version);
+DWORD WnbdGetDriverVersion(PWNBD_VERSION Version);
+
 // Setting the SCSI SENSE data provides detailed information about
 // the status of a request.
 void WnbdSetSenseEx(
@@ -176,6 +180,7 @@ DWORD WnbdIoctlStats(
     PWNBD_DRV_STATS Stats);
 // Reload the persistent settings provided through registry keys.
 DWORD WnbdIoctlReloadConfig(HANDLE Device);
+DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version);
 
 // The connection id should be handled carefully in order to avoid delayed replies
 // from being submitted to other disks after being remapped.

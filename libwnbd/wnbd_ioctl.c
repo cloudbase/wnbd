@@ -288,3 +288,22 @@ DWORD WnbdIoctlPing(HANDLE Device)
     return ERROR_SUCCESS;
 }
 
+DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_VERSION_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_VERSION;
+
+    BOOL DevStatus = DeviceIoControl(
+        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command),
+        Version, sizeof(WNBD_VERSION), &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+    }
+
+    return Status;
+}

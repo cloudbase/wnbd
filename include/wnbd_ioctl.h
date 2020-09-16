@@ -11,6 +11,7 @@
 #define IOCTL_WNBD_LIST 6
 #define IOCTL_WNBD_STATS 7
 #define IOCTL_WNBD_RELOAD_CONFIG 8
+#define IOCTL_WNBD_VERSION 9
 
 static const GUID WNBD_GUID = {
     0x949dd17c,
@@ -21,6 +22,7 @@ static const GUID WNBD_GUID = {
 
 #define WNBD_MAX_NAME_LENGTH 256
 #define WNBD_MAX_OWNER_LENGTH 16
+#define WNBD_MAX_VERSION_STR_LENGTH 128
 // For transfers larger than 16MB, Storport sends 0 sized buffers.
 #define WNBD_DEFAULT_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
 
@@ -212,6 +214,9 @@ typedef PWNBD_IOCTL_BASE_COMMAND PWNBD_IOCTL_LIST_COMMAND;
 typedef WNBD_IOCTL_BASE_COMMAND WNBD_IOCTL_RELOAD_CONFIG_COMMAND;
 typedef PWNBD_IOCTL_BASE_COMMAND PWNBD_IOCTL_RELOAD_CONFIG_COMMAND;
 
+typedef WNBD_IOCTL_BASE_COMMAND WNBD_IOCTL_VERSION_COMMAND;
+typedef PWNBD_IOCTL_BASE_COMMAND PWNBD_IOCTL_VERSION_COMMAND;
+
 typedef struct
 {
     ULONG IoControlCode;
@@ -278,5 +283,13 @@ static inline const CHAR* WnbdRequestTypeToStr(WnbdRequestType RequestType) {
             return "UNKNOWN";
     }
 }
+
+typedef struct {
+    UINT32 Major;
+    UINT32 Minor;
+    UINT32 Patch;
+    CHAR Description[WNBD_MAX_VERSION_STR_LENGTH];
+    BYTE Reserved[256];
+} WNBD_VERSION, *PWNBD_VERSION;
 
 #endif // WNBD_IOCTL_H

@@ -18,6 +18,7 @@
 #include "wnbd_dispatch.h"
 #include "wnbd_ioctl.h"
 #include "util.h"
+#include "version.h"
 
 #define CHECK_I_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.InputBufferLength < sizeof(Type))
 #define CHECK_O_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.OutputBufferLength < sizeof(Type))
@@ -888,7 +889,7 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         if (!Irp->AssociatedIrp.SystemBuffer ||
                 CHECK_O_LOCATION(IoLocation, WNBD_DRV_STATS)) {
             WNBD_LOG_ERROR("WNBD_STATS: Bad output buffer");
-            Irp->IoStatus.Information = sizeof(WNBD_DRV_STATS);
+            Status = STATUS_BUFFER_OVERFLOW;
             ExReleaseResourceLite(&GInfo->ConnectionMutex);
             KeLeaveCriticalRegion();
             break;
@@ -999,6 +1000,35 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         KeEnterCriticalRegion();
         ExReleaseRundownProtection(&Device->ScsiInformation->RundownProtection);
         KeLeaveCriticalRegion();
+        break;
+
+    case IOCTL_WNBD_VERSION:
+        WNBD_LOG_LOUD("IOCTL_WNBD_VERSION");
+        PWNBD_IOCTL_VERSION_COMMAND VersionCmd =
+            (PWNBD_IOCTL_VERSION_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!VersionCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_VERSION_COMMAND)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_VERSION: Bad input or output buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+        if (!Irp->AssociatedIrp.SystemBuffer ||
+                CHECK_O_LOCATION(IoLocation, WNBD_VERSION)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_VERSION: Bad output buffer");
+            Status = STATUS_BUFFER_OVERFLOW;
+            break;
+        }
+
+        PWNBD_VERSION Version = (PWNBD_VERSION) Irp->AssociatedIrp.SystemBuffer;
+        RtlZeroMemory(Version, sizeof(WNBD_VERSION));
+        Version->Major = WNBD_VERSION_MAJOR;
+        Version->Minor = WNBD_VERSION_MINOR;
+        Version->Patch = WNBD_VERSION_PATCH;
+        RtlCopyMemory(&Version->Description, WNBD_VERSION_STR,
+                      min(strlen(WNBD_VERSION_STR), WNBD_MAX_VERSION_STR_LENGTH - 1));
+
+        Irp->IoStatus.Information = sizeof(WNBD_VERSION);
+        Status = STATUS_SUCCESS;
         break;
 
     default:

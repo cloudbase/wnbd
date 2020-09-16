@@ -17,6 +17,8 @@ EXPORTS
     WnbdCoInitializeBasic
     WnbdGetDiskNumberBySerialNumber
     WnbdGetConnectionInfo
+    WnbdGetDriverVersion
+    WnbdGetLibVersion
 
     WnbdOpenDevice
     WnbdIoctlPing
