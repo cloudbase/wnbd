@@ -7,6 +7,7 @@
 #include "cmd.h"
 #include "wnbd.h"
 #include "nbd_protocol.h"
+#include "version.h"
 
 #include <string>
 #include <codecvt>
@@ -23,6 +24,7 @@ std::wstring to_wstring(std::string str)
 void PrintSyntax()
 {
     fprintf(stderr, "Syntax:\n");
+    fprintf(stderr, "wnbd-client -v\n");
     fprintf(stderr, "wnbd-client map  <InstanceName> <HostName> "
                     "<PortName> <ExportName> [<SkipNBDNegotiation> "
                     "<ReadOnly> <DiskSize> <BlockSize>]\n");
@@ -262,5 +264,25 @@ DWORD CmdRaiseLogLevel(UINT32 LogLevel)
         fprintf(stderr, "Could not get connection list.\n");
         PrintFormattedError(Status);
     }
+    return Status;
+}
+
+DWORD CmdVersion() {
+    printf("wnbd-client.exe: %s\n", WNBD_VERSION_STR);
+
+    WNBD_VERSION Version = { 0 };
+    WnbdGetLibVersion(&Version);
+    printf("libwnbd.dll: %s\n", Version.Description);
+
+    Version = { 0 };
+    DWORD Status = WnbdGetDriverVersion(&Version);
+    if (Status) {
+        fprintf(stderr, "Could not get WNBD driver version.\n");
+        PrintFormattedError(Status);
+    }
+    else {
+        printf("wnbd.sys: %s\n", Version.Description);
+    }
+
     return Status;
 }

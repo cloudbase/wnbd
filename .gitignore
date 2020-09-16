@@ -41,3 +41,5 @@ tags
 /vstudio/x64/
 /vstudio/sdv/
 /vstudiox64/
+
+include/version.h

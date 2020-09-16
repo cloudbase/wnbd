@@ -52,6 +52,9 @@ CmdList();
 DWORD
 CmdRaiseLogLevel(UINT32 LogLevel);
 
+DWORD
+CmdVersion();
+
 #ifdef __cplusplus
 }
 #endif

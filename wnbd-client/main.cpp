@@ -51,7 +51,7 @@ int main(int argc, PCHAR argv[])
 
         CmdMap(InstanceName, HostName, PortNumber, ExportName, DiskSize,
                BlockSize, SkipNegotiation, ReadOnly);
-    } else if (argc == 3 && !strcmp(Command, "unmap")) {
+    } else if (argc >= 3 && !strcmp(Command, "unmap")) {
         InstanceName = argv[2];
         BOOLEAN HardRemove = FALSE;
         if (argc > 3) {
@@ -65,6 +65,9 @@ int main(int argc, PCHAR argv[])
         return CmdList();
     } else if (argc == 3 && !strcmp(Command, "set-debug")) {
         CmdRaiseLogLevel(arg_to_bool(argv[2]));
+    } else if (argc == 2 && (
+            !strcmp(Command, "version") || !strcmp(Command, "-v"))) {
+        return CmdVersion();
     } else {
         PrintSyntax();
         return -1;
