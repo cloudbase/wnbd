@@ -8,9 +8,10 @@
 #define SCSI_OPERATION_H 1
 
 #include "common.h"
+#include "userspace.h"
 
 NTSTATUS
-WnbdHandleSrbOperation(_In_ PVOID DeviceExtension,
-                       _In_ PVOID ScsiDeviceExtension,
+WnbdHandleSrbOperation(_In_ PWNBD_EXTENSION DeviceExtension,
+                       _In_ PWNBD_SCSI_DEVICE ScsiDeviceExtension,
                        _In_ PSCSI_REQUEST_BLOCK Srb);
 #endif

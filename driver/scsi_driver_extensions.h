@@ -8,48 +8,83 @@
 #define SCSI_DRIVER_EXTENSIONS_H 1
 
 #include "common.h"
-
-#define WNBD_CONTEXT_MAGIC  0xabcddcba
+#include "wnbd_ioctl.h"
 
 typedef struct _WNBD_EXTENSION {
-    PVOID							GlobalInformation;
+    SCSI_ADAPTER_CONTROL_TYPE         ScsiAdapterControlState;
 
-    SCSI_ADAPTER_CONTROL_TYPE		ScsiAdapterControlState;
+    UNICODE_STRING                    DeviceInterface;
+    LIST_ENTRY                        DeviceList;
+    KSPIN_LOCK                        DeviceListLock;
+    LONG                              DeviceCount;
+    // TODO: try to remove this lock, maybe by adding a "Pending" device state
+    // That should avoid device duplicates, while allowing multiple devices
+    // to be created simultaneously. In particular, this might be a concern
+    // for NBD devices, in which case connecting to the NBD server might
+    // take longer. It shouldn't be a concern when not using NBD.
+    ERESOURCE                         DeviceCreationLock;
 
-    UNICODE_STRING					DeviceInterface;
-    LIST_ENTRY						DeviceList;
-    KSPIN_LOCK						DeviceListLock;
-    ERESOURCE                       DeviceResourceLock;
-
-    HANDLE							DeviceCleaner;
-    KEVENT							DeviceCleanerEvent;
-    BOOLEAN							StopDeviceCleaner;
+    EX_RUNDOWN_REF                    RundownProtection;
+    KEVENT                            GlobalDeviceRemovalEvent;
 } WNBD_EXTENSION, *PWNBD_EXTENSION;
 
-typedef struct _WNBD_SCSI_DEVICE {
-    LIST_ENTRY			ListEntry;
-    PVOID				ScsiDeviceExtension;
-    PVOID				DriverExtension;
+typedef struct _WNBD_SCSI_DEVICE
+{
+    LIST_ENTRY                  ListEntry;
+    PWNBD_EXTENSION             DeviceExtension;
 
-    ULONG				PathId;
-    ULONG				TargetId;
-    ULONG				Lun;
+    BOOLEAN                     Connected;
+    WNBD_PROPERTIES             Properties;
+    WNBD_CONNECTION_ID          ConnectionId;
 
-    PINQUIRYDATA		PInquiryData;
-    BOOLEAN				ReadOnly;
+    USHORT                      Bus;
+    USHORT                      Target;
+    USHORT                      Lun;
 
-    BOOLEAN				Missing;
-    BOOLEAN				ReportedMissing;
-    LONG				OutstandingIoCount;
+    PINQUIRYDATA                InquiryData;
+
+    INT                         NbdSocket;
+    INT                         SocketToClose;
+    ERESOURCE                   SocketLock;
+
+    // TODO: rename as PendingReqListHead
+    LIST_ENTRY                  RequestListHead;
+    KSPIN_LOCK                  RequestListLock;
+
+    // TODO: rename as SubmittedReqListHead
+    LIST_ENTRY                  ReplyListHead;
+    KSPIN_LOCK                  ReplyListLock;
+
+    KSEMAPHORE                  DeviceEvent;
+    PVOID                       DeviceRequestThread;
+    PVOID                       DeviceReplyThread;
+    PVOID                       DeviceMonitorThread;
+    BOOLEAN                     HardTerminateDevice;
+    BOOLEAN                     SoftTerminateDevice;
+    KEVENT                      TerminateEvent;
+    // The rundown protection provides device reference counting, preventing
+    // it from being deallocated while still being accessed. This is
+    // especially important for IO dispatching.
+    EX_RUNDOWN_REF              RundownProtection;
+
+    WNBD_DRV_STATS              Stats;
+    PVOID                       ReadPreallocatedBuffer;
+    ULONG                       ReadPreallocatedBufferLength;
+    PVOID                       WritePreallocatedBuffer;
+    ULONG                       WritePreallocatedBufferLength;
 } WNBD_SCSI_DEVICE, *PWNBD_SCSI_DEVICE;
 
-typedef struct _WNBD_LU_EXTENSION {
-    ULONG					PathId;
-    ULONG					TargetId;
-    ULONG					Lun;
-    PVOID					PDriverGlobalExtension;
-    struct _WNBD_SCSI_DEVICE*	WnbdScsiDevice;
-} WNBD_LU_EXTENSION, *PWNBD_LU_EXTENSION;
+typedef struct _SRB_QUEUE_ELEMENT {
+    LIST_ENTRY Link;
+    PSCSI_REQUEST_BLOCK Srb;
+    UINT64 StartingLbn;
+    ULONG ReadLength;
+    BOOLEAN FUA;
+    PVOID DeviceExtension;
+    UINT64 Tag;
+    BOOLEAN Aborted;
+    BOOLEAN Completed;
+} SRB_QUEUE_ELEMENT, * PSRB_QUEUE_ELEMENT;
 
 SCSI_ADAPTER_CONTROL_STATUS
 WnbdHwAdapterControl(_In_ PVOID DeviceExtension,

@@ -14,66 +14,6 @@
 #include "util.h"
 #include "userspace.h"
 
-VOID DrainDeviceQueue(PWNBD_SCSI_DEVICE Device, PLIST_ENTRY ListHead,
-                      PKSPIN_LOCK ListLock, PSCSI_DEVICE_INFORMATION DeviceInformation)
-{
-    WNBD_LOG_LOUD(": Enter");
-
-    PLIST_ENTRY Request;
-    PSRB_QUEUE_ELEMENT Element;
-
-    while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
-        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
-
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-        Element->Aborted = 1;
-
-        InterlockedDecrement(&Device->OutstandingIoCount);
-        WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
-            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
-            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-        StorPortNotification(RequestComplete, Element->DeviceExtension,
-                             Element->Srb);
-        ExFreePool(Element);
-
-        InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
-    }
-}
-
-
-VOID SendAbortFailedForQueue(PLIST_ENTRY ListHead, PKSPIN_LOCK ListLock,
-                             PSCSI_DEVICE_INFORMATION DeviceInformation)
-{
-    WNBD_LOG_LOUD(": Enter");
-
-    PSRB_QUEUE_ELEMENT Element;
-    PLIST_ENTRY ItemLink, ItemNext;
-    KIRQL Irql = { 0 };
-
-    KeAcquireSpinLock(ListLock, &Irql);
-    LIST_FORALL_SAFE(ListHead, ItemLink, ItemNext) {
-        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
-
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-
-        // If it's marked as aborted, it means that Storport was already notified.
-        // Double completion leads to a crash.
-        if(!Element->Aborted) {
-            WNBD_LOG_INFO("Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
-            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
-            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-            StorPortNotification(RequestComplete, Element->DeviceExtension,
-                                 Element->Srb);
-            Element->Aborted = 1;
-
-            InterlockedIncrement64(&DeviceInformation->Stats.AbortedUnsubmittedIORequests);
-        }
-    }
-    KeReleaseSpinLock(ListLock, Irql);
-}
-
 UCHAR DrainDeviceQueues(PVOID DeviceExtension,
                         PSCSI_REQUEST_BLOCK Srb)
 
@@ -84,11 +24,6 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
 
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_SCSI_DEVICE Device;
-    PWNBD_LU_EXTENSION LuExtension;
-    PWNBD_EXTENSION DevExtension = (PWNBD_EXTENSION)DeviceExtension;
-    KIRQL Irql;
-    KSPIN_LOCK DevLock = DevExtension->DeviceListLock;
-    KeAcquireSpinLock(&DevLock, &Irql);
 
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
@@ -97,50 +32,21 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
             CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
 
-    LuExtension = (PWNBD_LU_EXTENSION)
-        StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun);
-
-    if (!LuExtension) {
-        WNBD_LOG_ERROR(": Unable to get LUN extension for device PathId: %d TargetId: %d LUN: %d",
-            Srb->PathId, Srb->TargetId, Srb->Lun);
-        goto Exit;
-    }
-
-    Device = WnbdFindDevice(LuExtension, DeviceExtension,
-                            Srb->PathId, Srb->TargetId, Srb->Lun);
+    Device = WnbdFindDeviceByAddr(
+        DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun, TRUE);
     if (NULL == Device) {
         WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
             Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
 
-    if (NULL == Device->ScsiDeviceExtension) {
-        WNBD_LOG_ERROR("%p has no ScsiDeviceExtension. PathId = %d. TargetId = %d. LUN = %d",
-            Device, Srb->PathId, Srb->TargetId, Srb->Lun);
-        goto Exit;
-    }
-    if (Device->Missing) {
-        PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
-        WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
-            Device, Srb->PathId, Srb->TargetId, Srb->Lun);
-        /// Drain the queue here because the device doesn't theoretically exist;
-        DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
-        DrainDeviceQueue(Device, &Info->ReplyListHead, &Info->ReplyListLock, Info);
-        goto Exit;
-    }
-    PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
+    DrainDeviceQueue(Device, FALSE);
+    AbortSubmittedRequests(Device);
 
-    DrainDeviceQueue(Device, &Info->RequestListHead, &Info->RequestListLock, Info);
-    // Should we set those in-flight requests to SRB_STATUS_ABORT_FAILED?
-    // We can't set them to SRB_STATUS_ABORTED because those requests have been
-    // submitted and will most probably complete.
-    SendAbortFailedForQueue(&Info->ReplyListHead, &Info->ReplyListLock, Info);
-
+    WnbdReleaseDevice(Device);
     SrbStatus = SRB_STATUS_SUCCESS;
 
 Exit:
-    KeReleaseSpinLock(&DevLock, Irql);
-
     WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
@@ -215,11 +121,6 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     NTSTATUS Status = STATUS_SUCCESS;
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_SCSI_DEVICE Device;
-    PWNBD_LU_EXTENSION LuExtension;
-    PWNBD_EXTENSION DevExtension = (PWNBD_EXTENSION)DeviceExtension;
-    KIRQL Irql;
-    KSPIN_LOCK DevLock = DevExtension->DeviceListLock;
-    KeAcquireSpinLock(&DevLock, &Irql);
     *Complete = TRUE;
 
     if (SrbGetCdb(Srb)) {
@@ -228,49 +129,36 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
         WNBD_LOG_INFO(": Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
             CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
-    LuExtension = (PWNBD_LU_EXTENSION)
-        StorPortGetLogicalUnit(DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun );
 
-    if(!LuExtension) {
-        WNBD_LOG_ERROR(": Unable to get LUN extension for device PathId: %d TargetId: %d LUN: %d",
-                       Srb->PathId, Srb->TargetId, Srb->Lun);
-        goto Exit;
-    }
-
-    Device = WnbdFindDevice(LuExtension, DeviceExtension,
-                            Srb->PathId, Srb->TargetId, Srb->Lun);
+    Device = WnbdFindDeviceByAddr(
+        (PWNBD_EXTENSION)DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun, TRUE);
     if (NULL == Device) {
         WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
                       Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
-
-    if (NULL == Device->ScsiDeviceExtension) {
-        WNBD_LOG_ERROR("%p has no ScsiDeviceExtension. PathId = %d. TargetId = %d. LUN = %d",
-                       Device, Srb->PathId, Srb->TargetId, Srb->Lun);
-        goto Exit;
-    }
-    if (Device->Missing) {
+    if (Device->HardTerminateDevice) {
         WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
                       Device, Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
 
-    InterlockedIncrement(&Device->OutstandingIoCount);
-    Status = WnbdHandleSrbOperation(DeviceExtension, Device->ScsiDeviceExtension, Srb);
+    InterlockedIncrement64(&Device->Stats.OutstandingIOCount);
+    Status = WnbdHandleSrbOperation((PWNBD_EXTENSION)DeviceExtension, Device, Srb);
 
     if(STATUS_PENDING == Status) {
         *Complete = FALSE;
         SrbStatus = SRB_STATUS_PENDING;
     } else {
-        InterlockedDecrement(&Device->OutstandingIoCount);
+        InterlockedDecrement64(&Device->Stats.OutstandingIOCount);
         SrbStatus = Srb->SrbStatus;
     }
 
 Exit:
-    KeReleaseSpinLock(&DevLock, Irql);
-    WNBD_LOG_LOUD(": Exit");
+    if (Device)
+        WnbdReleaseDevice(Device);
 
+    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 

@@ -275,6 +275,7 @@ DWORD OpenRegistryKey(HKEY RootKey, LPCSTR KeyName, BOOLEAN Create, HKEY* OutKey
 DWORD WnbdRaiseLogLevel(USHORT LogLevel)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD dwLogLevel = (DWORD)LogLevel;
     DWORD Status = WnbdOpenDevice(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
@@ -287,7 +288,7 @@ DWORD WnbdRaiseLogLevel(USHORT LogLevel)
         goto Exit;
 
     Status = RegSetValueExA(hKey, "DebugLogLevel", 0, REG_DWORD,
-                            (LPBYTE)&LogLevel, sizeof(DWORD));
+                            (LPBYTE)&dwLogLevel, sizeof(DWORD));
     if (Status)
         goto Exit;
 

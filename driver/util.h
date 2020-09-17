@@ -8,39 +8,56 @@
 #define UTIL_H 1
 
 #include "common.h"
-#include "userspace.h"
 #include "nbd_protocol.h"
+#include "scsi_driver_extensions.h"
 
 VOID
-WnbdDeviceCleanerThread(_In_ PVOID Context);
+DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
+                 _In_ BOOLEAN SubmittedRequests);
+VOID
+AbortSubmittedRequests(_In_ PWNBD_SCSI_DEVICE Device);
+VOID
+CompleteRequest(_In_ PWNBD_SCSI_DEVICE Device,
+                _In_ PSRB_QUEUE_ELEMENT Element,
+                _In_ BOOLEAN FreeElement);
 
 VOID
-WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation);
+WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension);
 
-PWNBD_SCSI_DEVICE
-WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
-               _In_ PWNBD_EXTENSION DeviceExtension,
-               _In_ UCHAR PathId,
-               _In_ UCHAR TargetId,
-               _In_ UCHAR Lun);
+// Increments the device rundown protection reference count, preventing
+// it from being cleaned up.
+BOOLEAN
+WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device);
+// Decrements the reference count. All "WnbdAcquireDevice" calls must
+// be paired with a "WnbdReleaseDevice" call.
+VOID
+WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device);
+// Signals the device cleanup thread, setting the "*TerminateDevice" flags
+// to avoid further processing.
+VOID
+WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard);
 
+// Device returned by WnbdFindDevice* functions must be subsequently
+// relased using WnbdReleaseDevice, if "Acquire" is set.
+// Unacquired device pointers must not be dereferenced.
 PWNBD_SCSI_DEVICE
-WnbdFindDeviceEx(
+WnbdFindDeviceByAddr(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UCHAR PathId,
     _In_ UCHAR TargetId,
-    _In_ UCHAR Lun);
+    _In_ UCHAR Lun,
+    _In_ BOOLEAN Acquire);
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceByConnId(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ UINT64 ConnectionId,
+    _In_ BOOLEAN Acquire);
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceByInstanceName(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ PCHAR InstanceName,
+    _In_ BOOLEAN Acquire);
 
-typedef struct _SRB_QUEUE_ELEMENT {
-    LIST_ENTRY Link;
-    PSCSI_REQUEST_BLOCK Srb;
-    UINT64 StartingLbn;
-    ULONG ReadLength;
-    BOOLEAN FUA;
-    PVOID DeviceExtension;
-    UINT64 Tag;
-    BOOLEAN Aborted;
-} SRB_QUEUE_ELEMENT, * PSRB_QUEUE_ELEMENT;
 
 VOID
 WnbdDeviceRequestThread(_In_ PVOID Context);
@@ -51,12 +68,12 @@ WnbdDeviceReplyThread(_In_ PVOID Context);
 BOOLEAN
 IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
 VOID
-WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
-VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
-VOID DisconnectConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation);
+WnbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device);
+VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device);
+VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device);
 int ScsiOpToNbdReqType(_In_ int ScsiOp);
 BOOLEAN ValidateScsiRequest(
-    _In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
+    _In_ PWNBD_SCSI_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element);
 
 
