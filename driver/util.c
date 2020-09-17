@@ -5,6 +5,7 @@
  */
 
 #include <berkeley.h>
+#include <ksocket.h>
 #include "common.h"
 #include "debug.h"
 #include "nbd_protocol.h"
@@ -15,244 +16,213 @@
 #include "userspace.h"
 #include "util.h"
 
-VOID
-WnbdDeleteScsiInformation(_In_ PVOID ScsiInformation)
+VOID DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
+                      _In_ BOOLEAN SubmittedRequests)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(ScsiInformation);
-    PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION)ScsiInformation;
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&ScsiInfo->GlobalInformation->ConnectionMutex, TRUE);
 
     PLIST_ENTRY Request;
     PSRB_QUEUE_ELEMENT Element;
+    PLIST_ENTRY ListHead;
+    PKSPIN_LOCK ListLock;
 
-    while ((Request = ExInterlockedRemoveHeadList(&ScsiInfo->RequestListHead, &ScsiInfo->RequestListLock)) != NULL) {
+    if (SubmittedRequests) {
+        ListHead = &Device->RequestListHead;
+        ListLock = &Device->RequestListLock;
+    }
+    else {
+        ListHead = &Device->ReplyListHead;
+        ListLock = &Device->ReplyListLock;
+    }
+
+    while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
         Element->Srb->DataTransferLength = 0;
         Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-        PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)ScsiInfo->Device;
-        InterlockedDecrement(&Device->OutstandingIoCount);
-        ExFreePool(Element);
+        if (!Element->Aborted) {
+            Element->Aborted = 1;
+            if (SubmittedRequests)
+                InterlockedIncrement64(&Device->Stats.AbortedSubmittedIORequests);
+            else
+                InterlockedIncrement64(&Device->Stats.AbortedUnsubmittedIORequests);
+        }
+        CompleteRequest(Device, Element, TRUE);
     }
+}
 
-    while ((Request = ExInterlockedRemoveHeadList(&ScsiInfo->ReplyListHead, &ScsiInfo->ReplyListLock)) != NULL) {
-        Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
+VOID AbortSubmittedRequests(_In_ PWNBD_SCSI_DEVICE Device)
+{
+    // We're marking submitted requests as aborted and notifying Storport. We only cleaning
+    // them up when eventually receiving a reply from the storage backend (needed by NBD,
+    // in which case the IO payload is otherwise unknown).
+    // TODO: consider cleaning up aborted requests when not using NBD. For NBD, we might
+    // have a limit of aborted requests that we keep around.
+    WNBD_LOG_LOUD(": Enter");
+
+    PLIST_ENTRY ListHead = &Device->ReplyListHead;
+    PKSPIN_LOCK ListLock = &Device->ReplyListLock;
+
+    PSRB_QUEUE_ELEMENT Element;
+    PLIST_ENTRY ItemLink, ItemNext;
+    KIRQL Irql = { 0 };
+
+    KeAcquireSpinLock(ListLock, &Irql);
+    LIST_FORALL_SAFE(ListHead, ItemLink, ItemNext) {
+        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         Element->Srb->DataTransferLength = 0;
         Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
-        PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)ScsiInfo->Device;
-        InterlockedDecrement(&Device->OutstandingIoCount);
-        WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
-            Element->Srb, Element->Srb->SrbStatus, WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-        StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
-        ExFreePool(Element);
+        if (!Element->Aborted) {
+            Element->Aborted = 1;
+            InterlockedIncrement64(&Device->Stats.AbortedUnsubmittedIORequests);
+        }
+        CompleteRequest(Device, Element, FALSE);
     }
+    KeReleaseSpinLock(ListLock, Irql);
+}
 
-    if(ScsiInfo->InquiryData) {
-        ExFreePool(ScsiInfo->InquiryData);
-        ScsiInfo->InquiryData = NULL;
-    }
+VOID
+WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
+{
+    WNBD_LOG_LOUD(": Enter");
+    KeSetEvent(&DeviceExtension->GlobalDeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
 
-    DisconnectConnection(ScsiInfo);
+    // The rundown protection is a device reference count. We're going to wait
+    // for them to be removed after signaling the global device removal event.
+    ExWaitForRundownProtectionRelease(&DeviceExtension->RundownProtection);
 
-    ExDeleteResourceLite(&ScsiInfo->SocketLock);
-
-    if(ScsiInfo->UserEntry) {
-        ExFreePool(ScsiInfo->UserEntry);
-        ScsiInfo->UserEntry = NULL;
-    }
-
-    if (ScsiInfo->ReadPreallocatedBuffer) {
-        ExFreePool(ScsiInfo->ReadPreallocatedBuffer);
-        ScsiInfo->ReadPreallocatedBuffer = NULL;
-    }
-
-    if (ScsiInfo->WritePreallocatedBuffer) {
-        ExFreePool(ScsiInfo->WritePreallocatedBuffer);
-        ScsiInfo->WritePreallocatedBuffer = NULL;
-    }
-
-    ExReleaseResourceLite(&ScsiInfo->GlobalInformation->ConnectionMutex);
-    KeLeaveCriticalRegion();
-
-    ExFreePool(ScsiInfo);
-    ScsiInfo = NULL;
+    KsInitialize();
+    KsDestroy();
 
     WNBD_LOG_LOUD(": Exit");
 }
 
-VOID
-WnbdDeleteDevices(_In_ PWNBD_EXTENSION Ext,
-                  _In_ BOOLEAN All)
+BOOLEAN
+WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(Ext);
-    PWNBD_SCSI_DEVICE Device = NULL;
-    PLIST_ENTRY Link, Next;
-    if (NULL == Ext->GlobalInformation) {
-        return;
-    }
+    // TODO: limit the scopes of critical regions.
+    BOOLEAN Acquired = FALSE;
+
     KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite(&Ext->DeviceResourceLock, TRUE);
-    ExAcquireResourceExclusiveLite(&((PGLOBAL_INFORMATION)Ext->GlobalInformation)->ConnectionMutex, TRUE);
-    LIST_FORALL_SAFE(&Ext->DeviceList, Link, Next) {
-        Device = (PWNBD_SCSI_DEVICE)CONTAINING_RECORD(Link, WNBD_SCSI_DEVICE, ListEntry);
-        if (Device->ReportedMissing || All) {
-            WNBD_LOG_INFO("Deleting device %p with %d:%d:%d",
-                Device, Device->PathId, Device->TargetId, Device->Lun);
-            PSCSI_DEVICE_INFORMATION Info = (PSCSI_DEVICE_INFORMATION)Device->ScsiDeviceExtension;
-            WnbdDeleteConnection((PGLOBAL_INFORMATION)Ext->GlobalInformation,
-                                 Info->UserEntry->Properties.InstanceName);
-            RemoveEntryList(&Device->ListEntry);
-            WnbdDeleteScsiInformation(Device->ScsiDeviceExtension);
-            ExFreePool(Device);
-            Device = NULL;
-            if (FALSE == All) {
-                break;
-            }
-        }
-    }
-    ExReleaseResourceLite(&((PGLOBAL_INFORMATION)Ext->GlobalInformation)->ConnectionMutex);
-    ExReleaseResourceLite(&Ext->DeviceResourceLock);
+    if (Device)
+        Acquired = ExAcquireRundownProtection(&Device->RundownProtection);
     KeLeaveCriticalRegion();
-
-    WNBD_LOG_INFO("Request to exit DeleteDevicesThreadStart");
-
-    WNBD_LOG_LOUD(": Exit");
+    return Acquired;
 }
 
 VOID
-WnbdDeviceCleanerThread(_In_ PVOID Context)
+WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(Context);
-    PWNBD_EXTENSION Ext = (PWNBD_EXTENSION)Context;
-
-    while (TRUE) {
-        KeWaitForSingleObject(&Ext->DeviceCleanerEvent, Executive, KernelMode, FALSE, NULL);
-
-        if (Ext->StopDeviceCleaner) {
-            WNBD_LOG_INFO("Terminating Device Cleaner");
-            WnbdDeleteDevices(Ext, TRUE);
-            break;
-        }
-
-        WnbdDeleteDevices(Ext, FALSE);
-    }
-
-    WNBD_LOG_LOUD(": Exit");
-
-    (void)PsTerminateSystemThread(STATUS_SUCCESS);
+    KeEnterCriticalRegion();
+    if (Device)
+        ExReleaseRundownProtection(&Device->RundownProtection);
+    KeLeaveCriticalRegion();
 }
 
-VOID
-WnbdReportMissingDevice(_In_ PWNBD_EXTENSION DeviceExtension,
-                        _In_ PWNBD_SCSI_DEVICE Device,
-                        _In_ PWNBD_LU_EXTENSION LuExtension)
-{
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(Device);
-    ASSERT(DeviceExtension);
-    ASSERT(LuExtension);
-
-    if (!Device->Missing) {
-        LuExtension->WnbdScsiDevice = Device;
-    } else {
-        if (!Device->ReportedMissing) {
-            WNBD_LOG_INFO(": Scheduling %p to be deleted and waking DeviceCleaner",
-                          Device);
-            Device->ReportedMissing = TRUE;
-            KeSetEvent(&DeviceExtension->DeviceCleanerEvent, IO_DISK_INCREMENT, FALSE);
-        }
-        Device = NULL;
-    }
-
-    WNBD_LOG_LOUD(": Exit");
-}
-
+// The returned device must be subsequently relased using WnbdReleaseDevice,
+// if "Acquire" is set. Unacquired device pointers must not be dereferenced.
 PWNBD_SCSI_DEVICE
-WnbdFindDevice(_In_ PWNBD_LU_EXTENSION LuExtension,
-               _In_ PWNBD_EXTENSION DeviceExtension,
-               _In_ UCHAR PathId,
-               _In_ UCHAR TargetId,
-               _In_ UCHAR Lun)
-{
-    WNBD_LOG_LOUD(": Entered");
-    ASSERT(LuExtension);
-    ASSERT(DeviceExtension);
-
-    PWNBD_SCSI_DEVICE Device = NULL;
-
-    for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
-        Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink) {
-
-        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
-
-        if (Device->PathId == PathId
-            && Device->TargetId == TargetId
-            && Device->Lun == Lun) {
-            WnbdReportMissingDevice(DeviceExtension, Device, LuExtension);
-            break;
-        }
-        Device = NULL;
-    }
-
-    WNBD_LOG_LOUD(": Exit");
-
-    return Device;
-}
-
-PWNBD_SCSI_DEVICE
-WnbdFindDeviceEx(
+WnbdFindDeviceByAddr(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UCHAR PathId,
     _In_ UCHAR TargetId,
-    _In_ UCHAR Lun)
+    _In_ UCHAR Lun,
+    _In_ BOOLEAN Acquire)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
 
+    KIRQL Irql = { 0 };
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
     PWNBD_SCSI_DEVICE Device = NULL;
-    PWNBD_LU_EXTENSION LuExtension;
-    KIRQL Irql;
-    KSPIN_LOCK DevLock = DeviceExtension->DeviceListLock;
-    KeAcquireSpinLock(&DevLock, &Irql);
-
-    LuExtension = (PWNBD_LU_EXTENSION)
-        StorPortGetLogicalUnit(DeviceExtension, PathId, TargetId, Lun);
-
-    if (!LuExtension) {
-        WNBD_LOG_ERROR(": Unable to get LUN extension for device PathId: %d TargetId: %d LUN: %d",
-            PathId, TargetId, Lun);
-        goto Exit;
+    for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
+         Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
+    {
+        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        if (Device->Bus == PathId
+            && Device->Target == TargetId
+            && Device->Lun == Lun)
+        {
+            if (Acquire && !WnbdAcquireDevice(Device))
+                Device = NULL;
+            break;
+        }
+        Device = NULL;
     }
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    Device = WnbdFindDevice(LuExtension, DeviceExtension,
-                            PathId, TargetId, Lun);
-    if (!Device) {
-        WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
-            PathId, TargetId, Lun);
-        goto Exit;
+    WNBD_LOG_LOUD(": Exit");
+    return Device;
+}
+
+// The returned device must be subsequently relased using WnbdReleaseDevice,
+// if "Acquire" is set. Unacquired device pointers must not be dereferenced.
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceByConnId(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ UINT64 ConnectionId,
+    _In_ BOOLEAN Acquire)
+{
+    WNBD_LOG_LOUD(": Enter");
+    ASSERT(DeviceExtension);
+
+    KIRQL Irql = { 0 };
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    PWNBD_SCSI_DEVICE Device = NULL;
+    for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
+         Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
+    {
+        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        if (Device->ConnectionId == ConnectionId) {
+            if (Acquire && !WnbdAcquireDevice(Device))
+                Device = NULL;
+            break;
+        }
+        Device = NULL;
     }
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    if (!Device->ScsiDeviceExtension) {
-        WNBD_LOG_ERROR("%p has no ScsiDeviceExtension. PathId = %d. TargetId = %d. LUN = %d",
-            Device, PathId, TargetId, Lun);
-        goto Exit;
+    WNBD_LOG_LOUD(": Exit");
+    return Device;
+}
+
+// The returned device must be subsequently relased using WnbdReleaseDevice,
+// if "Acquire" is set. Unacquired device pointers must not be dereferenced.
+PWNBD_SCSI_DEVICE
+WnbdFindDeviceByInstanceName(
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ PCHAR InstanceName,
+    _In_ BOOLEAN Acquire)
+{
+    WNBD_LOG_LOUD(": Enter");
+    ASSERT(DeviceExtension);
+
+    KIRQL Irql = { 0 };
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    PWNBD_SCSI_DEVICE Device = NULL;
+    for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
+         Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
+    {
+        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        if (!strcmp((CONST CHAR*)&Device->Properties.InstanceName, InstanceName)) {
+            if (Acquire && !WnbdAcquireDevice(Device))
+                Device = NULL;
+            break;
+        }
+        Device = NULL;
     }
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-Exit:
-    KeReleaseSpinLock(&DevLock, Irql);
+    WNBD_LOG_LOUD(": Exit");
     return Device;
 }
 
 NTSTATUS
-WnbdRequestWrite(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
+WnbdRequestWrite(_In_ PWNBD_SCSI_DEVICE Device,
                  _In_ PSRB_QUEUE_ELEMENT Element,
                  _In_ DWORD NbdTransmissionFlags)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(DeviceInformation);
+    ASSERT(Device);
     ASSERT(Element);
     ULONG StorResult;
     PVOID Buffer;
@@ -262,13 +232,13 @@ WnbdRequestWrite(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
     if (STOR_STATUS_SUCCESS != StorResult) {
         Status = SRB_STATUS_INTERNAL_ERROR;
     } else {
-        NbdWriteStat(DeviceInformation->Socket,
+        NbdWriteStat(Device->NbdSocket,
                      Element->StartingLbn,
                      Element->ReadLength,
                      &Status,
                      Buffer,
-                     &DeviceInformation->WritePreallocatedBuffer,
-                     &DeviceInformation->WritePreallocatedBufferLength,
+                     &Device->WritePreallocatedBuffer,
+                     &Device->WritePreallocatedBufferLength,
                      Element->Tag,
                      NbdTransmissionFlags);
     }
@@ -277,52 +247,59 @@ WnbdRequestWrite(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
     return Status;
 }
 
-VOID DisconnectConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
+VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device) {
     KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(
-        &DeviceInformation->SocketLock, TRUE);
-    if (-1 != DeviceInformation->SocketToClose) {
-        WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
-        if (-1 != DeviceInformation->Socket) {
-            Close(DeviceInformation->Socket);
-        } else {
-            Close(DeviceInformation->SocketToClose);
-        }
-        DeviceInformation->Socket = -1;
-        DeviceInformation->SocketToClose = -1;
-        DeviceInformation->Device->Missing = TRUE;
+    ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
+    if (-1 != Device->SocketToClose) {
+        WNBD_LOG_INFO("Closing socket FD: %d", Device->SocketToClose);
+        Close(Device->SocketToClose);
     }
-    ExReleaseResourceLite(&DeviceInformation->SocketLock);
+    if (-1 != Device->NbdSocket) {
+        WNBD_LOG_INFO("Closing socket FD: %d", Device->NbdSocket);
+        Close(Device->NbdSocket);
+    }
+
+    Device->NbdSocket = -1;
+    Device->SocketToClose = -1;
+    ExReleaseResourceLite(&Device->SocketLock);
     KeLeaveCriticalRegion();
 }
 
-VOID CloseConnection(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation) {
+VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device) {
     KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(
-        &DeviceInformation->SocketLock, TRUE);
-    // TODO: is SocketToClose actually necessary? We're closing both
-    // SocketToClose and Socket. This logic seems very convoluted.
-    // Also, "Close" is calling the socket "Disconnect" function and
-    // Disconnect is actually calling "Close" ?! 
-    DeviceInformation->SocketToClose = -1;
-    if (-1 != DeviceInformation->Socket) {
-        WNBD_LOG_INFO("Closing socket FD: %d", DeviceInformation->Socket);
-        DeviceInformation->SocketToClose = DeviceInformation->Socket;
-        Disconnect(DeviceInformation->Socket);
-        DeviceInformation->Socket = -1;
-        if (DeviceInformation->Device) {
-            DeviceInformation->Device->Missing = TRUE;
-        }
+    ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
+    if (-1 != Device->NbdSocket) {
+        WNBD_LOG_INFO("Closing socket FD: %d", Device->NbdSocket);
+        Device->SocketToClose = Device->NbdSocket;
+        // We're setting this to -1 to avoid sending further requests. We're
+        // using SocketToClose so that CloseSocket can actually close it.
+        // TODO: consider merging those two functions.
+        Device->NbdSocket = -1;
+        Disconnect(Device->SocketToClose);
     }
-    ExReleaseResourceLite(&DeviceInformation->SocketLock);
+    ExReleaseResourceLite(&Device->SocketLock);
     KeLeaveCriticalRegion();
 }
 
 VOID
-WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
+WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(DeviceInformation);
+    ASSERT(Device);
+
+    Device->SoftTerminateDevice = TRUE;
+    if (Hard)
+        Device->HardTerminateDevice = TRUE;
+    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+
+    WNBD_LOG_LOUD(": Exit");
+}
+
+VOID
+WnbdProcessDeviceThreadRequests(_In_ PWNBD_SCSI_DEVICE Device)
+{
+    WNBD_LOG_LOUD(": Enter");
+    ASSERT(Device);
 
     PLIST_ENTRY Request;
     PSRB_QUEUE_ELEMENT Element;
@@ -330,8 +307,8 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     static UINT64 RequestTag = 0;
 
     while ((Request = ExInterlockedRemoveHeadList(
-            &DeviceInformation->RequestListHead,
-            &DeviceInformation->RequestListLock)) != NULL) {
+            &Device->RequestListHead,
+            &Device->RequestListLock)) != NULL) {
         RequestTag += 1;
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
         Element->Tag = RequestTag;
@@ -341,19 +318,16 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
                       Status, Element->Srb, Element->Tag);
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
 
-        if(!ValidateScsiRequest(DeviceInformation, Element)) {
+        if(!ValidateScsiRequest(Device, Element)) {
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
-            StorPortNotification(RequestComplete,
-                                 Element->DeviceExtension,
-                                 Element->Srb);
-            ExFreePool(Element);
-            InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
+            CompleteRequest(Device, Element, TRUE);
+            InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
             continue;
         }
 
         DWORD NbdTransmissionFlags = 0;
-        PWNBD_PROPERTIES DevProps = &DeviceInformation->UserEntry->Properties;
+        PWNBD_PROPERTIES DevProps = &Device->Properties;
         switch (NbdReqType) {
         case NBD_CMD_WRITE:
         case NBD_CMD_TRIM:
@@ -362,23 +336,22 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
             }
         case NBD_CMD_READ:
         case NBD_CMD_FLUSH:
-            if(DeviceInformation->SoftTerminateDevice ||
-                    DeviceInformation->HardTerminateDevice) {
+            if (Device->HardTerminateDevice) {
                 return;
             }
             ExInterlockedInsertTailList(
-                &DeviceInformation->ReplyListHead,
-                &Element->Link, &DeviceInformation->ReplyListLock);
+                &Device->ReplyListHead,
+                &Element->Link, &Device->ReplyListLock);
             WNBD_LOG_LOUD("Sending %s request. Address: %p Tag: 0x%llx. FUA: %d",
                           NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag,
                           Element->FUA);
 
             if(NbdReqType == NBD_CMD_WRITE){
-                Status = WnbdRequestWrite(DeviceInformation, Element,
+                Status = WnbdRequestWrite(Device, Element,
                                           NbdTransmissionFlags);
             } else {
                 NbdRequest(
-                    DeviceInformation->Socket,
+                    Device->NbdSocket,
                     Element->StartingLbn,
                     Element->ReadLength,
                     &Status,
@@ -386,9 +359,9 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
                     NbdReqType | NbdTransmissionFlags);
             }
 
-            InterlockedDecrement64(&DeviceInformation->Stats.UnsubmittedIORequests);
-            InterlockedIncrement64(&DeviceInformation->Stats.TotalSubmittedIORequests);
-            InterlockedIncrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
+            InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
+            InterlockedIncrement64(&Device->Stats.TotalSubmittedIORequests);
+            InterlockedIncrement64(&Device->Stats.PendingSubmittedIORequests);
             break;
         }
 
@@ -398,7 +371,7 @@ WnbdProcessDeviceThreadRequests(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
             if (STATUS_CONNECTION_RESET == Status ||
                 STATUS_CONNECTION_DISCONNECTED == Status ||
                 STATUS_CONNECTION_ABORTED == Status) {
-                CloseConnection(DeviceInformation);
+                WnbdDisconnectAsync(Device, TRUE);
             }
         }
     }
@@ -410,34 +383,34 @@ VOID
 WnbdDeviceRequestThread(_In_ PVOID Context)
 {
     WNBD_LOG_LOUD(": Enter");
-
     ASSERT(Context);
-    
-    PSCSI_DEVICE_INFORMATION DeviceInformation;
     PAGED_CODE();
-
-    DeviceInformation = (PSCSI_DEVICE_INFORMATION) Context;
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
-    while (TRUE) {
-        // TODO: should this be moved in the WnbdProcessDeviceThreadRequests loop?
-        KeWaitForSingleObject(&DeviceInformation->DeviceEvent, Executive, KernelMode, FALSE, NULL);
+    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    while (!Device->HardTerminateDevice) {
+        PVOID WaitObjects[2];
+        WaitObjects[0] = &Device->DeviceEvent;
+        WaitObjects[1] = &Device->TerminateEvent;
+        NTSTATUS WaitResult = KeWaitForMultipleObjects(
+            2, WaitObjects, WaitAny, Executive, KernelMode,
+            TRUE, NULL, NULL);
+        if (STATUS_WAIT_1 == WaitResult || Device->HardTerminateDevice)
+            break;
 
-        if (DeviceInformation->HardTerminateDevice) {
-            WNBD_LOG_INFO("Hard terminate thread: %p", DeviceInformation);
-            PsTerminateSystemThread(STATUS_SUCCESS);
+        if (STATUS_ALERTED == WaitResult) {
+            // This happens when the calling thread is terminating.
+            // TODO: ensure that we haven't been alerted for some other reason.
+            WNBD_LOG_INFO("Wait alterted, terminating.");
+            KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+            break;
         }
 
-        WnbdProcessDeviceThreadRequests(DeviceInformation);
-
-        // TODO: should we continue processing requests on soft termination until
-        // we drain our queues?
-        if (DeviceInformation->SoftTerminateDevice) {
-            WNBD_LOG_INFO("Soft terminate thread: %p", DeviceInformation);
-            PsTerminateSystemThread(STATUS_SUCCESS);
-        }
+        WnbdProcessDeviceThreadRequests(Device);
     }
+
+    PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 VOID
@@ -445,23 +418,16 @@ WnbdDeviceReplyThread(_In_ PVOID Context)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Context);
-
-    PSCSI_DEVICE_INFORMATION DeviceInformation;
     PAGED_CODE();
-
-    DeviceInformation = (PSCSI_DEVICE_INFORMATION) Context;
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
-    while (TRUE) {
-
-        if (DeviceInformation->SoftTerminateDevice) {
-            WNBD_LOG_INFO("Soft terminate thread: %p", DeviceInformation);
-            PsTerminateSystemThread(STATUS_SUCCESS);
-        }
-
-        WnbdProcessDeviceThreadReplies(DeviceInformation);
+    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    while (!Device->HardTerminateDevice) {
+        WnbdProcessDeviceThreadReplies(Device);
     }
+
+    PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
 _Use_decl_annotations_
@@ -510,10 +476,10 @@ ScsiOpToNbdReqType(int ScsiOp)
 }
 
 VOID
-WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
+WnbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(DeviceInformation);
+    ASSERT(Device);
 
     PSRB_QUEUE_ELEMENT Element = NULL;
     NTSTATUS Status = STATUS_SUCCESS;
@@ -521,20 +487,15 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     PVOID SrbBuff = NULL, TempBuff = NULL;
     NTSTATUS error = STATUS_SUCCESS;
 
-    Status = NbdReadReply(DeviceInformation->Socket, &Reply);
+    Status = NbdReadReply(Device->NbdSocket, &Reply);
     if (Status) {
-        CloseConnection(DeviceInformation);
-        // Sleep for a bit to avoid a lazy poll here since the connection
-        // could already be closed by the time the device is actually removed.
-        LARGE_INTEGER Timeout;
-        Timeout.QuadPart = (-1 * 100 * 10000);
-        KeDelayExecutionThread(KernelMode, FALSE, &Timeout);
+        WnbdDisconnectAsync(Device, TRUE);
         return;
     }
     PLIST_ENTRY ItemLink, ItemNext;
     KIRQL Irql = { 0 };
-    KeAcquireSpinLock(&DeviceInformation->ReplyListLock, &Irql);
-    LIST_FORALL_SAFE(&DeviceInformation->ReplyListHead, ItemLink, ItemNext) {
+    KeAcquireSpinLock(&Device->ReplyListLock, &Irql);
+    LIST_FORALL_SAFE(&Device->ReplyListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         if (Element->Tag == Reply.Handle) {
             /* Remove the element from the list once found*/
@@ -543,11 +504,11 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         }
         Element = NULL;
     }
-    KeReleaseSpinLock(&DeviceInformation->ReplyListLock, Irql);
+    KeReleaseSpinLock(&Device->ReplyListLock, Irql);
     if(!Element) {
         WNBD_LOG_ERROR("Received reply with no matching request tag: 0x%llx",
             Reply.Handle);
-        CloseConnection(DeviceInformation);
+        WnbdDisconnectAsync(Device, TRUE);
         goto Exit;
     }
 
@@ -565,7 +526,7 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
                 WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
                                Element->Srb, Element->Tag, error);
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                CloseConnection(DeviceInformation);
+                WnbdDisconnectAsync(Device, TRUE);
                 goto Exit;
             }
         }
@@ -575,26 +536,26 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     }
 
     if(!Reply.Error && IsReadSrb(Element->Srb)) {
-        if (Element->ReadLength > DeviceInformation->ReadPreallocatedBufferLength) {
+        if (Element->ReadLength > Device->ReadPreallocatedBufferLength) {
             TempBuff = NbdMalloc(Element->ReadLength);
             if (!TempBuff) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
-                CloseConnection(DeviceInformation);
+                WnbdDisconnectAsync(Device, TRUE);
                 goto Exit;
             }
-            DeviceInformation->ReadPreallocatedBufferLength = Element->ReadLength;
-            ExFreePool(DeviceInformation->ReadPreallocatedBuffer);
-            DeviceInformation->ReadPreallocatedBuffer = TempBuff;
+            Device->ReadPreallocatedBufferLength = Element->ReadLength;
+            ExFreePool(Device->ReadPreallocatedBuffer);
+            Device->ReadPreallocatedBuffer = TempBuff;
         } else {
-            TempBuff = DeviceInformation->ReadPreallocatedBuffer;
+            TempBuff = Device->ReadPreallocatedBuffer;
         }
 
-        if (-1 == NbdReadExact(DeviceInformation->Socket, TempBuff, Element->ReadLength, &error)) {
+        if (-1 == NbdReadExact(Device->NbdSocket, TempBuff, Element->ReadLength, &error)) {
             WNBD_LOG_ERROR("Failed receiving reply %p 0x%llx. Error: %d",
                            Element->Srb, Element->Tag, error);
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-            CloseConnection(DeviceInformation);
+            WnbdDisconnectAsync(Device, TRUE);
             goto Exit;
         } else {
             if(!Element->Aborted) {
@@ -618,11 +579,11 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
         Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
     }
 
-    InterlockedIncrement64(&DeviceInformation->Stats.TotalReceivedIOReplies);
-    InterlockedDecrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
+    InterlockedIncrement64(&Device->Stats.TotalReceivedIOReplies);
+    InterlockedDecrement64(&Device->Stats.PendingSubmittedIORequests);
 
     if(Element->Aborted) {
-        InterlockedIncrement64(&DeviceInformation->Stats.CompletedAbortedIORequests);
+        InterlockedIncrement64(&Device->Stats.CompletedAbortedIORequests);
     }
     else {
         WNBD_LOG_LOUD("Successfully completed request %p 0x%llx.",
@@ -630,28 +591,20 @@ WnbdProcessDeviceThreadReplies(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
     }
 
 Exit:
-    InterlockedDecrement(&DeviceInformation->Device->OutstandingIoCount);
     if (Element) {
-        if(!Element->Aborted) {
-            WNBD_LOG_INFO("Notifying StorPort of completion of %p status: 0x%x(%s)",
-                Element->Srb, Element->Srb->SrbStatus,
-                WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-            StorPortNotification(RequestComplete, Element->DeviceExtension,
-                                 Element->Srb);
-        }
-        ExFreePool(Element);
+        CompleteRequest(Device, Element, TRUE);
     }
 }
 
 BOOLEAN
 ValidateScsiRequest(
-    _In_ PSCSI_DEVICE_INFORMATION DeviceInformation,
+    _In_ PWNBD_SCSI_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element)
 {
     PCDB Cdb = (PCDB)&Element->Srb->Cdb;
     int ScsiOp = Cdb->AsByte[0];
     int NbdReqType = ScsiOpToNbdReqType(ScsiOp);
-    PWNBD_PROPERTIES DevProps = &DeviceInformation->UserEntry->Properties;
+    PWNBD_PROPERTIES DevProps = &Device->Properties;
 
     switch (NbdReqType) {
     case NBD_CMD_TRIM:
@@ -709,4 +662,25 @@ UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
     }
 
     return SrbStatus;
+}
+
+VOID CompleteRequest(
+    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PSRB_QUEUE_ELEMENT Element,
+    _In_ BOOLEAN FreeElement)
+{
+    // We must be very careful not to complete the same SRB twice in order
+    // to avoid crashes.
+    if (!InterlockedExchange8((CHAR*)&Element->Completed, TRUE)) {
+        WNBD_LOG_LOUD(
+            "Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
+            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
+            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+        StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
+        InterlockedDecrement64(&Device->Stats.OutstandingIOCount);
+    }
+
+    if (FreeElement) {
+        ExFreePool(Element);
+    }
 }

@@ -7,7 +7,6 @@
 #include "common.h"
 #include "debug.h"
 #include "driver.h"
-#include "driver_extension.h"
 #include "scsi_driver_extensions.h"
 
 DRIVER_INITIALIZE DriverEntry;
@@ -19,8 +18,6 @@ PDRIVER_DISPATCH StorPortDispatchPnp;
 WCHAR  GlobalRegistryPathBuffer[256];
 extern UNICODE_STRING GlobalRegistryPath = { 0, 0, GlobalRegistryPathBuffer};
 extern UINT32 GlobalLogLevel = 0;
-
-extern PGLOBAL_INFORMATION GlobalInformation;
 
 _Use_decl_annotations_
 BOOLEAN
@@ -95,7 +92,7 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
     WnbdInitData.PortVersionFlags		 = 0;
 
     WnbdInitData.DeviceExtensionSize      = sizeof(WNBD_EXTENSION);
-    WnbdInitData.SpecificLuExtensionSize  = sizeof(WNBD_LU_EXTENSION);
+    WnbdInitData.SpecificLuExtensionSize  = 0;
     WnbdInitData.SrbExtensionSize         = 0;
 
     /*
@@ -203,7 +200,6 @@ WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
 {
     WNBD_LOG_LOUD(": Enter");
 
-    WnbdDeleteGlobalInformation(GlobalInformation);
     if (0 != StorPortDriverUnload) {
         StorPortDriverUnload(DriverObject);
     }

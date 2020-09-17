@@ -83,23 +83,21 @@ NTSTATUS LockUsermodeBuffer(
 
 NTSTATUS WnbdDispatchRequest(
     PIRP Irp,
-    PSCSI_DEVICE_INFORMATION DeviceInfo,
+    PWNBD_SCSI_DEVICE Device,
     PWNBD_IOCTL_FETCH_REQ_COMMAND Command)
 {
-    // TODO: reject request when using NBD.
-    // TODO: check the associated PID.
     PVOID Buffer;
     NTSTATUS Status = 0;
     PWNBD_IO_REQUEST Request = &Command->Request;
     PMDL Mdl = NULL;
     BOOLEAN BufferLocked = FALSE;
 
-    if ((ULONG)DeviceInfo->UserEntry->Properties.Pid != IoGetRequestorProcessId(Irp)) {
+    if ((ULONG)Device->Properties.Pid != IoGetRequestorProcessId(Irp)) {
         WNBD_LOG_LOUD("Invalid pid: %d != %u.",
-            DeviceInfo->UserEntry->Properties.Pid, IoGetRequestorProcessId(Irp));
+            Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
-    if ((ULONG)DeviceInfo->UserEntry->Properties.Flags.UseNbd) {
+    if ((ULONG)Device->Properties.Flags.UseNbd) {
         WNBD_LOG_LOUD("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }
@@ -114,10 +112,10 @@ NTSTATUS WnbdDispatchRequest(
 
     // We're looping through the requests until we manage to dispatch one.
     // Unsupported requests as well as most errors will be hidden from the caller.
-    while (!DeviceInfo->HardTerminateDevice) {
+    while (!Device->HardTerminateDevice) {
         PVOID WaitObjects[2];
-        WaitObjects[0] = &DeviceInfo->DeviceEvent;
-        WaitObjects[1] = &DeviceInfo->TerminateEvent;
+        WaitObjects[0] = &Device->DeviceEvent;
+        WaitObjects[1] = &Device->TerminateEvent;
         NTSTATUS WaitResult = KeWaitForMultipleObjects(
             2, WaitObjects, WaitAny, Executive, KernelMode,
             TRUE, NULL, NULL);
@@ -128,15 +126,15 @@ NTSTATUS WnbdDispatchRequest(
             // This happens when the calling thread is terminating.
             // TODO: ensure that we haven't been alerted for some other reason.
             WNBD_LOG_INFO("Wait alterted, terminating.");
-            WnbdSetDeviceMissing(DeviceInfo->Device, TRUE);
+            KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
             break;
         }
 
         PLIST_ENTRY RequestEntry = ExInterlockedRemoveHeadList(
-            &DeviceInfo->RequestListHead,
-            &DeviceInfo->RequestListLock);
+            &Device->RequestListHead,
+            &Device->RequestListLock);
 
-        if (DeviceInfo->HardTerminateDevice) {
+        if (Device->HardTerminateDevice) {
             break;
         }
         if (!RequestEntry) {
@@ -164,15 +162,12 @@ NTSTATUS WnbdDispatchRequest(
         default:
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
-            StorPortNotification(RequestComplete,
-                                 Element->DeviceExtension,
-                                 Element->Srb);
-            ExFreePool(Element);
-            InterlockedDecrement64(&DeviceInfo->Stats.UnsubmittedIORequests);
+            CompleteRequest(Device, Element, TRUE);
+            InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
             continue;
         }
 
-        PWNBD_PROPERTIES DevProps = &DeviceInfo->UserEntry->Properties;
+        PWNBD_PROPERTIES DevProps = &Device->Properties;
 
         switch(RequestType) {
         case WnbdReqTypeRead:
@@ -190,12 +185,8 @@ NTSTATUS WnbdDispatchRequest(
                 // The user buffer must be at least as large as
                 // the specified maximum transfer length.
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                StorPortNotification(
-                    RequestComplete,
-                    Element->DeviceExtension,
-                    Element->Srb);
-                ExFreePool(Element);
-                InterlockedDecrement64(&DeviceInfo->Stats.UnsubmittedIORequests);
+                CompleteRequest(Device, Element, TRUE);
+                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
                 Status = STATUS_BUFFER_TOO_SMALL;
                 goto Exit;
             }
@@ -203,14 +194,9 @@ NTSTATUS WnbdDispatchRequest(
             PVOID SrbBuffer;
             if (StorPortGetSystemAddress(Element->DeviceExtension,
                                          Element->Srb, &SrbBuffer)) {
-                // TODO: consider moving this part to a helper function.
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                StorPortNotification(
-                    RequestComplete,
-                    Element->DeviceExtension,
-                    Element->Srb);
-                ExFreePool(Element);
-                InterlockedDecrement64(&DeviceInfo->Stats.UnsubmittedIORequests);
+                CompleteRequest(Device, Element, TRUE);
+                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
                 continue;
             }
 
@@ -219,10 +205,10 @@ NTSTATUS WnbdDispatchRequest(
         }
 
         ExInterlockedInsertTailList(
-            &DeviceInfo->ReplyListHead,
-            &Element->Link, &DeviceInfo->ReplyListLock);
-        InterlockedIncrement64(&DeviceInfo->Stats.PendingSubmittedIORequests);
-        InterlockedDecrement64(&DeviceInfo->Stats.UnsubmittedIORequests);
+            &Device->ReplyListHead,
+            &Element->Link, &Device->ReplyListLock);
+        InterlockedIncrement64(&Device->Stats.PendingSubmittedIORequests);
+        InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
         // We managed to find a supported request, we can now exit the loop
         // and pass it forward.
         break;
@@ -236,7 +222,7 @@ Exit:
         IoFreeMdl(Mdl);
     }
 
-    if (DeviceInfo->HardTerminateDevice) {
+    if (Device->HardTerminateDevice) {
         Request->RequestType = WnbdReqTypeDisconnect;
         Status = 0;
     }
@@ -246,7 +232,7 @@ Exit:
 
 NTSTATUS WnbdHandleResponse(
     PIRP Irp,
-    PSCSI_DEVICE_INFORMATION DeviceInfo,
+    PWNBD_SCSI_DEVICE Device,
     PWNBD_IOCTL_SEND_RSP_COMMAND Command)
 {
     PSRB_QUEUE_ELEMENT Element = NULL;
@@ -256,20 +242,20 @@ NTSTATUS WnbdHandleResponse(
     BOOLEAN BufferLocked = FALSE;
     PWNBD_IO_RESPONSE Response = &Command->Response;
 
-    if ((ULONG)DeviceInfo->UserEntry->Properties.Pid != IoGetRequestorProcessId(Irp)) {
+    if ((ULONG)Device->Properties.Pid != IoGetRequestorProcessId(Irp)) {
         WNBD_LOG_LOUD("Invalid pid: %d != %u.",
-            DeviceInfo->UserEntry->Properties.Pid, IoGetRequestorProcessId(Irp));
+            Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
-    if ((ULONG)DeviceInfo->UserEntry->Properties.Flags.UseNbd) {
+    if ((ULONG)Device->Properties.Flags.UseNbd) {
         WNBD_LOG_LOUD("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }
 
     PLIST_ENTRY ItemLink, ItemNext;
     KIRQL Irql = { 0 };
-    KeAcquireSpinLock(&DeviceInfo->ReplyListLock, &Irql);
-    LIST_FORALL_SAFE(&DeviceInfo->ReplyListHead, ItemLink, ItemNext) {
+    KeAcquireSpinLock(&Device->ReplyListLock, &Irql);
+    LIST_FORALL_SAFE(&Device->ReplyListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         if (Element->Tag == Response->RequestHandle) {
             RemoveEntryList(&Element->Link);
@@ -277,12 +263,11 @@ NTSTATUS WnbdHandleResponse(
         }
         Element = NULL;
     }
-    KeReleaseSpinLock(&DeviceInfo->ReplyListLock, Irql);
+    KeReleaseSpinLock(&Device->ReplyListLock, Irql);
     if (!Element) {
         WNBD_LOG_ERROR("Received reply with no matching request tag: 0x%llx",
             Response->RequestHandle);
-        Status = STATUS_NOT_FOUND;
-        goto Exit;
+        return STATUS_NOT_FOUND;
     }
 
     ULONG StorResult;
@@ -312,8 +297,10 @@ NTSTATUS WnbdHandleResponse(
         Status = LockUsermodeBuffer(
             Command->DataBuffer, Command->DataBufferSize, FALSE,
             &LockedUserBuff, &Mdl, &BufferLocked);
-        if (Status)
+        if (Status) {
+            Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
             goto Exit;
+        }
 
         // TODO: compare data buffer size with the read length
         if (!Element->Aborted) {
@@ -334,16 +321,14 @@ NTSTATUS WnbdHandleResponse(
         Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
     }
 
-    InterlockedIncrement64(&DeviceInfo->Stats.TotalReceivedIOReplies);
-    InterlockedDecrement64(&DeviceInfo->Stats.PendingSubmittedIORequests);
-    // TODO: consider dropping this counter, relying on the request list instead.
-    InterlockedDecrement(&DeviceInfo->Device->OutstandingIoCount);
+Exit:
+    InterlockedIncrement64(&Device->Stats.TotalReceivedIOReplies);
+    InterlockedDecrement64(&Device->Stats.PendingSubmittedIORequests);
 
     if (Element->Aborted) {
-        InterlockedIncrement64(&DeviceInfo->Stats.CompletedAbortedIORequests);
+        InterlockedIncrement64(&Device->Stats.CompletedAbortedIORequests);
     }
 
-Exit:
     if (Mdl) {
         if (BufferLocked) {
             MmUnlockPages(Mdl);
@@ -351,17 +336,10 @@ Exit:
         IoFreeMdl(Mdl);
     }
 
-    if (Element) {
-        if (!Element->Aborted) {
-            WNBD_LOG_LOUD(
-                "Notifying StorPort of completion of %p status: 0x%x(%s)",
-                Element->Srb, Element->Srb->SrbStatus,
-                WnbdToStringSrbStatus(Element->Srb->SrbStatus));
-            StorPortNotification(RequestComplete, Element->DeviceExtension,
-                                 Element->Srb);
-        }
-        ExFreePool(Element);
+    if (!Element->Aborted) {
+        CompleteRequest(Device, Element, FALSE);
     }
+    ExFreePool(Element);
 
     return Status;
 }

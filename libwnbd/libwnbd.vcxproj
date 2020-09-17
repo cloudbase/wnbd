@@ -21,6 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\wnbd.h" />
+    <ClInclude Include="..\include\wnbd_ioctl.h" />
     <ClInclude Include="wnbd_wmi.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

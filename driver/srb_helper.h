@@ -7,6 +7,7 @@
 #ifndef SRB_HELPER_H
 #define SRB_HELPER_H 1
 
+#include <storport.h>
 #include <srbhelper.h>
 
 FORCEINLINE VOID

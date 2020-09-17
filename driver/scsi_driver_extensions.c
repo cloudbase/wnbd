@@ -6,8 +6,7 @@
 
 #include "debug.h"
 #include "driver.h"
-#include "driver_extension.h"
-#include "srbhelper.h"
+#include "srb_helper.h"
 #include "scsi_driver_extensions.h"
 #include "scsi_function.h"
 #include "scsi_trace.h"
@@ -108,7 +107,6 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     WNBD_LOG_LOUD(": Enter");
     PWNBD_EXTENSION Ext = (PWNBD_EXTENSION) DeviceExtension;
     NTSTATUS Status = STATUS_SUCCESS;
-    HANDLE DeviceCleanerHandle = NULL;
 
     /*
      * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/drivers/ff563901(v%3Dvs.85)
@@ -130,7 +128,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     ConfigInfo->SynchronizationModel = StorSynchronizeFullDuplex;
     ConfigInfo->VirtualDevice = TRUE;
 
-    Status = ExInitializeResourceLite(&Ext->DeviceResourceLock);
+    Status = ExInitializeResourceLite(&Ext->DeviceCreationLock);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Clean;
@@ -142,24 +140,8 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
 
     InitializeListHead(&Ext->DeviceList);       
     KeInitializeSpinLock(&Ext->DeviceListLock);
-    KeInitializeEvent(&Ext->DeviceCleanerEvent, SynchronizationEvent, FALSE);
-
-    /*
-     * Initialize out device thread cleaner
-     */
-    Status = PsCreateSystemThread(&DeviceCleanerHandle,
-                                  (ACCESS_MASK)0L, NULL, NULL, NULL,
-                                  WnbdDeviceCleanerThread, Ext);
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CleanLock;
-    }
-    Status = ObReferenceObjectByHandle(DeviceCleanerHandle, THREAD_ALL_ACCESS, NULL,
-        KernelMode, &Ext->DeviceCleaner, NULL);
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto CleanAdapter;
-    }
+    KeInitializeEvent(&Ext->GlobalDeviceRemovalEvent, SynchronizationEvent, FALSE);
+    ExInitializeRundownProtection(&Ext->RundownProtection);
 
     /*
      * Setup user-space communication device
@@ -169,10 +151,10 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
 
     if (!NT_SUCCESS(Status)) {
         WNBD_LOG_ERROR(": Error calling IoRegisterDeviceInterface. Failed with NTSTATUS: %x.", Status);
-        goto CleanAdapter;
+        goto CleanLock;
     }
 
-    Status = WnbdInitializeGlobalInformation(DeviceExtension, &Ext->GlobalInformation);
+    WnbdInitScsiIds();
 
     if (!NT_SUCCESS(Status)) {
         goto Exit;
@@ -182,11 +164,8 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     return SP_RETURN_FOUND;
 Exit:
     RtlFreeUnicodeString(&Ext->DeviceInterface);
-CleanAdapter:
-    Ext->StopDeviceCleaner = TRUE;
-    KeSetEvent(&Ext->DeviceCleanerEvent, IO_NO_INCREMENT, TRUE);
 CleanLock:
-    ExDeleteResourceLite(&Ext->DeviceResourceLock);
+    ExDeleteResourceLite(&Ext->DeviceCreationLock);
 Clean:
     WNBD_LOG_ERROR(": Failing with SP_RETURN_NOT_FOUND");
     WNBD_LOG_LOUD(": Exit");
@@ -206,11 +185,8 @@ WnbdHwFreeAdapterResources(_In_ PVOID DeviceExtension)
 
     PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION) DeviceExtension;
 
-    Ext->StopDeviceCleaner = TRUE;
-    KeSetEvent(&Ext->DeviceCleanerEvent, IO_NO_INCREMENT, FALSE);
-    KeWaitForSingleObject(Ext->DeviceCleaner, Executive, KernelMode, FALSE, NULL);
-    ObDereferenceObject(Ext->DeviceCleaner);
-    ExDeleteResourceLite(&Ext->DeviceResourceLock);
+    WnbdCleanupAllDevices(Ext);
+    ExDeleteResourceLite(&Ext->DeviceCreationLock);
 
     WNBD_LOG_LOUD(": Exit");
 }
@@ -250,10 +226,10 @@ WnbdHwProcessServiceRequest(PVOID DeviceExtension,
 
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation((PIRP)Irp);
     NTSTATUS Status = STATUS_INVALID_DEVICE_REQUEST;
-    PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION) DeviceExtension;
 
     if (IRP_MJ_DEVICE_CONTROL == IoLocation->MajorFunction) {
-        Status = WnbdParseUserIOCTL(Ext->GlobalInformation, (PIRP)Irp);
+        Status = WnbdParseUserIOCTL((PWNBD_EXTENSION) DeviceExtension,
+                                    (PIRP)Irp);
     }
 
     if (STATUS_PENDING != Status) {

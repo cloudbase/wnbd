@@ -165,6 +165,7 @@ DWORD CmdStats(PCHAR InstanceName)
     printf("AbortedSubmittedIORequests: %llu\n", Stats.AbortedSubmittedIORequests);
     printf("AbortedUnsubmittedIORequests: %llu\n", Stats.AbortedUnsubmittedIORequests);
     printf("CompletedAbortedIORequests: %llu\n", Stats.CompletedAbortedIORequests);
+    printf("OutstandingIOCount: %llu\n", Stats.OutstandingIOCount);
     return Status;
 }
 

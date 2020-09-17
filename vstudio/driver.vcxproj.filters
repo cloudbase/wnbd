@@ -45,9 +45,6 @@
     <ClCompile Include="..\driver\scsi_operation.c">
       <Filter>Driver Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\driver\driver_extension.c">
-      <Filter>Driver Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\driver\scsi_driver_extensions.c">
       <Filter>Driver Files</Filter>
     </ClCompile>
@@ -84,9 +81,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\driver\debug.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\driver\driver_extension.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\driver\scsi_trace.h">

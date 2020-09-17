@@ -5,6 +5,7 @@
  */
 
 #include <berkeley.h>
+#include <ksocket.h>
 #include <ws2def.h>
 #include "common.h"
 #include "debug.h"
@@ -344,6 +345,12 @@ NbdOpenAndConnect(PCHAR HostName,
     Hints.ai_socktype = SOCK_STREAM;
     Hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
     Hints.ai_protocol = IPPROTO_TCP;
+
+    DWORD Status = KsInitialize();
+    if (!NT_SUCCESS(Status)) {
+        WNBD_LOG_ERROR("Could not initialize WSK framework. Status: %d.", Status);
+        return -1;
+    }
 
     char* PortName[12] = { 0 };
     RtlStringCbPrintfA((char*)PortName, sizeof(PortName), "%d", PortNumber);

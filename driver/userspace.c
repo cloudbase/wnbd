@@ -11,7 +11,6 @@
 #include <ksocket.h>
 #include "common.h"
 #include "debug.h"
-#include "driver_extension.h"
 #include "nbd_protocol.h"
 #include "scsi_function.h"
 #include "userspace.h"
@@ -29,114 +28,11 @@ extern UNICODE_STRING GlobalRegistryPath;
 
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
 ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * MAX_NUMBER_OF_SCSI_TARGETS];
-static USHORT LunId = 0;
 VOID WnbdInitScsiIds()
 {
     RtlZeroMemory(AssignedScsiIds, sizeof(AssignedScsiIds));
     RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, SCSI_MAXIMUM_TARGETS_PER_BUS * MAX_NUMBER_OF_SCSI_TARGETS);
 }
-
-_Use_decl_annotations_
-BOOLEAN
-WnbdFindConnection(PGLOBAL_INFORMATION GInfo,
-                   PCHAR InstanceName,
-                   PUSER_ENTRY* Entry)
-{
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(GInfo);
-    ASSERT(InstanceName);
-
-    // TODO: consider returning the "Entry" directly.
-    BOOLEAN Found = FALSE;
-    PUSER_ENTRY SearchEntry;
-
-    SearchEntry = (PUSER_ENTRY)GInfo->ConnectionList.Flink;
-
-    while (SearchEntry != (PUSER_ENTRY)&GInfo->ConnectionList.Flink) {
-        if (!strcmp((CONST CHAR*)&SearchEntry->Properties.InstanceName, InstanceName)) {
-            if (Entry) {
-                *Entry = SearchEntry;
-
-            }
-            Found = TRUE;
-            break;
-        }
-        SearchEntry = (PUSER_ENTRY)SearchEntry->ListEntry.Flink;
-    }
-
-    WNBD_LOG_LOUD(": Exit");
-    return Found;
-}
-
-_Use_decl_annotations_
-PUSER_ENTRY
-WnbdFindConnectionEx(_In_ PGLOBAL_INFORMATION GInfo,
-                     _In_ UINT64 ConnectionId)
-{
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(GInfo);
-
-    PUSER_ENTRY FoundEntry = NULL;
-    PUSER_ENTRY SearchEntry = (PUSER_ENTRY)GInfo->ConnectionList.Flink;
-
-    while (SearchEntry != (PUSER_ENTRY)&GInfo->ConnectionList.Flink) {
-        if (SearchEntry->ConnectionId == ConnectionId) {
-            FoundEntry = SearchEntry;
-            break;
-        }
-        SearchEntry = (PUSER_ENTRY)SearchEntry->ListEntry.Flink;
-    }
-
-    WNBD_LOG_LOUD(": Exit");
-    return FoundEntry;
-}
-
-PVOID WnbdCreateScsiDevice(_In_ PVOID Extension,
-                           _In_ ULONG PathId,
-                           _In_ ULONG TargetId,
-                           _In_ ULONG Lun,
-                           _In_ PVOID ScsiDeviceExtension,
-                           _In_ PINQUIRYDATA InquiryData)
-{
-    PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION)Extension;
-    PWNBD_SCSI_DEVICE Dev = NULL;
-    PWNBD_LU_EXTENSION LuExt;
-
-    LuExt = (PWNBD_LU_EXTENSION) StorPortGetLogicalUnit(Ext,
-                                   (UCHAR) PathId,
-                                   (UCHAR) TargetId,
-                                   (UCHAR) Lun);
-
-    if (LuExt) {
-        WNBD_LOG_ERROR(": LU extension %p already found for %d:%d:%d", LuExt, PathId, TargetId, Lun);
-        return NULL;
-    }
-
-    Dev = (PWNBD_SCSI_DEVICE) ExAllocatePoolWithTag(NonPagedPoolNx,sizeof(WNBD_SCSI_DEVICE),'DBNs');
-
-    if (!Dev) {
-        WNBD_LOG_ERROR(": Allocation failure");
-        return NULL;
-    }
-
-    WNBD_LOG_INFO(": Device %p with SCSI_INFO %p and LU extension has "
-        "been created for %p at %d:%d:%d",
-        Dev, ScsiDeviceExtension, LuExt, PathId, TargetId, Lun);
-
-    RtlZeroMemory(Dev,sizeof(WNBD_SCSI_DEVICE));
-    Dev->ScsiDeviceExtension = ScsiDeviceExtension;
-    Dev->PathId = PathId;
-    Dev->TargetId = TargetId;
-    Dev->Lun = Lun;
-    Dev->PInquiryData = InquiryData;
-    Dev->Missing = FALSE;
-    Dev->DriverExtension = (PVOID) Ext;
-
-    WNBD_LOG_LOUD(": Exit");
-
-    return Dev;
-}
-
 
 VOID
 WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
@@ -170,38 +66,36 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
     WNBD_LOG_LOUD(": Exit");
 }
 
-#define MallocT(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, 'pDBR')
-
 NTSTATUS
-WnbdInitializeNbdClient(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
+WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(ScsiInfo);
+    ASSERT(Device);
     HANDLE request_thread_handle = NULL, reply_thread_handle = NULL;
     NTSTATUS Status = STATUS_SUCCESS;
 
-    ScsiInfo->ReadPreallocatedBuffer = MallocT(((UINT)WNBD_PREALLOC_BUFF_SZ));
-    if (!ScsiInfo->ReadPreallocatedBuffer) {
+    Device->ReadPreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
+    if (!Device->ReadPreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
     }
-    ScsiInfo->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
-    ScsiInfo->WritePreallocatedBuffer = MallocT(((UINT)WNBD_PREALLOC_BUFF_SZ));
-    if (!ScsiInfo->WritePreallocatedBuffer) {
+    Device->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
+    Device->WritePreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
+    if (!Device->WritePreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
     }
-    ScsiInfo->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
+    Device->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
 
     Status = PsCreateSystemThread(&request_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, WnbdDeviceRequestThread, ScsiInfo);
+                                  NULL, NULL, WnbdDeviceRequestThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
     }
 
     Status = ObReferenceObjectByHandle(request_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-        &ScsiInfo->DeviceRequestThread, NULL);
+        &Device->DeviceRequestThread, NULL);
 
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -209,72 +103,161 @@ WnbdInitializeNbdClient(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo)
     }
 
     Status = PsCreateSystemThread(&reply_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, WnbdDeviceReplyThread, ScsiInfo);
+                                  NULL, NULL, WnbdDeviceReplyThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
     }
 
     Status = ObReferenceObjectByHandle(reply_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-        &ScsiInfo->DeviceReplyThread, NULL);
-
-    RtlZeroMemory(&ScsiInfo->Stats, sizeof(WNBD_DRV_STATS));
+        &Device->DeviceReplyThread, NULL);
 
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
     }
 
+    RtlZeroMemory(&Device->Stats, sizeof(WNBD_DRV_STATS));
+
     return Status;
 
 SoftTerminate:
-    ExDeleteResourceLite(&ScsiInfo->SocketLock);
-    if (ScsiInfo->ReadPreallocatedBuffer) {
-        ExFreePool(ScsiInfo->ReadPreallocatedBuffer);
+    ExDeleteResourceLite(&Device->SocketLock);
+    if (Device->ReadPreallocatedBuffer) {
+        ExFreePool(Device->ReadPreallocatedBuffer);
     }
-    if (ScsiInfo->WritePreallocatedBuffer) {
-        ExFreePool(ScsiInfo->WritePreallocatedBuffer);
+    if (Device->WritePreallocatedBuffer) {
+        ExFreePool(Device->WritePreallocatedBuffer);
     }
     if (request_thread_handle)
         ZwClose(request_thread_handle);
     if (reply_thread_handle)
         ZwClose(reply_thread_handle);
-    ScsiInfo->SoftTerminateDevice = TRUE;
-    KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
+    Device->SoftTerminateDevice = TRUE;
+    KeReleaseSemaphore(&Device->DeviceEvent, 0, 1, FALSE);
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
-NTSTATUS
-WnbdInitializeScsiInfo(_In_ PSCSI_DEVICE_INFORMATION ScsiInfo, BOOLEAN UseNbd)
+VOID
+WnbdDeviceMonitorThread(_In_ PVOID Context)
 {
+    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    ASSERT(Device);
+    ASSERT(Device->DeviceExtension);
+
+    PWNBD_EXTENSION DeviceExtension = Device->DeviceExtension;
+    PVOID WaitObjects[2];
+    WaitObjects[0] = &DeviceExtension->GlobalDeviceRemovalEvent;
+    WaitObjects[1] = &Device->TerminateEvent;
+    KeWaitForMultipleObjects(
+        2, WaitObjects, WaitAny, Executive, KernelMode,
+        FALSE, NULL, NULL);
+
+    Device->SoftTerminateDevice = TRUE;
+    // TODO: implement proper soft termination.
+    Device->HardTerminateDevice = TRUE;
+    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    LARGE_INTEGER Timeout;
+    // TODO: consider making this configurable, currently 120s.
+    // TODO: move this timeout to ksocket.
+    Timeout.QuadPart = (-120 * 1000 * 10000);
+    DisconnectSocket(Device);
+
+    // Ensure that the device isn't currently being accessed.
+    ExWaitForRundownProtectionRelease(&Device->RundownProtection);
+
+    if (Device->Properties.Flags.UseNbd) {
+        KeWaitForSingleObject(Device->DeviceRequestThread, Executive, KernelMode, FALSE, NULL);
+        KeWaitForSingleObject(Device->DeviceReplyThread, Executive, KernelMode, FALSE, &Timeout);
+        ObDereferenceObject(Device->DeviceRequestThread);
+        ObDereferenceObject(Device->DeviceReplyThread);
+    }
+
+    DrainDeviceQueue(Device, FALSE);
+    DrainDeviceQueue(Device, TRUE);
+
+    CloseSocket(Device);
+
+    // After acquiring the device spinlock, we should return as quickly as possible.
+    KIRQL Irql = { 0 };
+    KeEnterCriticalRegion();
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    RemoveEntryList(&Device->ListEntry);
+    StorPortNotification(BusChangeDetected, DeviceExtension, 0);
+
+    RtlClearBits(&ScsiBitMapHeader,
+                 Device->Target + (Device->Bus * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
+    InterlockedDecrement(&DeviceExtension->DeviceCount);
+
+    if (Device->InquiryData) {
+        ExFreePool(Device->InquiryData);
+        Device->InquiryData = NULL;
+    }
+
+    ExDeleteResourceLite(&Device->SocketLock);
+
+    if (Device->ReadPreallocatedBuffer) {
+        ExFreePool(Device->ReadPreallocatedBuffer);
+        Device->ReadPreallocatedBuffer = NULL;
+    }
+    if (Device->WritePreallocatedBuffer) {
+        ExFreePool(Device->WritePreallocatedBuffer);
+        Device->WritePreallocatedBuffer = NULL;
+    }
+
+    ObDereferenceObject(Device->DeviceMonitorThread);
+    ExFreePool(Device);
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
+    // Release the extension device reference count, allowing it to be
+    // unloaded.
+    ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
+    KeLeaveCriticalRegion();
+
+    WNBD_LOG_LOUD(": Exit");    
+}
+
+NTSTATUS
+WnbdInitializeDevice(_In_ PWNBD_SCSI_DEVICE Device, BOOLEAN UseNbd)
+{
+    // Internal resource initialization.
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(ScsiInfo);
+    ASSERT(Device);
     NTSTATUS Status = STATUS_SUCCESS;
 
-    InitializeListHead(&ScsiInfo->RequestListHead);
-    KeInitializeSpinLock(&ScsiInfo->RequestListLock);
-    InitializeListHead(&ScsiInfo->ReplyListHead);
-    KeInitializeSpinLock(&ScsiInfo->ReplyListLock);
-    ExInitializeRundownProtection(&ScsiInfo->RundownProtection);
-    KeInitializeSemaphore(&ScsiInfo->DeviceEvent, 0, 1 << 30);
-    KeInitializeEvent(&ScsiInfo->TerminateEvent, NotificationEvent, FALSE);
-
+    InitializeListHead(&Device->RequestListHead);
+    KeInitializeSpinLock(&Device->RequestListLock);
+    InitializeListHead(&Device->ReplyListHead);
+    KeInitializeSpinLock(&Device->ReplyListLock);
+    ExInitializeRundownProtection(&Device->RundownProtection);
+    KeInitializeSemaphore(&Device->DeviceEvent, 0, 1 << 30);
+    KeInitializeEvent(&Device->TerminateEvent, NotificationEvent, FALSE);
     // TODO: check if this is still needed.
-    Status = ExInitializeResourceLite(&ScsiInfo->SocketLock);
+    Status = ExInitializeResourceLite(&Device->SocketLock);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
 
-    ScsiInfo->HardTerminateDevice = FALSE;
-    ScsiInfo->SoftTerminateDevice = FALSE;
-
-    RtlZeroMemory(&ScsiInfo->Stats, sizeof(WNBD_DRV_STATS));
+    HANDLE monitor_thread_handle;
+    Status = PsCreateSystemThread(&monitor_thread_handle, (ACCESS_MASK)0L, NULL,
+                                  NULL, NULL, WnbdDeviceMonitorThread, Device);
+    if (!NT_SUCCESS(Status)) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto Exit;
+    }
+    Status = ObReferenceObjectByHandle(
+        monitor_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
+        &Device->DeviceMonitorThread, NULL);
+    if (!NT_SUCCESS(Status)) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto Exit;
+    }
 
     if (UseNbd) {
-        Status = WnbdInitializeNbdClient(ScsiInfo);
+        Status = WnbdInitializeNbdClient(Device);
     }
 
 Exit:
@@ -284,196 +267,160 @@ Exit:
 
 _Use_decl_annotations_
 NTSTATUS
-WnbdCreateConnection(PGLOBAL_INFORMATION GInfo,
+WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
                      PWNBD_PROPERTIES Properties,
                      PWNBD_CONNECTION_INFO ConnectionInfo)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(GInfo);
+    ASSERT(DeviceExtension);
     ASSERT(Properties);
 
     NTSTATUS Status = STATUS_SUCCESS;
-    BOOLEAN Added = FALSE;
     INT Sock = -1;
+    PINQUIRYDATA InquiryData = NULL;
 
-    PUSER_ENTRY NewEntry = (PUSER_ENTRY)
-        ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(USER_ENTRY), 'DBNu');
-    if (!NewEntry) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
+    KeEnterCriticalRegion();
+    BOOLEAN RPAcquired = ExAcquireRundownProtection(&DeviceExtension->RundownProtection);
+    KeLeaveCriticalRegion();
+
+    if (!RPAcquired) {
+        // This shouldn't really happen while having a pending "HwProcessServiceRequest".
+        WNBD_LOG_WARN("The device extension is being removed.");
+        return STATUS_SHUTDOWN_IN_PROGRESS;
     }
 
-    Status = KsInitialize();
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-
-    if (WnbdFindConnection(GInfo, Properties->InstanceName, NULL)) {
+    if (WnbdFindDeviceByInstanceName(
+        DeviceExtension, Properties->InstanceName, FALSE)) {
         Status = STATUS_OBJECT_NAME_COLLISION;
         goto Exit;
     }
 
-    RtlZeroMemory(NewEntry,sizeof(USER_ENTRY));
-    RtlCopyMemory(&NewEntry->Properties, Properties, sizeof(WNBD_PROPERTIES));
-    InsertTailList(&GInfo->ConnectionList, &NewEntry->ListEntry);
-    Added = TRUE;
+    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Malloc(sizeof(WNBD_SCSI_DEVICE));
+    if (!Device) {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+        goto Exit;
+    }
+    RtlZeroMemory(Device, sizeof(WNBD_SCSI_DEVICE));
+    RtlCopyMemory(&Device->Properties, Properties, sizeof(WNBD_PROPERTIES));
 
-    PINQUIRYDATA InquiryData = (PINQUIRYDATA) Malloc(sizeof(INQUIRYDATA));
+    Device->DeviceExtension = DeviceExtension;
+
+    InquiryData = (PINQUIRYDATA) Malloc(sizeof(INQUIRYDATA));
     if (NULL == InquiryData) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
-
     WnbdSetInquiryData(InquiryData);
+    Device->InquiryData = InquiryData;
 
+    ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
+    if (0xFFFFFFFF == bitNumber) {
+        Status = STATUS_INVALID_FIELD_IN_PARAMETER_LIST;
+        goto Exit;
+    }
+
+    Device->Bus = (USHORT)(bitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
+    Device->Target = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
+    Device->Lun = 0;
+    Device->ConnectionId =  WNBD_CONNECTION_ID_FROM_ADDR(
+        Device->Bus, Device->Target, Device->Lun);
+    WNBD_LOG_INFO("Bus: %d, target: %d, lun: %d, connection id: %llu.",
+                  Device->Bus, Device->Target, Device->Lun, ConnectionInfo->ConnectionId);
+
+    // TODO: consider moving NBD initialization to a separate function.
+    UINT16 NbdFlags = 0;
+    Device->SocketToClose = -1;
+    Device->NbdSocket = -1;
     if (Properties->Flags.UseNbd) {
         Sock = NbdOpenAndConnect(
             Properties->NbdProperties.Hostname,
             Properties->NbdProperties.PortNumber);
         if (-1 == Sock) {
             Status = STATUS_CONNECTION_REFUSED;
-            goto ExitInquiryData;
+            goto Exit;
         }
-    }
+        Device->NbdSocket = Sock;
 
-    ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
-
-    if (0xFFFFFFFF == bitNumber) {
-        Status = STATUS_INVALID_FIELD_IN_PARAMETER_LIST;
-        goto ExitInquiryData;
-    }
-
-    UINT16 NbdFlags = 0;
-    if (Properties->Flags.UseNbd && !Properties->NbdProperties.Flags.SkipNegotiation) {
-        WNBD_LOG_INFO("Trying to negotiate handshake with NBD Server");
-        UINT64 DiskSize = 0;
-        Status = NbdNegotiate(&Sock, &DiskSize, &NbdFlags,
-                              Properties->NbdProperties.ExportName, 1, 1);
-        if (!NT_SUCCESS(Status)) {
-            goto ExitInquiryData;
+        if (!Properties->NbdProperties.Flags.SkipNegotiation) {
+            WNBD_LOG_INFO("Trying to negotiate handshake with NBD Server");
+            UINT64 DiskSize = 0;
+            Status = NbdNegotiate(&Sock, &DiskSize, &NbdFlags,
+                                  Properties->NbdProperties.ExportName, 1, 1);
+            if (!NT_SUCCESS(Status)) {
+                goto Exit;
+            }
+            WNBD_LOG_INFO("Negotiated disk size: %llu", DiskSize);
+            // TODO: negotiate block size.
+            Device->Properties.BlockSize = WNBD_DEFAULT_BLOCK_SIZE;
+            Device->Properties.BlockCount = DiskSize / Device->Properties.BlockSize;
         }
-        WNBD_LOG_INFO("Negotiated disk size: %llu", DiskSize);
-        // TODO: negotiate block size.
-        NewEntry->Properties.BlockSize = WNBD_DEFAULT_BLOCK_SIZE;
-        NewEntry->Properties.BlockCount = DiskSize / NewEntry->Properties.BlockSize;
+
+        Device->Properties.Flags.ReadOnly |= CHECK_NBD_READONLY(NbdFlags);
+        Device->Properties.Flags.UnmapSupported |= CHECK_NBD_SEND_TRIM(NbdFlags);
+        Device->Properties.Flags.FlushSupported |= CHECK_NBD_SEND_FLUSH(NbdFlags);
+        Device->Properties.Flags.FUASupported |= CHECK_NBD_SEND_FUA(NbdFlags);
     }
 
-    if (!NewEntry->Properties.BlockSize || !NewEntry->Properties.BlockCount ||
-        NewEntry->Properties.BlockCount > ULLONG_MAX / NewEntry->Properties.BlockSize)
+    if (!Device->Properties.BlockSize || !Device->Properties.BlockCount ||
+        Device->Properties.BlockCount > ULLONG_MAX / Device->Properties.BlockSize)
     {
         WNBD_LOG_ERROR("Invalid block size or block count. "
                        "Block size: %d. Block count: %lld.",
-                       NewEntry->Properties.BlockSize,
-                       NewEntry->Properties.BlockCount);
+                       Device->Properties.BlockSize,
+                       Device->Properties.BlockCount);
         Status = STATUS_INVALID_PARAMETER;
-        goto ExitInquiryData;
+        goto Exit;
     }
-
-    NewEntry->Properties.Flags.ReadOnly |= CHECK_NBD_READONLY(NbdFlags);
-    NewEntry->Properties.Flags.UnmapSupported |= CHECK_NBD_SEND_TRIM(NbdFlags);
-    NewEntry->Properties.Flags.FlushSupported |= CHECK_NBD_SEND_FLUSH(NbdFlags);
-    NewEntry->Properties.Flags.FUASupported |= CHECK_NBD_SEND_FUA(NbdFlags);
-
-    USHORT TargetId = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
-    USHORT BusId = (USHORT)(bitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
 
     WNBD_LOG_INFO("Retrieved NBD flags: %d. Read-only: %d, TRIM enabled: %d, "
                   "FLUSH enabled: %d, FUA enabled: %d.",
                    NbdFlags,
-                   NewEntry->Properties.Flags.ReadOnly,
-                   NewEntry->Properties.Flags.UnmapSupported,
-                   NewEntry->Properties.Flags.FlushSupported,
-                   NewEntry->Properties.Flags.FUASupported);
+                   Device->Properties.Flags.ReadOnly,
+                   Device->Properties.Flags.UnmapSupported,
+                   Device->Properties.Flags.FlushSupported,
+                   Device->Properties.Flags.FUASupported);
 
-    PSCSI_DEVICE_INFORMATION ScsiInfo = (PSCSI_DEVICE_INFORMATION) Malloc(sizeof(SCSI_DEVICE_INFORMATION));
-    if (!ScsiInfo) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto ExitInquiryData;
-    }
-
-    RtlZeroMemory(ScsiInfo, sizeof(SCSI_DEVICE_INFORMATION));
-    ScsiInfo->Device = WnbdCreateScsiDevice(GInfo->Handle,
-                                            BusId,
-                                            TargetId,
-                                            LunId,
-                                            ScsiInfo,
-                                            InquiryData);
-
-    if (!ScsiInfo->Device) {
-        Status = STATUS_DEVICE_ALREADY_ATTACHED;
-        goto ExitScsiInfo;
-    }
-
-    ScsiInfo->GlobalInformation = GInfo;
-    ScsiInfo->InquiryData = InquiryData;
-    ScsiInfo->Socket = Sock;
-
-    Status = WnbdInitializeScsiInfo(ScsiInfo, !!Properties->Flags.UseNbd);
+    Status = WnbdInitializeDevice(Device, !!Properties->Flags.UseNbd);
     if (!NT_SUCCESS(Status)) {
-        goto ExitScsiInfo;
+        goto Exit;
     }
-
-    ScsiInfo->UserEntry = NewEntry;
 
     // The connection properties might be slightly different than the ones set
     // by the client (e.g. after NBD negotiation or setting default values).
-    RtlCopyMemory(&ConnectionInfo->Properties, &NewEntry->Properties, sizeof(WNBD_PROPERTIES));
-    ConnectionInfo->BusNumber = BusId;
-    ConnectionInfo->TargetId = TargetId;
-    ConnectionInfo->Lun = LunId;
-    ConnectionInfo->ConnectionId = WNBD_CONNECTION_ID_FROM_ADDR(BusId, TargetId, LunId);
-    WNBD_LOG_INFO("Bus: %d, target: %d, lun: %d, connection id: %llu.",
-                  BusId, TargetId, LunId, ConnectionInfo->ConnectionId);
+    RtlCopyMemory(&ConnectionInfo->Properties, &Device->Properties, sizeof(WNBD_PROPERTIES));
+    ConnectionInfo->BusNumber = Device->Bus;
+    ConnectionInfo->TargetId = Device->Target;
+    ConnectionInfo->Lun = Device->Lun;
+    ConnectionInfo->ConnectionId = Device->ConnectionId;
 
-    NewEntry->ScsiInformation = ScsiInfo;
-    NewEntry->BusIndex = BusId;
-    NewEntry->TargetIndex = TargetId;
-    NewEntry->LunIndex = LunId;
-    NewEntry->ConnectionId = ConnectionInfo->ConnectionId;
+    ExInterlockedInsertTailList(
+        &DeviceExtension->DeviceList, &Device->ListEntry,
+        &DeviceExtension->DeviceListLock);
 
-    PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION)GInfo->Handle;
-    KeEnterCriticalRegion();
-    ExAcquireResourceSharedLite(&Ext->DeviceResourceLock, TRUE);
+    InterlockedIncrement(&DeviceExtension->DeviceCount);
+    StorPortNotification(BusChangeDetected, DeviceExtension, 0);
 
-    InsertTailList(&Ext->DeviceList, &ScsiInfo->Device->ListEntry);
-
-    ExReleaseResourceLite(&Ext->DeviceResourceLock);
-    KeLeaveCriticalRegion();
-
-    InterlockedIncrement(&GInfo->ConnectionCount);
-    StorPortNotification(BusChangeDetected, GInfo->Handle, 0);
-
-    NewEntry->Connected = TRUE;
+    Device->Connected = TRUE;
     Status = STATUS_SUCCESS;
 
     WNBD_LOG_LOUD(": Exit");
 
     return Status;
 
-ExitScsiInfo:
-    if (ScsiInfo) {
-        if (ScsiInfo->Device) {
-            ExFreePool(ScsiInfo->Device);
-        }
-        ExFreePool(ScsiInfo);
+Exit:
+    if (Status && RPAcquired) {
+        KeEnterCriticalRegion();
+        ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
+        KeLeaveCriticalRegion();
     }
-ExitInquiryData:
     if (InquiryData) {
         ExFreePool(InquiryData);
     }
-Exit:
     if (-1 != Sock) {
         WNBD_LOG_ERROR("Closing socket FD: %d", Sock);
         Close(Sock);
         Sock = -1;
     }
-    if (Added) {
-        WnbdDeleteConnectionEntry(NewEntry);
-    }
-    if (NewEntry) {
-        ExFreePool(NewEntry);
-    }
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
@@ -481,168 +428,46 @@ Exit:
 
 _Use_decl_annotations_
 NTSTATUS
-WnbdDeleteConnectionEntry(PUSER_ENTRY Entry)
+WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
+                     PCHAR InstanceName)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(Entry);
+    ASSERT(DeviceExtension);
+    ASSERT(InstanceName);
 
-    RemoveEntryList(&Entry->ListEntry);
+    PWNBD_SCSI_DEVICE Device = WnbdFindDeviceByInstanceName(
+        DeviceExtension, InstanceName, TRUE);
+    if (!Device) {
+        WNBD_LOG_ERROR("Could not find connection to delete");
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
 
-    WNBD_LOG_LOUD(": Exit");
+    // We're holding a device reference, preventing it from being
+    // cleaned up while we're accessing it.
+    PVOID DeviceMonitorThread = Device->DeviceMonitorThread;
+    // Make sure that the thread handle stays valid.
+    ObReferenceObject(DeviceMonitorThread);
+    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    // It's very important to release our device reference, allowing it to be removed.
+    // Do not access the device after releasing it.
+    WnbdReleaseDevice(Device);
+
+    KeWaitForSingleObject(DeviceMonitorThread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(DeviceMonitorThread);
+    
+    WNBD_LOG_LOUD(": Exit");  
     return STATUS_SUCCESS;
 }
 
 _Use_decl_annotations_
-BOOLEAN
-WnbdSetDeviceMissing(PVOID Handle,
-                     BOOLEAN Force)
-{
-    WNBD_LOG_LOUD(": Enter");
-    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE)Handle;
-    
-    if (Device == NULL) {
-        return TRUE;
-    }
-
-    if (Device->OutstandingIoCount && !Force) {
-        return FALSE;
-    }
-    
-    ASSERT(!Device->OutstandingIoCount);
-    WNBD_LOG_INFO("Disconnecting with, OutstandingIoCount: %d", Device->OutstandingIoCount);
-
-    Device->Missing = TRUE;
-
-    WNBD_LOG_LOUD(": Exit");
-
-    return TRUE;
-}
-
-
-VOID
-WnbdDrainQueueOnClose(_In_ PSCSI_DEVICE_INFORMATION DeviceInformation)
-{
-    PLIST_ENTRY ItemLink, ItemNext;
-    KIRQL Irql = { 0 };
-    PSRB_QUEUE_ELEMENT Element = NULL;
-
-    KeAcquireSpinLock(&DeviceInformation->RequestListLock, &Irql);
-    if (IsListEmpty(&DeviceInformation->RequestListHead))
-        goto Reply;
-
-    LIST_FORALL_SAFE(&DeviceInformation->RequestListHead, ItemLink, ItemNext) {
-        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
-        if (Element) {
-            RemoveEntryList(&Element->Link);
-            Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-            StorPortNotification(RequestComplete, Element->DeviceExtension,
-                Element->Srb);
-            ExFreePool(Element);
-        }
-        Element = NULL;
-    }
-Reply:
-    KeReleaseSpinLock(&DeviceInformation->RequestListLock, Irql);
-    KeAcquireSpinLock(&DeviceInformation->ReplyListLock, &Irql);
-    if (IsListEmpty(&DeviceInformation->ReplyListHead))
-        goto Exit;
-
-    LIST_FORALL_SAFE(&DeviceInformation->ReplyListHead, ItemLink, ItemNext) {
-        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
-        if (Element) {
-            RemoveEntryList(&Element->Link);
-            if (!Element->Aborted) {
-                Element->Srb->DataTransferLength = 0;
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                StorPortNotification(RequestComplete, Element->DeviceExtension,
-                    Element->Srb);
-            }
-            ExFreePool(Element);
-            InterlockedDecrement64(&DeviceInformation->Stats.PendingSubmittedIORequests);
-        }
-        Element = NULL;
-    }
-Exit:
-    KeReleaseSpinLock(&DeviceInformation->ReplyListLock, Irql);
-}
-
-_Use_decl_annotations_
 NTSTATUS
-WnbdDeleteConnection(PGLOBAL_INFORMATION GInfo,
-                     PCHAR InstanceName)
+WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 {
     WNBD_LOG_LOUD(": Enter");
-    ASSERT(GInfo);
-    ASSERT(InstanceName);
-    PUSER_ENTRY EntryMarked = NULL;
-    ULONG TargetIndex = 0;
-    ULONG BusIndex = 0;
-    if (!WnbdFindConnection(GInfo, InstanceName, &EntryMarked)) {
-        WNBD_LOG_ERROR("Could not find connection to delete");
-        return STATUS_OBJECT_NAME_NOT_FOUND;
-    }
-    if (NULL == EntryMarked) {
-        return STATUS_OBJECT_NAME_NOT_FOUND;
-    }
-    PSCSI_DEVICE_INFORMATION ScsiInfo = EntryMarked->ScsiInformation;
-    NTSTATUS Status = STATUS_UNSUCCESSFUL;
-
-    TargetIndex = EntryMarked->TargetIndex;
-    BusIndex = EntryMarked->BusIndex;
-
-    if (ScsiInfo) {
-        ScsiInfo->SoftTerminateDevice = TRUE;
-        // TODO: implement proper soft termination.
-        ScsiInfo->HardTerminateDevice = TRUE;
-        KeSetEvent(&ScsiInfo->TerminateEvent, IO_NO_INCREMENT, FALSE);
-        KeReleaseSemaphore(&ScsiInfo->DeviceEvent, 0, 1, FALSE);
-        LARGE_INTEGER Timeout;
-        // TODO: consider making this configurable, currently 120s.
-        Timeout.QuadPart = (-120 * 1000 * 10000);
-        CloseConnection(ScsiInfo);
-
-        // Ensure that the device isn't currently being accessed.
-        ExWaitForRundownProtectionRelease(&ScsiInfo->RundownProtection);
-
-        if (ScsiInfo->UserEntry->Properties.Flags.UseNbd) {
-            KeWaitForSingleObject(ScsiInfo->DeviceRequestThread, Executive, KernelMode, FALSE, NULL);
-            KeWaitForSingleObject(ScsiInfo->DeviceReplyThread, Executive, KernelMode, FALSE, &Timeout);
-            ObDereferenceObject(ScsiInfo->DeviceRequestThread);
-            ObDereferenceObject(ScsiInfo->DeviceReplyThread);
-        }
-        WnbdDrainQueueOnClose(ScsiInfo);
-        DisconnectConnection(ScsiInfo);
-
-        if (!WnbdSetDeviceMissing(ScsiInfo->Device,TRUE)) {
-            WNBD_LOG_WARN("Could not delete media because it is still in use.");
-            return STATUS_UNABLE_TO_UNLOAD_MEDIA;
-        }
-        StorPortNotification(BusChangeDetected, GInfo->Handle, 0);
-    } else {
-        WNBD_LOG_ERROR("Could not find device needed for deletion");
-        return STATUS_OBJECT_NAME_NOT_FOUND;
-    }
-
-    Status = WnbdDeleteConnectionEntry(EntryMarked);
-
-    RtlClearBits(&ScsiBitMapHeader, TargetIndex + (BusIndex * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
-
-    InterlockedDecrement(&GInfo->ConnectionCount);
-    WNBD_LOG_LOUD(": Exit");
-
-    return Status;
-}
-
-_Use_decl_annotations_
-NTSTATUS
-WnbdEnumerateActiveConnections(PGLOBAL_INFORMATION GInfo, PIRP Irp)
-{
-    WNBD_LOG_LOUD(": Enter");
-    ASSERT(GInfo);
+    ASSERT(DeviceExtension);
     ASSERT(Irp);
 
-    PUSER_ENTRY CurrentEntry = (PUSER_ENTRY)GInfo->ConnectionList.Flink;
+    PWNBD_SCSI_DEVICE CurrentEntry = (PWNBD_SCSI_DEVICE)DeviceExtension->DeviceList.Flink;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
     PWNBD_CONNECTION_LIST OutList = (
         PWNBD_CONNECTION_LIST) Irp->AssociatedIrp.SystemBuffer;
@@ -658,22 +483,25 @@ WnbdEnumerateActiveConnections(PGLOBAL_INFORMATION GInfo, PIRP Irp)
     OutList->Count = 0;
     OutList->ElementSize = sizeof(WNBD_CONNECTION_INFO);
 
-    while ((CurrentEntry != (PUSER_ENTRY) &GInfo->ConnectionList.Flink) && Remaining) {
+    KIRQL Irql = { 0 };
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    while ((CurrentEntry != (PWNBD_SCSI_DEVICE) &DeviceExtension->DeviceList.Flink) && Remaining) {
         OutEntry = &OutList->Connections[OutList->Count];
         RtlZeroMemory(OutEntry, sizeof(WNBD_CONNECTION_INFO));
         RtlCopyMemory(OutEntry, &CurrentEntry->Properties, sizeof(WNBD_PROPERTIES));
 
-        OutEntry->BusNumber = (USHORT)CurrentEntry->BusIndex;
-        OutEntry->TargetId = (USHORT)CurrentEntry->TargetIndex;
-        OutEntry->Lun = (USHORT)CurrentEntry->LunIndex;
+        OutEntry->BusNumber = (USHORT)CurrentEntry->Bus;
+        OutEntry->TargetId = (USHORT)CurrentEntry->Target;
+        OutEntry->Lun = (USHORT)CurrentEntry->Lun;
 
         OutList->Count++;
         Remaining--;
 
-        CurrentEntry = (PUSER_ENTRY)CurrentEntry->ListEntry.Flink;
+        CurrentEntry = (PWNBD_SCSI_DEVICE)CurrentEntry->ListEntry.Flink;
     }
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    if (CurrentEntry == (PUSER_ENTRY) &GInfo->ConnectionList.Flink) {
+    if (CurrentEntry == (PWNBD_SCSI_DEVICE) &DeviceExtension->DeviceList.Flink) {
         Status = STATUS_SUCCESS;
     }
 
@@ -688,19 +516,16 @@ WnbdEnumerateActiveConnections(PGLOBAL_INFORMATION GInfo, PIRP Irp)
 
 _Use_decl_annotations_
 NTSTATUS
-WnbdParseUserIOCTL(PVOID GlobalHandle,
+WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
                    PIRP Irp)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Irp);
-    ASSERT(GlobalHandle);
+    ASSERT(DeviceExtension);
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
     NTSTATUS Status = STATUS_SUCCESS;
-    PGLOBAL_INFORMATION	GInfo = (PGLOBAL_INFORMATION) GlobalHandle;
 
-    PUSER_ENTRY Device = NULL;
-    BOOLEAN RPAcquired = FALSE;
-
+    PWNBD_SCSI_DEVICE Device = NULL;
     DWORD Ioctl = IoLocation->Parameters.DeviceIoControl.IoControlCode;
     WNBD_LOG_LOUD("DeviceIoControl = 0x%x.", Ioctl);
 
@@ -771,22 +596,15 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         }
 
         KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
+        ExAcquireResourceSharedLite(&DeviceExtension->DeviceCreationLock, TRUE);
+        KeLeaveCriticalRegion();
 
         WNBD_LOG_INFO("Mapping disk. Name: %s, Serial=%s, BC=%llu, BS=%lu, Pid=%d",
                       Props.InstanceName, Props.SerialNumber,
                       Props.BlockCount, Props.BlockSize, Props.Pid);
 
-        if (WnbdFindConnection(GInfo, Props.InstanceName, NULL)) {
-            ExReleaseResourceLite(&GInfo->ConnectionMutex);
-            KeLeaveCriticalRegion();
-            Status = STATUS_FILES_OPEN;
-            WNBD_LOG_ERROR("IOCTL_WNBD_CREATE: InstanceName already used.");
-            break;
-        }
-
         WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-        Status = WnbdCreateConnection(GInfo, &Props, &ConnectionInfo);
+        Status = WnbdCreateConnection(DeviceExtension, &Props, &ConnectionInfo);
 
         PWNBD_CONNECTION_INFO OutHandle = (PWNBD_CONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
         RtlCopyMemory(OutHandle, &ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
@@ -795,7 +613,8 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         WNBD_LOG_LOUD("Mapped disk. Name: %s, connection id: %llu",
                       Props.InstanceName, ConnectionInfo.ConnectionId);
 
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
+        KeEnterCriticalRegion();
+        ExReleaseResourceLite(&DeviceExtension->DeviceCreationLock);
         KeLeaveCriticalRegion();
         break;
 
@@ -817,27 +636,13 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
-        if (!WnbdFindConnection(GInfo, RmCmd->InstanceName, NULL)) {
-            ExReleaseResourceLite(&GInfo->ConnectionMutex);
-            KeLeaveCriticalRegion();
-            Status = STATUS_OBJECT_NAME_NOT_FOUND;
-            WNBD_LOG_ERROR("IOCTL_WNBD_REMOVE: Connection does not exist");
-            break;
-        }
-        WNBD_LOG_LOUD("IOCTL_WNBDVM_UNMAP DeleteConnection");
-        Status = WnbdDeleteConnection(GInfo, RmCmd->InstanceName);
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
-        KeLeaveCriticalRegion();
+        Status = WnbdDeleteConnection(DeviceExtension, RmCmd->InstanceName);
         break;
 
      case IOCTL_WNBD_LIST:
         WNBD_LOG_LOUD("IOCTL_WNBD_LIST");
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
         DWORD RequiredBuffSize = (
-            GInfo->ConnectionCount * sizeof(WNBD_CONNECTION_INFO))
+            DeviceExtension->DeviceCount * sizeof(WNBD_CONNECTION_INFO))
             + sizeof(WNBD_CONNECTION_LIST);
 
         if (!Irp->AssociatedIrp.SystemBuffer ||
@@ -845,13 +650,9 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
         {
             WNBD_LOG_ERROR("IOCTL_WNBD_LIST: Bad output buffer");
             Irp->IoStatus.Information = RequiredBuffSize;
-            ExReleaseResourceLite(&GInfo->ConnectionMutex);
-            KeLeaveCriticalRegion();
             break;
         }
-        Status = WnbdEnumerateActiveConnections(GInfo, Irp);
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
-        KeLeaveCriticalRegion();
+        Status = WnbdEnumerateActiveConnections(DeviceExtension, Irp);
         break;
 
     case IOCTL_WNBD_RELOAD_CONFIG:
@@ -884,21 +685,16 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
         if (!Irp->AssociatedIrp.SystemBuffer ||
                 CHECK_O_LOCATION(IoLocation, WNBD_DRV_STATS)) {
             WNBD_LOG_ERROR("WNBD_STATS: Bad output buffer");
             Status = STATUS_BUFFER_OVERFLOW;
-            ExReleaseResourceLite(&GInfo->ConnectionMutex);
-            KeLeaveCriticalRegion();
             break;
         }
 
-        PUSER_ENTRY DiskEntry = NULL;
-        if (!WnbdFindConnection(GInfo, StatsCmd->InstanceName, &DiskEntry)) {
-            ExReleaseResourceLite(&GInfo->ConnectionMutex);
-            KeLeaveCriticalRegion();
+        Device = WnbdFindDeviceByInstanceName(
+            DeviceExtension, StatsCmd->InstanceName, TRUE);
+        if (!Device) {
             Status = STATUS_OBJECT_NAME_NOT_FOUND;
             WNBD_LOG_ERROR("WNBD_STATS: Connection does not exist");
             break;
@@ -906,13 +702,10 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
 
         PWNBD_DRV_STATS OutStatus = (
             PWNBD_DRV_STATS) Irp->AssociatedIrp.SystemBuffer;
-        RtlCopyMemory(OutStatus, &DiskEntry->ScsiInformation->Stats,
-                      sizeof(WNBD_DRV_STATS));
+        RtlCopyMemory(OutStatus, &Device->Stats, sizeof(WNBD_DRV_STATS));
+        WnbdReleaseDevice(Device);
 
         Irp->IoStatus.Information = sizeof(WNBD_DRV_STATS);
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
-        KeLeaveCriticalRegion();
-
         Status = STATUS_SUCCESS;
         break;
 
@@ -930,21 +723,9 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
-        Device = WnbdFindConnectionEx(GInfo, ReqCmd->ConnectionId);
-        // If we can't acquire the rundown protection, it means that the device
-        // is being deallocated. Acquiring it guarantees that it won't be deallocated
-        // while we're dispatching requests. This doesn't prevent other requests from
-        // acquiring it at the same time, which will increase its counter.
-        if (Device) {
-            RPAcquired = ExAcquireRundownProtection(
-                &Device->ScsiInformation->RundownProtection);
-        }
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
-        KeLeaveCriticalRegion();
-
-        if (!Device || !RPAcquired) {
+        Device = WnbdFindDeviceByConnId(
+            DeviceExtension, ReqCmd->ConnectionId, TRUE);
+        if (!Device) {
             Status = STATUS_INVALID_HANDLE;
             WNBD_LOG_ERROR(
                 "IOCTL_WNBD_FETCH_REQ: Could not fetch request, invalid connection id: %d.",
@@ -952,14 +733,12 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        Status = WnbdDispatchRequest(Irp, Device->ScsiInformation, ReqCmd);
+        Status = WnbdDispatchRequest(Irp, Device, ReqCmd);
         Irp->IoStatus.Information = sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND);
         WNBD_LOG_LOUD("Request dispatch status: %d. Request type: %d Request handle: %llx",
                       Status, ReqCmd->Request.RequestType, ReqCmd->Request.RequestHandle);
 
-        KeEnterCriticalRegion();
-        ExReleaseRundownProtection(&Device->ScsiInformation->RundownProtection);
-        KeLeaveCriticalRegion();
+        WnbdReleaseDevice(Device);
         break;
 
     case IOCTL_WNBD_SEND_RSP:
@@ -972,21 +751,8 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        KeEnterCriticalRegion();
-        ExAcquireResourceExclusiveLite(&GInfo->ConnectionMutex, TRUE);
-        Device = WnbdFindConnectionEx(GInfo, RspCmd->ConnectionId);
-        // If we can't acquire the rundown protection, it means that the device
-        // is being deallocated. Acquiring it guarantees that it won't be deallocated
-        // while we're dispatching requests. This doesn't prevent other requests from
-        // acquiring it at the same time, which will increase its counter.
-        if (Device) {
-            RPAcquired = ExAcquireRundownProtection(
-                &Device->ScsiInformation->RundownProtection);
-        }
-        ExReleaseResourceLite(&GInfo->ConnectionMutex);
-        KeLeaveCriticalRegion();
-
-        if (!Device || !RPAcquired) {
+        Device = WnbdFindDeviceByConnId(DeviceExtension, RspCmd->ConnectionId, TRUE);
+        if (!Device) {
             Status = STATUS_INVALID_HANDLE;
             WNBD_LOG_ERROR(
                 "IOCTL_WNBD_SEND_RSP: Could not fetch request, invalid connection id: %d.",
@@ -994,12 +760,10 @@ WnbdParseUserIOCTL(PVOID GlobalHandle,
             break;
         }
 
-        Status = WnbdHandleResponse(Irp, Device->ScsiInformation, RspCmd);
+        Status = WnbdHandleResponse(Irp, Device, RspCmd);
         WNBD_LOG_LOUD("Reply handling status: %d.", Status);
 
-        KeEnterCriticalRegion();
-        ExReleaseRundownProtection(&Device->ScsiInformation->RundownProtection);
-        KeLeaveCriticalRegion();
+        WnbdReleaseDevice(Device);
         break;
 
     case IOCTL_WNBD_VERSION:

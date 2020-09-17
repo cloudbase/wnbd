@@ -11,12 +11,12 @@ NTSTATUS LockUsermodeBuffer(
 
 NTSTATUS WnbdDispatchRequest(
     PIRP Irp,
-    PSCSI_DEVICE_INFORMATION DeviceInfo,
+    PWNBD_SCSI_DEVICE Device,
     PWNBD_IOCTL_FETCH_REQ_COMMAND Command);
 
 NTSTATUS WnbdHandleResponse(
     PIRP Irp,
-    PSCSI_DEVICE_INFORMATION DeviceInfo,
+    PWNBD_SCSI_DEVICE Device,
     PWNBD_IOCTL_SEND_RSP_COMMAND Command);
 
 #endif // WNBD_DISPATCH_H

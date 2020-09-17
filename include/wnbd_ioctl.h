@@ -146,7 +146,11 @@ typedef struct
     INT64 AbortedSubmittedIORequests;
     INT64 AbortedUnsubmittedIORequests;
     INT64 CompletedAbortedIORequests;
-    INT64 Reserved[16];
+    // Pending requests, without including aborted ones.
+    // Soft device removals will wait for outstanding IO
+    // requests.
+    INT64 OutstandingIOCount;
+    INT64 Reserved[15];
 } WNBD_DRV_STATS, *PWNBD_DRV_STATS;
 
 typedef struct
