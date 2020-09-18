@@ -15,15 +15,6 @@ init:
 build_script:
 - '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
 - msbuild C:\wnbd\vstudio\wnbd.sln /property:Configuration=%CONFIGURATION%
-- ps: |
-    if ($env:CONFIGURATION -eq "Analyze") {
-      pushd
-      cd C:\wnbd\vstudio\;
-      msbuild driver.vcxproj /t:sdv /p:inputs="/check" /p:configuration="Analyze" /p:platform="x64" /p:SolutionDir="C:\wnbd\vstudio\"
-      popd
-      # The catalog file is lost when using SDV
-      msbuild C:\wnbd\vstudio\wnbd.sln /property:Configuration="Analyze"
-    }
 - copy C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\* .
 - 7z a wnbd-%CONFIGURATION%.zip C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.cat C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.inf C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.sys C:\wnbd\vstudio\x64\%CONFIGURATION%\wnbd-client.exe
 

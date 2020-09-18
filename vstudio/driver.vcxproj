@@ -99,7 +99,7 @@
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass $(SolutionDir)generate_version_h.ps1</Command>
+      <Command>powershell.exe -executionpolicy bypass $(SolutionDir)\generate_version_h.ps1</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
@@ -113,6 +113,9 @@
     <PreBuildEvent>
       <Command>powershell.exe -executionpolicy bypass $(SolutionDir)generate_version_h.ps1</Command>
     </PreBuildEvent>
+    <PostBuildEvent>
+      <Command>powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(SolutionFileName) /p:Configuration=Release; msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Release /p:SolutionDir=$(SolutionDir); msbuild $(ProjectFileName) /p:Configuration=Release /P:RunCodeAnalysisOnce=True</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Inf Include="..\driver\wnbd.inf" />
