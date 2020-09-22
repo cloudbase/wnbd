@@ -69,6 +69,7 @@ git clone https://github.com/cloudbase/wnbd
 msbuild wnbd\vstudio\wnbd.sln
 copy wnbd\vstudio\x64\Debug\driver\* .
 copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
+copy wnbd\vstudio\x64\Debug\libwnbd.dll .
 ```
 
 You can download the latest prebuilt packages from Appveyor via the links:
@@ -115,6 +116,9 @@ To **install** the driver, issue the following from an elevated command prompt:
 
 (The command above assumes that the utility `devcon.exe` and the driver files `wnbd.inf`, `wnbd.cat`, `wnbd.sys` are in the current directory)
 
+After installing the driver, copy ``libwnbd.dll`` and ``wnbd-client.exe``,
+also adding the destination folder to the environment PATH variable.
+
 To **uninstall** the driver, issue the following from an elevated PowerShell prompt:
 
 ```PowerShell
@@ -125,7 +129,9 @@ pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
 
 (The command above assumes that the utility `devcon.exe` is in the current directory)
 
-For convenience, we included [reinstall.ps1](vstudio/reinstall.ps1), which reinstalls the driver.
+For convenience, we included [reinstall.ps1](vstudio/reinstall.ps1), which installs/reinstalls the driver.
+
+[This project](https://github.com/cloudbase/ceph-windows-installer) allows building MSI installers that bundle WNBD and the Ceph Windows clients.
 
 Ceph integration
 ----------------
