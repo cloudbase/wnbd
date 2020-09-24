@@ -14,6 +14,7 @@
 #include "nbd_protocol.h"
 #include "scsi_function.h"
 #include "userspace.h"
+#include "nbd_dispatch.h"
 #include "wnbd_dispatch.h"
 #include "wnbd_ioctl.h"
 #include "util.h"
@@ -88,7 +89,7 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
     Device->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
 
     Status = PsCreateSystemThread(&request_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, WnbdDeviceRequestThread, Device);
+                                  NULL, NULL, NbdDeviceRequestThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;
@@ -103,7 +104,7 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
     }
 
     Status = PsCreateSystemThread(&reply_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, WnbdDeviceReplyThread, Device);
+                                  NULL, NULL, NbdDeviceReplyThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto SoftTerminate;

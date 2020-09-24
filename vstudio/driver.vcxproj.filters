@@ -54,6 +54,9 @@
     <ClCompile Include="..\driver\wnbd_dispatch.c">
       <Filter>Driver Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\driver\nbd_dispatch.c">
+      <Filter>Driver Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\driver\userspace.h">
@@ -90,6 +93,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\driver\wnbd_dispatch.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\driver\nbd_dispatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
