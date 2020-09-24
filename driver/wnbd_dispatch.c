@@ -116,8 +116,8 @@ NTSTATUS WnbdDispatchRequest(
         }
 
         PLIST_ENTRY RequestEntry = ExInterlockedRemoveHeadList(
-            &Device->RequestListHead,
-            &Device->RequestListLock);
+            &Device->PendingReqListHead,
+            &Device->PendingReqListLock);
 
         if (Device->HardTerminateDevice) {
             break;
@@ -159,14 +159,14 @@ NTSTATUS WnbdDispatchRequest(
             Request->Cmd.Read.BlockAddress =
                 Element->StartingLbn / DevProps->BlockSize;;
             Request->Cmd.Read.BlockCount =
-                Element->ReadLength / DevProps->BlockSize;
+                Element->DataLength / DevProps->BlockSize;
             break;
         case WnbdReqTypeWrite:
             Request->Cmd.Write.BlockAddress =
                 Element->StartingLbn / DevProps->BlockSize;
             Request->Cmd.Write.BlockCount =
-                Element->ReadLength / DevProps->BlockSize;
-            if (Element->ReadLength > Command->DataBufferSize) {
+                Element->DataLength / DevProps->BlockSize;
+            if (Element->DataLength > Command->DataBufferSize) {
                 // The user buffer must be at least as large as
                 // the specified maximum transfer length.
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
@@ -188,13 +188,13 @@ NTSTATUS WnbdDispatchRequest(
                 continue;
             }
 
-            RtlCopyMemory(Buffer, SrbBuffer, Element->ReadLength);
+            RtlCopyMemory(Buffer, SrbBuffer, Element->DataLength);
             break;
         }
 
         ExInterlockedInsertTailList(
-            &Device->ReplyListHead,
-            &Element->Link, &Device->ReplyListLock);
+            &Device->SubmittedReqListHead,
+            &Element->Link, &Device->SubmittedReqListLock);
         InterlockedIncrement64(&Device->Stats.PendingSubmittedIORequests);
         InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
         // We managed to find a supported request, we can now exit the loop
@@ -242,8 +242,8 @@ NTSTATUS WnbdHandleResponse(
 
     PLIST_ENTRY ItemLink, ItemNext;
     KIRQL Irql = { 0 };
-    KeAcquireSpinLock(&Device->ReplyListLock, &Irql);
-    LIST_FORALL_SAFE(&Device->ReplyListHead, ItemLink, ItemNext) {
+    KeAcquireSpinLock(&Device->SubmittedReqListLock, &Irql);
+    LIST_FORALL_SAFE(&Device->SubmittedReqListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
         if (Element->Tag == Response->RequestHandle) {
             RemoveEntryList(&Element->Link);
@@ -251,7 +251,7 @@ NTSTATUS WnbdHandleResponse(
         }
         Element = NULL;
     }
-    KeReleaseSpinLock(&Device->ReplyListLock, Irql);
+    KeReleaseSpinLock(&Device->SubmittedReqListLock, Irql);
     if (!Element) {
         WNBD_LOG_ERROR("Received reply with no matching request tag: 0x%llx",
             Response->RequestHandle);
@@ -295,7 +295,7 @@ NTSTATUS WnbdHandleResponse(
             // SrbBuff can't be NULL
 #pragma warning(push)
 #pragma warning(disable:6387)
-            RtlCopyMemory(SrbBuff, LockedUserBuff, Element->ReadLength);
+            RtlCopyMemory(SrbBuff, LockedUserBuff, Element->DataLength);
 #pragma warning(pop)
         }
     }
@@ -304,8 +304,7 @@ NTSTATUS WnbdHandleResponse(
         Element->Srb->SrbStatus = SetSrbStatus(Element->Srb, &Response->Status);
     }
     else {
-        // TODO: rename ReadLength to DataLength
-        Element->Srb->DataTransferLength = Element->ReadLength;
+        Element->Srb->DataTransferLength = Element->DataLength;
         Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
     }
 

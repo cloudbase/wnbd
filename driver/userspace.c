@@ -228,10 +228,10 @@ WnbdInitializeDevice(_In_ PWNBD_SCSI_DEVICE Device, BOOLEAN UseNbd)
     ASSERT(Device);
     NTSTATUS Status = STATUS_SUCCESS;
 
-    InitializeListHead(&Device->RequestListHead);
-    KeInitializeSpinLock(&Device->RequestListLock);
-    InitializeListHead(&Device->ReplyListHead);
-    KeInitializeSpinLock(&Device->ReplyListLock);
+    InitializeListHead(&Device->PendingReqListHead);
+    KeInitializeSpinLock(&Device->PendingReqListLock);
+    InitializeListHead(&Device->SubmittedReqListHead);
+    KeInitializeSpinLock(&Device->SubmittedReqListLock);
     ExInitializeRundownProtection(&Device->RundownProtection);
     KeInitializeSemaphore(&Device->DeviceEvent, 0, 1 << 30);
     KeInitializeEvent(&Device->TerminateEvent, NotificationEvent, FALSE);

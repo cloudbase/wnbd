@@ -27,12 +27,12 @@ VOID DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
     PKSPIN_LOCK ListLock;
 
     if (SubmittedRequests) {
-        ListHead = &Device->RequestListHead;
-        ListLock = &Device->RequestListLock;
+        ListHead = &Device->PendingReqListHead;
+        ListLock = &Device->PendingReqListLock;
     }
     else {
-        ListHead = &Device->ReplyListHead;
-        ListLock = &Device->ReplyListLock;
+        ListHead = &Device->SubmittedReqListHead;
+        ListLock = &Device->SubmittedReqListLock;
     }
 
     while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
@@ -59,8 +59,8 @@ VOID AbortSubmittedRequests(_In_ PWNBD_SCSI_DEVICE Device)
     // have a limit of aborted requests that we keep around.
     WNBD_LOG_LOUD(": Enter");
 
-    PLIST_ENTRY ListHead = &Device->ReplyListHead;
-    PKSPIN_LOCK ListLock = &Device->ReplyListLock;
+    PLIST_ENTRY ListHead = &Device->SubmittedReqListHead;
+    PKSPIN_LOCK ListLock = &Device->SubmittedReqListLock;
 
     PSRB_QUEUE_ELEMENT Element;
     PLIST_ENTRY ItemLink, ItemNext;
