@@ -8,7 +8,6 @@
 #define UTIL_H 1
 
 #include "common.h"
-#include "nbd_protocol.h"
 #include "scsi_driver_extensions.h"
 
 VOID
@@ -58,24 +57,15 @@ WnbdFindDeviceByInstanceName(
     _In_ PCHAR InstanceName,
     _In_ BOOLEAN Acquire);
 
-
-VOID
-WnbdDeviceRequestThread(_In_ PVOID Context);
-#pragma alloc_text (PAGE, WnbdDeviceRequestThread)
-VOID
-WnbdDeviceReplyThread(_In_ PVOID Context);
-#pragma alloc_text (PAGE, WnbdDeviceReplyThread)
 BOOLEAN
 IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
-VOID
-WnbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device);
+
 VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device);
 VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device);
 int ScsiOpToNbdReqType(_In_ int ScsiOp);
 BOOLEAN ValidateScsiRequest(
     _In_ PWNBD_SCSI_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element);
-
 
 #define LIST_FORALL_SAFE(_headPtr, _itemPtr, _nextPtr)                \
     for (_itemPtr = (_headPtr)->Flink, _nextPtr = (_itemPtr)->Flink;  \
@@ -85,3 +75,27 @@ BOOLEAN ValidateScsiRequest(
 #endif
 
 UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status);
+
+static inline int
+ScsiOpToWnbdReqType(int ScsiOp)
+{
+    switch (ScsiOp) {
+    case SCSIOP_READ6:
+    case SCSIOP_READ:
+    case SCSIOP_READ12:
+    case SCSIOP_READ16:
+        return WnbdReqTypeRead;
+    case SCSIOP_WRITE6:
+    case SCSIOP_WRITE:
+    case SCSIOP_WRITE12:
+    case SCSIOP_WRITE16:
+        return WnbdReqTypeWrite;
+    case SCSIOP_UNMAP:
+        return WnbdReqTypeUnmap;
+    case SCSIOP_SYNCHRONIZE_CACHE:
+    case SCSIOP_SYNCHRONIZE_CACHE16:
+        return WnbdReqTypeFlush;
+    default:
+        return WnbdReqTypeUnknown;
+    }
+}

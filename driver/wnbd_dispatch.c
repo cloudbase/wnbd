@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2019 SUSE LLC
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
+// This module handles IO request dispatching and reply handling over
+// the IOCTL interface.
+
 #include <ntifs.h>
 
 #include "wnbd_dispatch.h"
@@ -6,30 +15,6 @@
 #include "debug.h"
 #include "scsi_function.h"
 #include "scsi_trace.h"
-
-inline int
-ScsiOpToWnbdReqType(int ScsiOp)
-{
-    switch (ScsiOp) {
-    case SCSIOP_READ6:
-    case SCSIOP_READ:
-    case SCSIOP_READ12:
-    case SCSIOP_READ16:
-        return WnbdReqTypeRead;
-    case SCSIOP_WRITE6:
-    case SCSIOP_WRITE:
-    case SCSIOP_WRITE12:
-    case SCSIOP_WRITE16:
-        return WnbdReqTypeWrite;
-    case SCSIOP_UNMAP:
-        return WnbdReqTypeUnmap;
-    case SCSIOP_SYNCHRONIZE_CACHE:
-    case SCSIOP_SYNCHRONIZE_CACHE16:
-        return WnbdReqTypeFlush;
-    default:
-        return WnbdReqTypeUnknown;
-    }
-}
 
 NTSTATUS LockUsermodeBuffer(
     PVOID Buffer, UINT32 BufferSize, BOOLEAN Writeable,
