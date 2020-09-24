@@ -507,11 +507,11 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
     Element->DeviceExtension = DeviceExtension;
     Element->Srb = Srb;
     Element->StartingLbn = StartingLbn;
-    Element->ReadLength = (ULONG)DataLength;
+    Element->DataLength = (ULONG)DataLength;
     Element->Aborted = 0;
     Element->Completed = 0;
     Element->FUA = FUA;
-    ExInterlockedInsertTailList(&Device->RequestListHead, &Element->Link, &Device->RequestListLock);
+    ExInterlockedInsertTailList(&Device->PendingReqListHead, &Element->Link, &Device->PendingReqListLock);
     KeReleaseSemaphore(&Device->DeviceEvent, 0, 1, FALSE);
     Status = STATUS_PENDING;
 

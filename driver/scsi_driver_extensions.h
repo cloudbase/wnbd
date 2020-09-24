@@ -47,13 +47,11 @@ typedef struct _WNBD_SCSI_DEVICE
     INT                         SocketToClose;
     ERESOURCE                   SocketLock;
 
-    // TODO: rename as PendingReqListHead
-    LIST_ENTRY                  RequestListHead;
-    KSPIN_LOCK                  RequestListLock;
+    LIST_ENTRY                  PendingReqListHead;
+    KSPIN_LOCK                  PendingReqListLock;
 
-    // TODO: rename as SubmittedReqListHead
-    LIST_ENTRY                  ReplyListHead;
-    KSPIN_LOCK                  ReplyListLock;
+    LIST_ENTRY                  SubmittedReqListHead;
+    KSPIN_LOCK                  SubmittedReqListLock;
 
     KSEMAPHORE                  DeviceEvent;
     PVOID                       DeviceRequestThread;
@@ -78,7 +76,7 @@ typedef struct _SRB_QUEUE_ELEMENT {
     LIST_ENTRY Link;
     PSCSI_REQUEST_BLOCK Srb;
     UINT64 StartingLbn;
-    ULONG ReadLength;
+    ULONG DataLength;
     BOOLEAN FUA;
     PVOID DeviceExtension;
     UINT64 Tag;
