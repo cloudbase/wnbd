@@ -21,11 +21,12 @@ typedef struct
 
 // We'll fetch other fields if/when needed.
 // This is only used internally.
-typedef struct
+typedef struct _DISK_INFO
 {
   std::wstring deviceId;
-  uint32_t Index;
-} DiskInfo;
+  uint32_t Index = 0;
+  std::wstring PNPDeviceID;
+} DISK_INFO, *PDISK_INFO;
 
 HRESULT CoInitializeBasic();
 VOID CloseWmiConnecton(PWMI_CONNECTION Connection);
@@ -45,7 +46,10 @@ HRESULT GetPropertyInt(
 HRESULT GetDiskDrives(
     PWMI_CONNECTION Connection,
     std::wstring Query,
-    std::vector<DiskInfo>& Disks);
+    std::vector<DISK_INFO>& Disks);
 HRESULT GetDiskNumberBySerialNumber(
     LPCWSTR SerialNumber,
     PDWORD DiskNumber);
+HRESULT GetDiskInfoBySerialNumber(
+    LPCWSTR SerialNumber,
+    PDISK_INFO DiskInfo);

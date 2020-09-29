@@ -14,6 +14,7 @@
 #include <locale>
 
 #pragma comment(lib, "Setupapi.lib")
+#pragma comment(lib, "CfgMgr32.lib")
 
 std::wstring to_wstring(std::string str)
 {
@@ -133,10 +134,17 @@ DWORD CmdMap(
     return Status;
 }
 
-
 DWORD CmdUnmap(PCHAR InstanceName, BOOLEAN HardRemove)
 {
-    DWORD Status = WnbdRemoveEx(InstanceName, HardRemove);
+    WNBD_REMOVE_OPTIONS RemoveOptions = {0};
+    RemoveOptions.Flags.HardRemove = HardRemove;
+
+    // TODO: make those configurable. We should use named arguments first.
+    RemoveOptions.Flags.HardRemoveFallback = TRUE;
+    RemoveOptions.SoftRemoveTimeoutMs = WNBD_DEFAULT_RM_TIMEOUT_MS;
+    RemoveOptions.SoftRemoveRetryIntervalMs = WNBD_DEFAULT_RM_RETRY_INTERVAL_MS;
+
+    DWORD Status = WnbdRemoveEx(InstanceName, &RemoveOptions);
     if (Status) {
         CheckOpenFailed(Status);
         fprintf(stderr, "Could not disconnect WNBD device.\n");
@@ -168,7 +176,6 @@ DWORD CmdStats(PCHAR InstanceName)
     printf("OutstandingIOCount: %llu\n", Stats.OutstandingIOCount);
     return Status;
 }
-
 
 DWORD GetList(PWNBD_CONNECTION_LIST* ConnectionList)
 {
@@ -224,21 +231,13 @@ DWORD CmdList()
         return err;
     }
 
-    // This must be called only once.
-    HRESULT hres = WnbdCoInitializeBasic();
-    if (FAILED(hres)) {
-        fprintf(stderr, "Failed to initialize COM. HRESULT: 0x%x.\n", hres);
-        free(ConnList);
-        return HRESULT_CODE(hres);
-    }
-
     DWORD Status = 0;
     printf("%-10s  %-10s  %-5s  %-15s  %s\n", "Pid", "DiskNumber", "Nbd", "Owner", "InstanceName");
     for (ULONG index = 0; index < ConnList->Count; index++) {
         std::wstring SerialNumberW = to_wstring(
             ConnList->Connections[index].Properties.SerialNumber);
         DWORD DiskNumber = -1;
-        hres = WnbdGetDiskNumberBySerialNumber(
+        HRESULT hres = WnbdGetDiskNumberBySerialNumber(
             SerialNumberW.c_str(), &DiskNumber);
         if (FAILED(hres)) {
             fprintf(stderr,

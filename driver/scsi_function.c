@@ -185,15 +185,19 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
             RtlZeroMemory(DeviceCapabilitiesEx, sizeof(PSTOR_DEVICE_CAPABILITIES_EX));
             DeviceCapabilitiesEx->DefaultWriteCacheEnabled = 1;
             DeviceCapabilitiesEx->SilentInstall = 1;
-            DeviceCapabilitiesEx->SurpriseRemovalOK = 1;
+            // We're disabling SurpriseRemovalOK in order to
+            // receive device removal PnP events.
+            DeviceCapabilitiesEx->SurpriseRemovalOK = 0;
             DeviceCapabilitiesEx->Removable = 1;
+            DeviceCapabilitiesEx->EjectSupported = 1;
 
             SrbStatus = SRB_STATUS_SUCCESS;
         }
         break;
 
     default:
-        WNBD_LOG_WARN("Untreated SCSI Request PNP Flag: %x", PNP->SrbPnPFlags);
+        WNBD_LOG_WARN("Untreated SCSI request. PnP action: %x, "
+                      "PnP flag: %x", PNP->PnPAction, PNP->SrbPnPFlags);
         break;
     }
 

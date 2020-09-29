@@ -25,6 +25,14 @@ int main(int argc, PCHAR argv[])
 
     Command = argv[1];
 
+    // This must be called only once. We're going to do it as early as
+    // possible to avoid having issues because of uninitialized COM.
+    HRESULT hres = WnbdCoInitializeBasic();
+    if (FAILED(hres)) {
+        fprintf(stderr, "Failed to initialize COM. HRESULT: 0x%x.\n", hres);
+        return HRESULT_CODE(hres);
+    }
+
     if ((argc >= 6) && !strcmp(Command, "map")) {
         InstanceName = argv[2];
         HostName = argv[3];

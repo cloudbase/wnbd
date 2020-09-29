@@ -125,7 +125,7 @@ HRESULT GetPropertyInt(
 HRESULT GetDiskDrives(
     PWMI_CONNECTION Connection,
     std::wstring Query,
-    std::vector<DiskInfo>& Disks)
+    std::vector<DISK_INFO>& Disks)
 {
     HRESULT hres = 0;
     IEnumWbemClassObject* Enumerator = NULL;
@@ -155,9 +155,13 @@ HRESULT GetDiskDrives(
         if (!ReturnedCount)
             break;
 
-        DiskInfo d;
+        DISK_INFO d;
 
         hres = GetPropertyStr(ClsObj, L"DeviceID", d.deviceId);
+        if (FAILED(hres))
+            goto Exit;
+
+        hres = GetPropertyStr(ClsObj, L"PNPDeviceID", d.PNPDeviceID);
         if (FAILED(hres))
             goto Exit;
 
@@ -177,15 +181,15 @@ Exit:
     return hres;
 }
 
-HRESULT GetDiskNumberBySerialNumber(
+HRESULT GetDiskInfoBySerialNumber(
     LPCWSTR SerialNumber,
-    PDWORD DiskNumber)
+    PDISK_INFO DiskInfo)
 {
     std::wstring Query = L"SELECT * FROM Win32_DiskDrive WHERE SerialNumber = '";
     Query.append(SerialNumber);
     Query.append(L"'");
 
-    std::vector<DiskInfo> Disks;
+    std::vector<DISK_INFO> Disks;
 
     WMI_CONNECTION Connection = { 0 };
     HRESULT hres = CreateWmiConnection(L"root\\cimv2", &Connection);
@@ -205,6 +209,18 @@ HRESULT GetDiskNumberBySerialNumber(
         return MAKE_HRESULT(SEVERITY_ERROR, FACILITY_WIN32, ERROR_FILE_NOT_FOUND);
     }
 
-    *DiskNumber = Disks[0].Index;
+    *DiskInfo = Disks[0];
+    return hres;
+}
+
+HRESULT GetDiskNumberBySerialNumber(
+    LPCWSTR SerialNumber,
+    PDWORD DiskNumber)
+{
+    DISK_INFO Disk;
+    HRESULT hres = GetDiskInfoBySerialNumber(SerialNumber, &Disk);
+    if (!FAILED(hres)) {
+        *DiskNumber = Disk.Index;
+    }
     return hres;
 }

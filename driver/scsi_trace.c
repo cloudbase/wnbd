@@ -9,6 +9,7 @@
 
 #define CASE_STR(x) case x: return #x;
 
+// TODO: unused, remove this.
 PCHAR SRB_STATUS_STRINGS[] = {
     (PCHAR)"SRB_STATUS_PENDING                  0x00",
     (PCHAR)"SRB_STATUS_SUCCESS                  0x01",

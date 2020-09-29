@@ -12,6 +12,7 @@
 #define IOCTL_WNBD_STATS 7
 #define IOCTL_WNBD_RELOAD_CONFIG 8
 #define IOCTL_WNBD_VERSION 9
+#define IOCTL_WNBD_SHOW 10
 
 static const GUID WNBD_GUID = {
     0x949dd17c,
@@ -230,16 +231,23 @@ typedef struct
 
 typedef struct
 {
-    UINT32 HardRemove:1;
-    UINT32 Reserved:31;
+    UINT32 Reserved:32;
 } WNBD_REMOVE_COMMAND_FLAGS, *PWNBD_REMOVE_COMMAND_FLAGS;
+
+// Similar to the userspace WNBD_REMOVE_OPTIONS, currently unused.
+// The "Remove" API kept changing, so having a placeholder here
+// seems the right thing to do.
+typedef struct
+{
+    WNBD_REMOVE_COMMAND_FLAGS Flags;
+    BYTE Reserved[80];
+} WNBD_REMOVE_COMMAND_OPTIONS, *PWNBD_REMOVE_COMMAND_OPTIONS;
 
 typedef struct
 {
     ULONG IoControlCode;
     CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
-    WNBD_REMOVE_COMMAND_FLAGS Flags;
-    // In the future, we'll add a "hard" remove flag.
+    WNBD_REMOVE_COMMAND_OPTIONS Options;
     UINT64 Reserved[4];
 } WNBD_IOCTL_REMOVE_COMMAND, *PWNBD_IOCTL_REMOVE_COMMAND;
 
@@ -249,6 +257,13 @@ typedef struct
     CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
     UINT64 Reserved[4];
 } WNBD_IOCTL_STATS_COMMAND, *PWNBD_IOCTL_STATS_COMMAND;
+
+typedef struct
+{
+    ULONG IoControlCode;
+    CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
+    UINT64 Reserved[4];
+} WNBD_IOCTL_SHOW_COMMAND, *PWNBD_IOCTL_SHOW_COMMAND;
 
 typedef struct
 {
