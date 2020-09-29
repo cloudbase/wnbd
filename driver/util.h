@@ -35,6 +35,10 @@ WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device);
 // to avoid further processing.
 VOID
 WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard);
+// The specified device must be acquired. It will be released by
+// WnbdDisconnectSync.
+VOID
+WnbdDisconnectSync(_In_ PWNBD_SCSI_DEVICE Device);
 
 // Device returned by WnbdFindDevice* functions must be subsequently
 // relased using WnbdReleaseDevice, if "Acquire" is set.

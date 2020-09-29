@@ -12,10 +12,12 @@
 
 #define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
 
-
-DWORD WnbdOpenDevice(PHANDLE Handle)
+// Open the WNBD SCSI adapter device.
+DWORD WnbdOpenDeviceEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
 {
     HDEVINFO DevInfo = { 0 };
+    SP_DEVINFO_DATA DevInfoData = { 0 };
+    DevInfoData.cbSize = sizeof(DevInfoData);
     SP_DEVICE_INTERFACE_DATA DevInterfaceData = { 0 };
     PSP_DEVICE_INTERFACE_DETAIL_DATA DevInterfaceDetailData = NULL;
     ULONG DevIndex = 0;
@@ -26,6 +28,7 @@ DWORD WnbdOpenDevice(PHANDLE Handle)
     DevInfo = SetupDiGetClassDevs(&WNBD_GUID, NULL, NULL,
                                   DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
     if (DevInfo == INVALID_HANDLE_VALUE) {
+        ErrorCode = ERROR_OPEN_FAILED;
         goto Exit;
     }
 
@@ -45,13 +48,15 @@ DWORD WnbdOpenDevice(PHANDLE Handle)
         DevInterfaceDetailData =
             (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(RequiredSize);
         if (!DevInterfaceDetailData) {
+            ErrorCode = ERROR_BUFFER_OVERFLOW;
             goto Exit;
         }
         DevInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
 
         if (!SetupDiGetDeviceInterfaceDetail(
               DevInfo, &DevInterfaceData, DevInterfaceDetailData,
-              RequiredSize, &RequiredSize, NULL)) {
+              RequiredSize, &RequiredSize, &DevInfoData)) {
+            ErrorCode = GetLastError();
             goto Exit;
         }
 
@@ -83,10 +88,31 @@ Exit:
         SetupDiDestroyDeviceInfoList(DevInfo);
     }
 
-    if (!ErrorCode)
+    if (!ErrorCode) {
         *Handle = WnbdDriverHandle;
+        *CMDeviceInstance = DevInfoData.DevInst;
+    }
 
     return ErrorCode;
+}
+
+// Open the WNBD SCSI adapter device.
+DWORD WnbdOpenDevice(PHANDLE Handle)
+{
+    DEVINST DevInst = { 0 };
+    return WnbdOpenDeviceEx(Handle, &DevInst);
+}
+
+// Open the WNBD SCSI adapter device.
+DWORD WnbdOpenCMDeviceInstance(PDEVINST DeviceInstance)
+{
+    HANDLE Handle;
+    DWORD Status = WnbdOpenDeviceEx(&Handle, DeviceInstance);
+
+    if (!Status) {
+        CloseHandle(&Handle);
+    }
+    return Status;
 }
 
 DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
@@ -124,9 +150,9 @@ DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
     return ErrorCode;
 }
 
-
 DWORD WnbdIoctlRemove(
-    HANDLE Device, const char* InstanceName, BOOLEAN HardRemove)
+    HANDLE Device, const char* InstanceName,
+    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions)
 {
     DWORD Status = ERROR_SUCCESS;
 
@@ -141,7 +167,9 @@ DWORD WnbdIoctlRemove(
     WNBD_IOCTL_REMOVE_COMMAND Command = { 0 };
 
     Command.IoControlCode = IOCTL_WNBD_REMOVE;
-    Command.Flags.HardRemove = !!HardRemove;
+    if (RemoveOptions) {
+        Command.Options = *RemoveOptions;
+    }
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
     BOOL DevStatus = DeviceIoControl(
@@ -250,6 +278,28 @@ DWORD WnbdIoctlStats(HANDLE Device, const char* InstanceName,
         Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         Stats, sizeof(WNBD_DRV_STATS), &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+    }
+
+    return Status;
+}
+
+DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
+                    PWNBD_CONNECTION_INFO ConnectionInfo)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_SHOW_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_SHOW;
+    memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
+
+    BOOL DevStatus = DeviceIoControl(
+        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command),
+        ConnectionInfo, sizeof(WNBD_CONNECTION_INFO), &BytesReturned, NULL);
 
     if (!DevStatus) {
         Status = GetLastError();

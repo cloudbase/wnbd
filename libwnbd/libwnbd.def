@@ -6,12 +6,14 @@ EXPORTS
     WnbdRemoveEx
     WnbdClose
     WnbdList
+    WnbdShow
     WnbdGetUserspaceStats
     WnbdGetDriverStats
     WnbdRaiseLogLevel
     WnbdSetSenseEx
     WnbdSetSense
     WnbdStartDispatcher
+    WnbdStopDispatcher
     WnbdWaitDispatcher
     WnbdSendResponse
     WnbdCoInitializeBasic
@@ -21,10 +23,13 @@ EXPORTS
     WnbdGetLibVersion
 
     WnbdOpenDevice
+    WnbdOpenDeviceEx
+    WnbdOpenCMDeviceInstance
     WnbdIoctlPing
     WnbdIoctlCreate
     WnbdIoctlRemove
     WnbdIoctlList
+    WnbdIoctlShow
     WnbdIoctlStats
     WnbdIoctlReloadConfig
     WnbdIoctlFetchRequest

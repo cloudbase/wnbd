@@ -167,22 +167,24 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
     NTSTATUS Status = STATUS_INVALID_DEVICE_REQUEST;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
     ASSERT(IoLocation);
+    UCHAR MinorFunction = IoLocation->MinorFunction;
 
-    switch (IoLocation->MinorFunction) {
+    switch (MinorFunction) {
     case IRP_MN_QUERY_CAPABILITIES:
         /*
          * Set our device capability
          */
         WNBD_LOG_INFO("IRP_MN_QUERY_CAPABILITIES");
-        IoLocation->Parameters.DeviceCapabilities.Capabilities->Removable = 1;
         IoLocation->Parameters.DeviceCapabilities.Capabilities->SilentInstall = 1;
-        IoLocation->Parameters.DeviceCapabilities.Capabilities->SurpriseRemovalOK = 1;
+        // We're disabling SurpriseRemovalOK in order to
+        // receive device removal PnP events.
+        IoLocation->Parameters.DeviceCapabilities.Capabilities->SurpriseRemovalOK = 0;
+        IoLocation->Parameters.DeviceCapabilities.Capabilities->Removable = 1;
+        IoLocation->Parameters.DeviceCapabilities.Capabilities->EjectSupported = 1;
         break;
-
     case IRP_MN_START_DEVICE:
         WNBD_LOG_INFO("IRP_MN_START_DEVICE");
         break;
-
     case IRP_MN_REMOVE_DEVICE:
         WNBD_LOG_INFO("IRP_MN_REMOVE_DEVICE");
         break;
@@ -190,7 +192,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
 
     Status = StorPortDispatchPnp(DeviceObject, Irp);
 
-    WNBD_LOG_LOUD(": Exit");
+    WNBD_LOG_LOUD(": Exit: %d", Status);
     return Status;
 }
 

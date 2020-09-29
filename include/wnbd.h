@@ -1,7 +1,9 @@
 #ifndef WNBD_SHARED_H
 #define WNBD_SHARED_H
 
-#include <wnbd_ioctl.h>
+#include <cfgmgr32.h>
+
+#include "wnbd_ioctl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,6 +12,8 @@ extern "C" {
 #define WNBD_MIN_DISPATCHER_THREAD_COUNT 1
 #define WNBD_MAX_DISPATCHER_THREAD_COUNT 255
 #define WNBD_LOG_MESSAGE_MAX_SIZE 4096
+#define WNBD_DEFAULT_RM_TIMEOUT_MS 30 * 1000
+#define WNBD_DEFAULT_RM_RETRY_INTERVAL_MS 2000
 
 typedef enum
 {
@@ -40,6 +44,22 @@ typedef struct _WNBD_USR_STATS
     UINT64 TotalReadBlocks;
     UINT64 TotalWrittenBlocks;
 } WNBD_USR_STATS, *PWNBD_USR_STATS;
+
+typedef struct
+{
+    UINT32 HardRemove:1;
+    // Fallback to a hard remove if the soft remove fails.
+    UINT32 HardRemoveFallback:1;
+    UINT32 Reserved:30;
+} WNBD_REMOVE_FLAGS, *PWNBD_REMOVE_FLAGS;
+
+typedef struct
+{
+    WNBD_REMOVE_FLAGS Flags;
+    DWORD SoftRemoveTimeoutMs;
+    DWORD SoftRemoveRetryIntervalMs;
+    BYTE Reserved[64];
+} WNBD_REMOVE_OPTIONS, *PWNBD_REMOVE_OPTIONS;
 
 typedef struct _WNBD_INTERFACE WNBD_INTERFACE;
 // This should be handled as an opaque structure by library consumers.
@@ -112,8 +132,12 @@ DWORD WnbdCreate(
     PWNBD_DEVICE* PDevice);
 // Remove the disk. The existing dispatchers will continue running until all
 // the driver IO requests are completed unless the "HardRemove" flag is set.
-DWORD WnbdRemove(PWNBD_DEVICE Device, BOOLEAN HardRemove);
-DWORD WnbdRemoveEx(const char* InstanceName, BOOLEAN HardRemove);
+DWORD WnbdRemove(
+    PWNBD_DEVICE Device,
+    PWNBD_REMOVE_OPTIONS RemoveOptions);
+DWORD WnbdRemoveEx(
+    const char* InstanceName,
+    PWNBD_REMOVE_OPTIONS RemoveOptions);
 // Cleanup the PWNBD_DEVICE structure. This should be called after stopping
 // the IO dispatchers.
 VOID WnbdClose(PWNBD_DEVICE Device);
@@ -122,6 +146,9 @@ DWORD WnbdList(
     PWNBD_CONNECTION_LIST ConnectionList,
     // Connection list buffer size.
     PDWORD BufferSize);
+DWORD WnbdShow(
+    const char* InstanceName,
+    PWNBD_CONNECTION_INFO ConnectionInfo);
 // Userspace counters
 DWORD WnbdGetUserspaceStats(
     PWNBD_DEVICE Device,
@@ -150,6 +177,7 @@ void WnbdSetSenseEx(
 void WnbdSetSense(PWNBD_STATUS Status, UINT8 SenseKey, UINT8 Asc);
 
 DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount);
+DWORD WnbdStopDispatcher(PWNBD_DEVICE Device, PWNBD_REMOVE_OPTIONS RemoveOptions);
 DWORD WnbdWaitDispatcher(PWNBD_DEVICE Device);
 // Must be called after an IO request completes, notifying the driver about
 // the result. Storport will timeout requests that don't complete in a timely
@@ -160,7 +188,10 @@ DWORD WnbdSendResponse(
     PVOID DataBuffer,
     UINT32 DataBufferSize);
 
+// Open the WNBD SCSI adapter device.
 DWORD WnbdOpenDevice(PHANDLE Handle);
+DWORD WnbdOpenDeviceEx(PHANDLE Handle, PDEVINST CMDeviceInstance);
+DWORD WnbdOpenCMDeviceInstance(PDEVINST DeviceInstance);
 DWORD WnbdIoctlPing(HANDLE Device);
 
 DWORD WnbdIoctlCreate(
@@ -168,12 +199,17 @@ DWORD WnbdIoctlCreate(
     PWNBD_PROPERTIES Properties,
     // The resulting connecting info.
     PWNBD_CONNECTION_INFO ConnectionInfo);
-DWORD WnbdIoctlRemove(HANDLE Device, const char* InstanceName, BOOLEAN HardRemove);
+DWORD WnbdIoctlRemove(HANDLE Device, const char* InstanceName,
+    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions);
 DWORD WnbdIoctlList(
     HANDLE Device,
     PWNBD_CONNECTION_LIST ConnectionList,
     // Connection list buffer size.
     PDWORD BufferSize);
+DWORD WnbdIoctlShow(
+    HANDLE Device,
+    const char* InstanceName,
+    PWNBD_CONNECTION_INFO ConnectionInfo);
 DWORD WnbdIoctlStats(
     HANDLE Device,
     const char* InstanceName,

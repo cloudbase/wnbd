@@ -42,6 +42,10 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
     ASSERT(InquiryData);
 
     RtlZeroMemory(InquiryData, sizeof(INQUIRYDATA));
+    char ProductRevision[4] = {0};
+    RtlStringCbPrintfA(ProductRevision, sizeof(ProductRevision), "%d.%d",
+        WNBD_VERSION_MAJOR, WNBD_VERSION_MINOR);
+
     InquiryData->DeviceType = DIRECT_ACCESS_DEVICE;
     InquiryData->DeviceTypeQualifier = DEVICE_QUALIFIER_ACTIVE;
     InquiryData->DeviceTypeModifier = 0;
@@ -56,13 +60,11 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
         RTL_SIZEOF_THROUGH_FIELD(INQUIRYDATA, AdditionalLength);
     InquiryData->LinkedCommands = FALSE;
     RtlCopyMemory((PUCHAR)&InquiryData->VendorId[0], WNBD_INQUIRY_VENDOR_ID,
-        strlen(WNBD_INQUIRY_VENDOR_ID));
+        min(sizeof(InquiryData->VendorId), strlen(WNBD_INQUIRY_VENDOR_ID)));
     RtlCopyMemory((PUCHAR)&InquiryData->ProductId[0], WNBD_INQUIRY_PRODUCT_ID,
-        strlen(WNBD_INQUIRY_PRODUCT_ID));
-    RtlCopyMemory((PUCHAR)&InquiryData->ProductRevisionLevel[0], WNBD_INQUIRY_PRODUCT_REVISION,
-        strlen(WNBD_INQUIRY_PRODUCT_REVISION));
-    RtlCopyMemory((PUCHAR)&InquiryData->VendorSpecific[0], WNBD_INQUIRY_VENDOR_SPECIFIC,
-        strlen(WNBD_INQUIRY_VENDOR_SPECIFIC));
+        min(sizeof(InquiryData->ProductId), strlen(WNBD_INQUIRY_PRODUCT_ID)));
+    RtlCopyMemory((PUCHAR)&InquiryData->ProductRevisionLevel[0],
+        ProductRevision, sizeof(ProductRevision));
 
     WNBD_LOG_LOUD(": Exit");
 }
@@ -443,18 +445,7 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
         return STATUS_OBJECT_NAME_NOT_FOUND;
     }
 
-    // We're holding a device reference, preventing it from being
-    // cleaned up while we're accessing it.
-    PVOID DeviceMonitorThread = Device->DeviceMonitorThread;
-    // Make sure that the thread handle stays valid.
-    ObReferenceObject(DeviceMonitorThread);
-    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
-    // It's very important to release our device reference, allowing it to be removed.
-    // Do not access the device after releasing it.
-    WnbdReleaseDevice(Device);
-
-    KeWaitForSingleObject(DeviceMonitorThread, Executive, KernelMode, FALSE, NULL);
-    ObDereferenceObject(DeviceMonitorThread);
+    WnbdDisconnectSync(Device);
     
     WNBD_LOG_LOUD(": Exit");  
     return STATUS_SUCCESS;
@@ -654,6 +645,54 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             break;
         }
         Status = WnbdEnumerateActiveConnections(DeviceExtension, Irp);
+        break;
+
+    case IOCTL_WNBD_SHOW:
+        WNBD_LOG_LOUD("WNBD_SHOW");
+        PWNBD_IOCTL_SHOW_COMMAND ShowCmd =
+            (PWNBD_IOCTL_SHOW_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!ShowCmd || CHECK_I_LOCATION(IoLocation, PWNBD_IOCTL_SHOW_COMMAND)) {
+            WNBD_LOG_ERROR("WNBD_SHOW: Bad input buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        ShowCmd->InstanceName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
+        if (!strlen((PSTR) &ShowCmd->InstanceName)) {
+            WNBD_LOG_ERROR("WNBD_SHOW: Invalid instance name");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        if (!Irp->AssociatedIrp.SystemBuffer ||
+                CHECK_O_LOCATION(IoLocation, WNBD_CONNECTION_INFO)) {
+            WNBD_LOG_ERROR("WNBD_SHOW: Bad output buffer");
+            Status = STATUS_BUFFER_OVERFLOW;
+            break;
+        }
+
+        Device = WnbdFindDeviceByInstanceName(
+            DeviceExtension, ShowCmd->InstanceName, TRUE);
+        if (!Device) {
+            Status = STATUS_OBJECT_NAME_NOT_FOUND;
+            WNBD_LOG_ERROR("WNBD_SHOW: Connection does not exist");
+            break;
+        }
+
+        PWNBD_CONNECTION_INFO OutConnInfo = (
+            PWNBD_CONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
+        RtlZeroMemory(OutConnInfo, sizeof(WNBD_CONNECTION_INFO));
+        RtlCopyMemory(OutConnInfo, &Device->Properties, sizeof(WNBD_PROPERTIES));
+
+        OutConnInfo->BusNumber = (USHORT)Device->Bus;
+        OutConnInfo->TargetId = (USHORT)Device->Target;
+        OutConnInfo->Lun = (USHORT)Device->Lun;
+
+        WnbdReleaseDevice(Device);
+
+        Irp->IoStatus.Information = sizeof(WNBD_CONNECTION_INFO);
+        Status = STATUS_SUCCESS;
         break;
 
     case IOCTL_WNBD_RELOAD_CONFIG:

@@ -264,6 +264,27 @@ WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard)
     WNBD_LOG_LOUD(": Exit");
 }
 
+// The specified device must be acquired. It will be released by
+// WnbdDisconnectSync.
+VOID
+WnbdDisconnectSync(_In_ PWNBD_SCSI_DEVICE Device)
+{
+    WNBD_LOG_LOUD(": Enter");
+    // We're holding a device reference, preventing it from being
+    // cleaned up while we're accessing it.
+    PVOID DeviceMonitorThread = Device->DeviceMonitorThread;
+    // Make sure that the thread handle stays valid.
+    ObReferenceObject(DeviceMonitorThread);
+    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    // It's very important to release our device reference, allowing it to be removed.
+    // Do not access the device after releasing it.
+    WnbdReleaseDevice(Device);
+
+    KeWaitForSingleObject(DeviceMonitorThread, Executive, KernelMode, FALSE, NULL);
+    ObDereferenceObject(DeviceMonitorThread);
+    WNBD_LOG_LOUD(": Exit");
+}
+
 BOOLEAN
 IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
 {
