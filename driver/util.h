@@ -34,7 +34,7 @@ WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device);
 // Signals the device cleanup thread, setting the "*TerminateDevice" flags
 // to avoid further processing.
 VOID
-WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard);
+WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device);
 // The specified device must be acquired. It will be released by
 // WnbdDisconnectSync.
 VOID

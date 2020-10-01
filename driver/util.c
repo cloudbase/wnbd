@@ -251,14 +251,12 @@ VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device) {
 }
 
 VOID
-WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device, BOOLEAN Hard)
+WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
 
-    Device->SoftTerminateDevice = TRUE;
-    if (Hard)
-        Device->HardTerminateDevice = TRUE;
+    Device->HardTerminateDevice = TRUE;
     KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
 
     WNBD_LOG_LOUD(": Exit");
