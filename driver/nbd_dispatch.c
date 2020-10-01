@@ -144,7 +144,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_SCSI_DEVICE Device)
             if (STATUS_CONNECTION_RESET == Status ||
                 STATUS_CONNECTION_DISCONNECTED == Status ||
                 STATUS_CONNECTION_ABORTED == Status) {
-                WnbdDisconnectAsync(Device, TRUE);
+                WnbdDisconnectAsync(Device);
             }
         }
     }
@@ -217,7 +217,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
 
     Status = NbdReadReply(Device->NbdSocket, &Reply);
     if (Status) {
-        WnbdDisconnectAsync(Device, TRUE);
+        WnbdDisconnectAsync(Device);
         return;
     }
     PLIST_ENTRY ItemLink, ItemNext;
@@ -236,7 +236,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
     if(!Element) {
         WNBD_LOG_ERROR("Received reply with no matching request tag: 0x%llx",
             Reply.Handle);
-        WnbdDisconnectAsync(Device, TRUE);
+        WnbdDisconnectAsync(Device);
         goto Exit;
     }
 
@@ -254,7 +254,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
                 WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
                                Element->Srb, Element->Tag, error);
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                WnbdDisconnectAsync(Device, TRUE);
+                WnbdDisconnectAsync(Device);
                 goto Exit;
             }
         }
@@ -268,7 +268,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
             TempBuff = NbdMalloc(Element->DataLength);
             if (!TempBuff) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
-                WnbdDisconnectAsync(Device, TRUE);
+                WnbdDisconnectAsync(Device);
                 goto Exit;
             }
             Device->ReadPreallocatedBufferLength = Element->DataLength;
@@ -283,7 +283,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
                            Element->Srb, Element->Tag, error);
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-            WnbdDisconnectAsync(Device, TRUE);
+            WnbdDisconnectAsync(Device);
             goto Exit;
         } else {
             if(!Element->Aborted) {

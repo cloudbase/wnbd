@@ -80,13 +80,13 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
     Device->ReadPreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
     if (!Device->ReadPreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
     Device->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
     Device->WritePreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
     if (!Device->WritePreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
     Device->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
 
@@ -94,7 +94,7 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
                                   NULL, NULL, NbdDeviceRequestThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
 
     Status = ObReferenceObjectByHandle(request_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
@@ -102,14 +102,14 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
 
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
 
     Status = PsCreateSystemThread(&reply_thread_handle, (ACCESS_MASK)0L, NULL,
                                   NULL, NULL, NbdDeviceReplyThread, Device);
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
 
     Status = ObReferenceObjectByHandle(reply_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
@@ -117,14 +117,14 @@ WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
 
     if (!NT_SUCCESS(Status)) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto SoftTerminate;
+        goto Exit;
     }
 
     RtlZeroMemory(&Device->Stats, sizeof(WNBD_DRV_STATS));
 
     return Status;
 
-SoftTerminate:
+Exit:
     ExDeleteResourceLite(&Device->SocketLock);
     if (Device->ReadPreallocatedBuffer) {
         ExFreePool(Device->ReadPreallocatedBuffer);
@@ -136,8 +136,8 @@ SoftTerminate:
         ZwClose(request_thread_handle);
     if (reply_thread_handle)
         ZwClose(reply_thread_handle);
-    Device->SoftTerminateDevice = TRUE;
-    KeReleaseSemaphore(&Device->DeviceEvent, 0, 1, FALSE);
+    Device->HardTerminateDevice = TRUE;
+    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
@@ -158,8 +158,8 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
         2, WaitObjects, WaitAny, Executive, KernelMode,
         FALSE, NULL, NULL);
 
-    Device->SoftTerminateDevice = TRUE;
-    // TODO: implement proper soft termination.
+    // Soft termination is currently handled by the userspace,
+    // which notifies the PnP stack.
     Device->HardTerminateDevice = TRUE;
     KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
     LARGE_INTEGER Timeout;
