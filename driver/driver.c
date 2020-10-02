@@ -8,6 +8,8 @@
 #include "debug.h"
 #include "driver.h"
 #include "scsi_driver_extensions.h"
+#include "scsi_trace.h"
+#include "util.h"
 
 DRIVER_INITIALIZE DriverEntry;
 DRIVER_UNLOAD WnbdDriverUnload;
@@ -16,6 +18,7 @@ PDRIVER_UNLOAD StorPortDriverUnload;
 PDRIVER_DISPATCH StorPortDispatchPnp;
 
 WCHAR  GlobalRegistryPathBuffer[256];
+PWNBD_EXTENSION GlobalExt = NULL;
 extern UNICODE_STRING GlobalRegistryPath = { 0, 0, GlobalRegistryPathBuffer};
 extern UINT32 GlobalLogLevel = 0;
 
@@ -147,6 +150,7 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
     DriverObject->DriverUnload = WnbdDriverUnload;
     StorPortDispatchPnp = DriverObject->MajorFunction[IRP_MJ_PNP];
     DriverObject->MajorFunction[IRP_MJ_PNP] = 0 != StorPortDispatchPnp ? WnbdDispatchPnp : 0;
+    GlobalExt = NULL;
 
     WNBD_LOG_LOUD(": Exit");
 
@@ -166,15 +170,17 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
     ASSERT(Irp);
     NTSTATUS Status = STATUS_INVALID_DEVICE_REQUEST;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
+    SCSI_ADDRESS ScsiAddress = { 0 };
     ASSERT(IoLocation);
     UCHAR MinorFunction = IoLocation->MinorFunction;
 
+    WNBD_LOG_LOUD("Received PnP request: %s (%d).",
+                  WnbdToStringPnpMinorFunction(MinorFunction), MinorFunction);
     switch (MinorFunction) {
     case IRP_MN_QUERY_CAPABILITIES:
         /*
          * Set our device capability
          */
-        WNBD_LOG_INFO("IRP_MN_QUERY_CAPABILITIES");
         IoLocation->Parameters.DeviceCapabilities.Capabilities->SilentInstall = 1;
         // We're disabling SurpriseRemovalOK in order to
         // receive device removal PnP events.
@@ -182,11 +188,29 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
         IoLocation->Parameters.DeviceCapabilities.Capabilities->Removable = 1;
         IoLocation->Parameters.DeviceCapabilities.Capabilities->EjectSupported = 1;
         break;
-    case IRP_MN_START_DEVICE:
-        WNBD_LOG_INFO("IRP_MN_START_DEVICE");
-        break;
+    case IRP_MN_QUERY_REMOVE_DEVICE:
     case IRP_MN_REMOVE_DEVICE:
-        WNBD_LOG_INFO("IRP_MN_REMOVE_DEVICE");
+        {
+            if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
+                break;
+            }
+            Status = WnbdGetScsiAddress(DeviceObject, &ScsiAddress);
+            if (Status) {
+                WNBD_LOG_ERROR("Could not query SCSI address. Error: %d.", Status);
+                break;
+            }
+
+            WNBD_LOG_INFO("Removing device.");
+            PWNBD_SCSI_DEVICE Device = WnbdFindDeviceByAddr(
+                GlobalExt, ScsiAddress.PathId,
+                ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
+            if (!Device) {
+                WNBD_LOG_INFO("Device already removed.");
+                break;
+            }
+            WnbdDisconnectSync(Device);
+            WNBD_LOG_INFO("Successfully removed device.");
+        }
         break;
     }
 

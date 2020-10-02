@@ -13,6 +13,8 @@
 #include "util.h"
 #include "userspace.h"
 
+PWNBD_EXTENSION GlobalExt;
+
 VOID
 WnbdScsiAdapterSupportControlTypes(PSCSI_SUPPORTED_CONTROL_TYPE_LIST List)
 {
@@ -47,43 +49,22 @@ WnbdHwAdapterControl(PVOID DeviceExtension,
                      SCSI_ADAPTER_CONTROL_TYPE ControlType,
                      PVOID Parameters)
 {
-    WNBD_LOG_LOUD(": Enter");
+    UNREFERENCED_PARAMETER(DeviceExtension);
 
-    SCSI_ADAPTER_CONTROL_STATUS Status = ScsiAdapterControlSuccess;
-    ASSERT(DeviceExtension);
-    PWNBD_EXTENSION Ext = (PWNBD_EXTENSION) DeviceExtension;
-
-    Ext->ScsiAdapterControlState = ControlType;
-
+    WNBD_LOG_INFO(
+        "Received control type: %s (%d)",
+        WnbdToStringScsiAdapterCtrlType(ControlType),
+        ControlType);
     switch (ControlType) {
     case ScsiQuerySupportedControlTypes:
-        WNBD_LOG_INFO("ScsiQuerySupportedControlTypes");
-        WnbdScsiAdapterSupportControlTypes((PSCSI_SUPPORTED_CONTROL_TYPE_LIST)Parameters);
+        WnbdScsiAdapterSupportControlTypes(
+            (PSCSI_SUPPORTED_CONTROL_TYPE_LIST)Parameters);
         break;
-
-    case ScsiStopAdapter:
-        WNBD_LOG_INFO("ScsiStopAdapter");
-        break;
-
-    case ScsiRestartAdapter:
-        WNBD_LOG_INFO("ScsiRestartAdapter");
-        break;
-
-    case ScsiSetBootConfig:
-        WNBD_LOG_INFO("ScsiSetBootConfig");
-        break;
-
-    case ScsiSetRunningConfig:
-        WNBD_LOG_INFO("ScsiSetRunningConfig");
-        break;
-
     default:
         break;
     }
 
-    WNBD_LOG_LOUD(": Exit");
-
-    return Status;
+    return ScsiAdapterControlSuccess;
 }
 
 /*
@@ -142,6 +123,8 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     KeInitializeSpinLock(&Ext->DeviceListLock);
     KeInitializeEvent(&Ext->GlobalDeviceRemovalEvent, SynchronizationEvent, FALSE);
     ExInitializeRundownProtection(&Ext->RundownProtection);
+    GlobalExt = Ext;
+
 
     /*
      * Setup user-space communication device

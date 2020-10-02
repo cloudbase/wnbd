@@ -188,6 +188,8 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     KeEnterCriticalRegion();
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
     RemoveEntryList(&Device->ListEntry);
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
     StorPortNotification(BusChangeDetected, DeviceExtension, 0);
 
     RtlClearBits(&ScsiBitMapHeader,
@@ -212,14 +214,13 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
 
     ObDereferenceObject(Device->DeviceMonitorThread);
     ExFreePool(Device);
-    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
     // Release the extension device reference count, allowing it to be
     // unloaded.
     ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
     KeLeaveCriticalRegion();
 
-    WNBD_LOG_LOUD(": Exit");    
+    WNBD_LOG_LOUD(": Exit");
 }
 
 NTSTATUS
@@ -446,7 +447,7 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
     }
 
     WnbdDisconnectSync(Device);
-    
+
     WNBD_LOG_LOUD(": Exit");  
     return STATUS_SUCCESS;
 }

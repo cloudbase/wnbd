@@ -15,4 +15,10 @@ WnbdToStringSrbFunction(_In_ UCHAR SrbFunction);
 PCHAR
 WnbdToStringSrbStatus(_In_ UCHAR SrbStatus);
 
+PCHAR
+WnbdToStringPnpMinorFunction(_In_ UCHAR PnpMinorFunction);
+
+PCHAR
+WnbdToStringScsiAdapterCtrlType(_In_ UCHAR ControlType);
+
 #endif

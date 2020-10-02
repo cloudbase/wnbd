@@ -11,8 +11,6 @@
 #include "wnbd_ioctl.h"
 
 typedef struct _WNBD_EXTENSION {
-    SCSI_ADAPTER_CONTROL_TYPE         ScsiAdapterControlState;
-
     UNICODE_STRING                    DeviceInterface;
     LIST_ENTRY                        DeviceList;
     KSPIN_LOCK                        DeviceListLock;

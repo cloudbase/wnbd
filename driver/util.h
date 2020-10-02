@@ -103,3 +103,16 @@ ScsiOpToWnbdReqType(int ScsiOp)
         return WnbdReqTypeUnknown;
     }
 }
+
+VOID WnbdSendIoctl(
+    ULONG ControlCode,
+    PDEVICE_OBJECT DeviceObject,
+    PVOID InputBuffer,
+    ULONG InputBufferLength,
+    PVOID OutputBuffer,
+    ULONG OutputBufferLength,
+    PIO_STATUS_BLOCK IoStatus);
+NTSTATUS
+WnbdGetScsiAddress(
+    PDEVICE_OBJECT DeviceObject,
+    PSCSI_ADDRESS ScsiAddress);
