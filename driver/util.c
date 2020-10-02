@@ -256,8 +256,8 @@ WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device)
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
 
-    Device->HardTerminateDevice = TRUE;
-    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    Device->HardRemoveDevice = TRUE;
+    KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
 
     WNBD_LOG_LOUD(": Exit");
 }
@@ -273,7 +273,7 @@ WnbdDisconnectSync(_In_ PWNBD_SCSI_DEVICE Device)
     PVOID DeviceMonitorThread = Device->DeviceMonitorThread;
     // Make sure that the thread handle stays valid.
     ObReferenceObject(DeviceMonitorThread);
-    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
     // It's very important to release our device reference, allowing it to be removed.
     // Do not access the device after releasing it.
     WnbdReleaseDevice(Device);

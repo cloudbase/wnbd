@@ -137,7 +137,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
                       Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
-    if (Device->HardTerminateDevice) {
+    if (Device->HardRemoveDevice) {
         WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
                       Device, Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;

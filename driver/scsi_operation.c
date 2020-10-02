@@ -653,7 +653,7 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     ASSERT(Srb);
     PCDB Cdb = (PCDB) &Srb->Cdb;
     NTSTATUS status = STATUS_SUCCESS;
-    if (!Device || Device->HardTerminateDevice) {
+    if (!Device || Device->HardRemoveDevice) {
         Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         return status;
     }
