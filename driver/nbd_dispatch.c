@@ -49,6 +49,8 @@ WnbdRequestWrite(_In_ PWNBD_SCSI_DEVICE Device,
 
     StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &Buffer);
     if (STOR_STATUS_SUCCESS != StorResult) {
+        WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
+                       Element->Srb, Element->Tag, StorResult);
         Status = SRB_STATUS_INTERNAL_ERROR;
     } else {
         NbdWriteStat(Device->NbdSocket,
