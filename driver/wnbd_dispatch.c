@@ -177,11 +177,14 @@ NTSTATUS WnbdDispatchRequest(
             }
 
             PVOID SrbBuffer;
-            if (StorPortGetSystemAddress(Element->DeviceExtension,
-                                         Element->Srb, &SrbBuffer)) {
+            ULONG StorResult = StorPortGetSystemAddress(
+                Element->DeviceExtension, Element->Srb, &SrbBuffer);
+            if (StorResult) {
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
                 CompleteRequest(Device, Element, TRUE);
                 InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
+                WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
+                               Element->Srb, Element->Tag, StorResult);
                 continue;
             }
 
