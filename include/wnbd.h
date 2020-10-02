@@ -1,6 +1,7 @@
 #ifndef WNBD_SHARED_H
 #define WNBD_SHARED_H
 
+#include <windows.h>
 #include <cfgmgr32.h>
 
 #include "wnbd_ioctl.h"
@@ -69,7 +70,6 @@ typedef struct _WNBD_DEVICE
     PVOID Context;
     WNBD_PROPERTIES Properties;
     WNBD_CONNECTION_INFO ConnectionInfo;
-    WnbdLogLevel LogLevel;
     const WNBD_INTERFACE *Interface;
     BOOLEAN Stopping;
     BOOLEAN Stopped;
@@ -104,7 +104,6 @@ typedef VOID (*UnmapFunc)(
     PWNBD_UNMAP_DESCRIPTOR Descriptors,
     UINT32 Count);
 typedef VOID (*LogMessageFunc)(
-    PWNBD_DEVICE Device,
     WnbdLogLevel LogLevel,
     const char* Message,
     const char* FileName,
@@ -120,15 +119,13 @@ typedef struct _WNBD_INTERFACE
     WriteFunc Write;
     FlushFunc Flush;
     UnmapFunc Unmap;
-    LogMessageFunc LogMessage;
-    VOID* Reserved[14];
+    VOID* Reserved[15];
 } WNBD_INTERFACE, *PWNBD_INTERFACE;
 
 DWORD WnbdCreate(
     const PWNBD_PROPERTIES Properties,
     const PWNBD_INTERFACE Interface,
     PVOID Context,
-    WnbdLogLevel LogLevel,
     PWNBD_DEVICE* PDevice);
 // Remove the disk. The existing dispatchers will continue running until all
 // the driver IO requests are completed unless the "HardRemove" flag is set.
@@ -161,7 +158,11 @@ DWORD WnbdGetConnectionInfo(
     PWNBD_DEVICE Device,
     PWNBD_CONNECTION_INFO ConnectionInfo);
 
-DWORD WnbdRaiseLogLevel(USHORT LogLevel);
+// libwnbd logger
+VOID WnbdSetLogger(LogMessageFunc Logger);
+VOID WnbdSetLogLevel(WnbdLogLevel LogLevel);
+
+DWORD WnbdRaiseDrvLogLevel(USHORT LogLevel);
 
 // Get libwnbd version.
 DWORD WnbdGetLibVersion(PWNBD_VERSION Version);

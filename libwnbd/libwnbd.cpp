@@ -1,79 +1,20 @@
 #include <windows.h>
 
 #include <stdio.h>
-#include <codecvt>
-#include <locale>
 
 #define _NTSCSI_USER_MODE_
 #include <scsi.h>
 
 #include "wnbd.h"
 #include "wnbd_wmi.h"
+#include "wnbd_log.h"
+#include "utils.h"
 #include "version.h"
-
-#define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
-
-std::wstring to_wstring(const char* str)
-{
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> strconverter;
-    return strconverter.from_bytes(str);
-}
-
-// TODO: consider using a static function pointer instead of relying on the
-// Device structure. That will allow logging in functions that don't take
-// that argument.
-VOID LogMessage(PWNBD_DEVICE Device, WnbdLogLevel LogLevel,
-                const char* FileName, UINT32 Line, const char* FunctionName,
-                const char* Format, ...) {
-    if (!Device || !Device->Interface->LogMessage ||
-            Device->LogLevel < LogLevel)
-        return;
-
-    va_list Args;
-    va_start(Args, Format);
-
-    size_t BufferLength = (size_t)_vscprintf(Format, Args) + 1;
-
-    // TODO: consider enforcing WNBD_LOG_MESSAGE_MAX_SIZE and using a fixed
-    // size buffer for performance reasons.
-    char* Buff = (char*) malloc(BufferLength);
-    if (!Buff)
-        return;
-
-    vsnprintf_s(Buff, BufferLength, BufferLength - 1, Format, Args);
-    va_end(Args);
-
-    Device->Interface->LogMessage(
-        Device, LogLevel, Buff,
-        FileName, Line, FunctionName);
-
-    free(Buff);
-}
-
-#define LogCritical(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelCritical, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
-#define LogError(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelError, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
-#define LogWarning(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelWarning, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
-#define LogInfo(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelInfo, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
-#define LogDebug(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelDebug, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
-#define LogTrace(Device, Format, ...) \
-    LogMessage(Device, WnbdLogLevelTrace, \
-               __FILE__, __LINE__, __FUNCTION__, Format, __VA_ARGS__)
 
 DWORD WnbdCreate(
     const PWNBD_PROPERTIES Properties,
     const PWNBD_INTERFACE Interface,
     PVOID Context,
-    WnbdLogLevel LogLevel,
     PWNBD_DEVICE* PDevice)
 {
     DWORD ErrorCode = ERROR_SUCCESS;
@@ -81,17 +22,16 @@ DWORD WnbdCreate(
 
     Device = (PWNBD_DEVICE) calloc(1, sizeof(WNBD_DEVICE));
     if (!Device) {
+        LogError("Failed to allocate %d bytes.", sizeof(WNBD_DEVICE));
         return ERROR_OUTOFMEMORY;
     }
 
     Device->Context = Context;
     Device->Interface = Interface;
     Device->Properties = *Properties;
-    Device->LogLevel = LogLevel;
     ErrorCode = WnbdOpenDevice(&Device->Handle);
 
-    LogDebug(Device,
-             "Mapping device. Name=%s, Serial=%s, Owner=%s, "
+    LogDebug("Mapping device. Name=%s, Serial=%s, Owner=%s, "
              "BC=%llu, BS=%lu, RO=%u, Flush=%u, "
              "Unmap=%u, UnmapAnchor=%u, MaxUnmapDescCount=%u, "
              "Nbd=%u.",
@@ -107,8 +47,7 @@ DWORD WnbdCreate(
              Properties->MaxUnmapDescCount,
              Properties->Flags.UseNbd);
     if (Properties->Flags.UseNbd) {
-        LogDebug(Device,
-                 "Nbd properties: Hostname=%s, Port=%u, ExportName=%s, "
+        LogDebug("Nbd properties: Hostname=%s, Port=%u, ExportName=%s, "
                  "SkipNegotiation=%u.",
                  Properties->NbdProperties.Hostname,
                  Properties->NbdProperties.PortNumber,
@@ -117,21 +56,16 @@ DWORD WnbdCreate(
     }
 
     if (ErrorCode) {
-        LogError(Device,
-                 "Could not oped WNBD device. Please make sure "
-                 "that the driver is installed. Error: %d.", ErrorCode);
         goto Exit;
     }
 
     ErrorCode = WnbdIoctlCreate(
         Device->Handle, &Device->Properties, &Device->ConnectionInfo);
     if (ErrorCode) {
-        LogError(Device, "Could not map WNBD virtual disk. Error: %d.",
-                 ErrorCode);
         goto Exit;
     }
 
-    LogDebug(Device, "Mapped device. Connection id: %llu.",
+    LogDebug("Mapped device. Connection id: %llu.",
              Device->ConnectionInfo.ConnectionId);
 
     *PDevice = Device;
@@ -182,12 +116,11 @@ DWORD PnpRemoveDevice(
                 Status = ERROR_TIMEOUT;
             }
 
-            // TODO: uncomment after we update the logging mechanism.
-            // LogDebug(
-            //    "Could not remove device. Status: %d, "
-            //    "veto type %d, veto name: %s\n. Time elapsed: %llus",
-            //    CMStatus, VetoType, VetoName,
-            //    ElapsedMs.QuadPart * 1000);
+            LogDebug(
+               "Could not remove device. CM status: %d, "
+               "veto type %d, veto name: %s\n. Time elapsed: %llus",
+               CMStatus, VetoType, VetoName,
+               ElapsedMs.QuadPart * 1000);
         }
         if (RemoveVetoed && TimeLeft) {
             Sleep(RetryIntervalMs);
@@ -213,16 +146,20 @@ DWORD GetCMDeviceInstanceByID(
     DWORD CMStatus = CM_Get_Child(&ChildDevInst, AdapterDevInst, 0);
     if (CMStatus) {
         if (CMStatus == CR_NO_SUCH_DEVNODE) {
+            LogDebug("No WNBD disk found.");
             return ERROR_FILE_NOT_FOUND;
         }
         else {
+            LogWarning("Could not open disk device. CM status: %d", CMStatus);
             return ERROR_OPEN_FAILED;
         }
     }
 
     do {
         WCHAR CurrDeviceId[MAX_PATH];
-        if (CM_Get_Device_IDW(ChildDevInst, CurrDeviceId, MAX_PATH, 0)) {
+        CMStatus = CM_Get_Device_IDW(ChildDevInst, CurrDeviceId, MAX_PATH, 0);
+        if (CMStatus) {
+            LogError("Could not get disk id. CM status: %d", CMStatus);
             return ERROR_CAN_NOT_COMPLETE;
         }
 
@@ -235,11 +172,14 @@ DWORD GetCMDeviceInstanceByID(
         if (CMStatus) {
             MoreSiblings = FALSE;
             if (CMStatus != CR_NO_SUCH_DEVNODE) {
+                LogError("Could not get disk sibling. CM status: %d",
+                         CMStatus);
                 Status = ERROR_OPEN_FAILED;
             }
         }
     } while (MoreSiblings);
 
+    LogDebug("Could not find the specified disk.");
     return ERROR_FILE_NOT_FOUND;
 }
 
@@ -271,10 +211,10 @@ DWORD WnbdRemove(
     // TODO: check for null pointers.
     DWORD ErrorCode = ERROR_SUCCESS;
 
-    LogDebug(Device, "Unmapping device %s.",
+    LogDebug("Unmapping device %s.",
              Device->Properties.InstanceName);
     if (!Device->Handle || Device->Handle == INVALID_HANDLE_VALUE) {
-        LogDebug(Device, "WNBD device already removed.");
+        LogDebug("WNBD device already removed.");
         return 0;
     }
 
@@ -314,13 +254,18 @@ DWORD WnbdRemoveEx(
             ConnectionInfo.Properties.SerialNumber,
             RemoveOptions->SoftRemoveTimeoutMs,
             RemoveOptions->SoftRemoveRetryIntervalMs);
-        if (Status && Status != ERROR_FILE_NOT_FOUND
-                && !RemoveOptions->Flags.HardRemoveFallback) {
-            return Status;
+        if (Status && Status != ERROR_FILE_NOT_FOUND) {
+            if (!RemoveOptions->Flags.HardRemoveFallback) {
+                LogError("Soft device removal failed. "
+                         "Hard removal fallback disabled, exiting.");
+                return Status;
+            }
+            else {
+                LogWarning("Soft device removal failed. "
+                           "Falling back to hard removal.");
+            }
         }
     }
-    // TODO: start logging once we decouple the logger from the WNBD_DEVICE.
-    // We can continue to ignore "NOT_FOUND" errors.
     Status = WnbdIoctlRemove(Handle, InstanceName, NULL);
     CloseHandle(Handle);
 
@@ -370,8 +315,10 @@ DWORD WnbdGetUserspaceStats(
     PWNBD_DEVICE Device,
     PWNBD_USR_STATS Stats)
 {
-    if (!Device)
+    if (!Device) {
+        LogError("No device specified.");
         return ERROR_INVALID_PARAMETER;
+    }
 
     memcpy(Stats, &Device->Stats, sizeof(WNBD_USR_STATS));
     return ERROR_SUCCESS;
@@ -397,6 +344,7 @@ DWORD WnbdGetDriverStats(
 DWORD WnbdGetLibVersion(PWNBD_VERSION Version)
 {
     if (!Version) {
+        LogError("No input parameter.");
         return ERROR_INVALID_PARAMETER;
     }
 
@@ -427,8 +375,10 @@ DWORD WnbdGetConnectionInfo(
     PWNBD_DEVICE Device,
     PWNBD_CONNECTION_INFO ConnectionInfo)
 {
-    if (!Device)
+    if (!Device) {
+        LogError("No device specified.");
         return ERROR_INVALID_PARAMETER;
+    }
 
     memcpy(ConnectionInfo, &Device->ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
     return ERROR_SUCCESS;
@@ -439,10 +389,22 @@ DWORD OpenRegistryKey(HKEY RootKey, LPCSTR KeyName, BOOLEAN Create, HKEY* OutKey
     HKEY Key = NULL;
     DWORD Status = RegOpenKeyExA(RootKey, KeyName, 0, KEY_ALL_ACCESS, &Key);
 
-    if (Status == ERROR_FILE_NOT_FOUND && Create)
-    {
-        Status = RegCreateKeyExA(RootKey, KeyName, 0, NULL, REG_OPTION_NON_VOLATILE,
-                                 KEY_ALL_ACCESS, NULL, &Key, NULL);
+    if (Status) {
+        if (Status == ERROR_FILE_NOT_FOUND && Create) {
+            Status = RegCreateKeyExA(
+                RootKey, KeyName, 0, NULL, REG_OPTION_NON_VOLATILE,
+                KEY_ALL_ACCESS, NULL, &Key, NULL);
+            if (Status) {
+                LogError("Could not create registry key: %s. "
+                         "Error: %d. Error message: %s",
+                         KeyName, Status, win32_strerror(Status).c_str());
+            }
+        }
+        else {
+            LogError("Could not open registry key: %s. "
+                     "Error: %d. Error message: %s",
+                     KeyName, Status, win32_strerror(Status).c_str());
+        }
     }
 
     if (!Status) {
@@ -452,7 +414,7 @@ DWORD OpenRegistryKey(HKEY RootKey, LPCSTR KeyName, BOOLEAN Create, HKEY* OutKey
     return Status;
 }
 
-DWORD WnbdRaiseLogLevel(USHORT LogLevel)
+DWORD WnbdRaiseDrvLogLevel(USHORT LogLevel)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
     DWORD dwLogLevel = (DWORD)LogLevel;
@@ -464,13 +426,18 @@ DWORD WnbdRaiseLogLevel(USHORT LogLevel)
     HKEY hKey = NULL;
     Status = OpenRegistryKey(HKEY_LOCAL_MACHINE, WNBD_REGISTRY_KEY,
                              TRUE, &hKey);
-    if (Status)
+    if (Status) {
         goto Exit;
+    }
 
     Status = RegSetValueExA(hKey, "DebugLogLevel", 0, REG_DWORD,
                             (LPBYTE)&dwLogLevel, sizeof(DWORD));
-    if (Status)
+    if (Status) {
+        LogError("Could not set registry value. "
+                 "Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
         goto Exit;
+    }
 
     Status = WnbdIoctlReloadConfig(Handle);
 
@@ -484,7 +451,7 @@ void WnbdClose(PWNBD_DEVICE Device)
     if (!Device)
         return;
 
-    LogDebug(Device, "Closing device");
+    LogDebug("Closing device");
     if (Device->Handle)
         CloseHandle(Device->Handle);
 
@@ -496,7 +463,7 @@ void WnbdClose(PWNBD_DEVICE Device)
 
 VOID WnbdSignalStopped(PWNBD_DEVICE Device)
 {
-    LogDebug(Device, "Marking device as stopped.");
+    LogDebug("Marking device as stopped.");
     if (Device)
         Device->Stopped = TRUE;
 }
@@ -518,7 +485,7 @@ DWORD WnbdStopDispatcher(PWNBD_DEVICE Device, PWNBD_REMOVE_OPTIONS RemoveOptions
     // the "Disconnect" request from the driver.
     DWORD Ret = 0;
 
-    LogDebug(Device, "Stopping dispatcher.");
+    LogDebug("Stopping dispatcher.");
     if (!InterlockedExchange8((CHAR*)&Device->Stopping, 1)) {
         Ret = WnbdRemove(Device, RemoveOptions);
     }
@@ -551,7 +518,6 @@ DWORD WnbdSendResponse(
     UINT32 DataBufferSize)
 {
     LogDebug(
-        Device,
         "Sending response: [%s] : (SS:%u, SK:%u, ASC:%u, I:%llu) # %llx "
         "@ %p~0x%x.",
         WnbdRequestTypeToStr(Response->RequestType),
@@ -581,7 +547,7 @@ DWORD WnbdSendResponse(
     }
 
     if (!WnbdIsRunning(Device)) {
-        LogDebug(Device, "Device disconnected, cannot send response.");
+        LogDebug("Device disconnected, cannot send response.");
         return ERROR_PIPE_NOT_CONNECTED;
     }
 
@@ -608,13 +574,13 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
 
     switch (Request->RequestType) {
         case WnbdReqTypeDisconnect:
-            LogInfo(Device, "Received disconnect request.");
+            LogInfo("Received disconnect request.");
             WnbdSignalStopped(Device);
             break;
         case WnbdReqTypeRead:
             if (!Device->Interface->Read)
                 goto Unsupported;
-            LogDebug(Device, "Dispatching READ @ 0x%llx~0x%x # %llx.",
+            LogDebug("Dispatching READ @ 0x%llx~0x%x # %llx.",
                      Request->Cmd.Read.BlockAddress,
                      Request->Cmd.Read.BlockCount,
                      Request->RequestHandle);
@@ -633,7 +599,7 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
         case WnbdReqTypeWrite:
             if (!Device->Interface->Write)
                 goto Unsupported;
-            LogDebug(Device, "Dispatching WRITE @ 0x%llx~0x%x # %llx." ,
+            LogDebug("Dispatching WRITE @ 0x%llx~0x%x # %llx." ,
                      Request->Cmd.Write.BlockAddress,
                      Request->Cmd.Write.BlockCount,
                      Request->RequestHandle);
@@ -653,7 +619,7 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
             // TODO: should it be a no-op when unsupported?
             if (!Device->Interface->Flush || !Device->Properties.Flags.FlushSupported)
                 goto Unsupported;
-            LogDebug(Device, "Dispatching FLUSH @ 0x%llx~0x%x # %llx." ,
+            LogDebug("Dispatching FLUSH @ 0x%llx~0x%x # %llx." ,
                      Request->Cmd.Flush.BlockAddress,
                      Request->Cmd.Flush.BlockCount,
                      Request->RequestHandle);
@@ -679,7 +645,7 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
                 goto Unsupported;
             }
 
-            LogDebug(Device, "Dispatching UNMAP # %llx.",
+            LogDebug("Dispatching UNMAP # %llx.",
                      Request->RequestHandle);
             Device->Interface->Unmap(
                 Device,
@@ -688,7 +654,7 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
                 Request->Cmd.Unmap.Count);
         default:
         Unsupported:
-            LogDebug(Device, "Received unsupported command. "
+            LogDebug("Received unsupported command. "
                      "Request type: %d, request handle: %llu.",
                      Request->RequestType,
                      Request->RequestHandle);
@@ -729,11 +695,6 @@ DWORD WnbdDispatcherLoop(PWNBD_DEVICE Device)
             Buffer,
             BufferSize);
         if (ErrorCode) {
-            LogWarning(Device,
-                       "Could not fetch request. Error: %d. "
-                       "Buffer: %p, buffer size: %d, connection id: %llu.",
-                       ErrorCode, Buffer, BufferSize,
-                       Device->ConnectionInfo.ConnectionId);
             break;
         }
         WnbdHandleRequest(Device, &Request, Buffer);
@@ -752,15 +713,15 @@ DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
     DWORD ErrorCode = ERROR_SUCCESS;
     if (ThreadCount < WNBD_MIN_DISPATCHER_THREAD_COUNT ||
        ThreadCount > WNBD_MAX_DISPATCHER_THREAD_COUNT) {
-        LogError(Device, "Invalid number of dispatcher threads: %u",
+        LogError("Invalid number of dispatcher threads: %u",
                  ThreadCount);
         return ERROR_INVALID_PARAMETER;
     }
 
-    LogDebug(Device, "Starting dispatcher. Threads: %u", ThreadCount);
+    LogDebug("Starting dispatcher. Threads: %u", ThreadCount);
     Device->DispatcherThreads = (HANDLE*)malloc(sizeof(HANDLE) * ThreadCount);
     if (!Device->DispatcherThreads) {
-        LogError(Device, "Could not allocate memory.");
+        LogError("Could not allocate memory.");
         return ERROR_OUTOFMEMORY;
     }
 
@@ -773,8 +734,10 @@ DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
             0, 0, (LPTHREAD_START_ROUTINE )WnbdDispatcherLoop, Device, 0, 0);
         if (!Thread)
         {
-            LogError(Device, "Could not start dispatcher thread.");
             ErrorCode = GetLastError();
+            LogError("Could not start dispatcher thread. "
+                     "Error: %d. Error message: %s.",
+                     ErrorCode, win32_strerror(ErrorCode).c_str());
             WNBD_REMOVE_OPTIONS RemoveOptions = {0};
             RemoveOptions.Flags.HardRemove = TRUE;
             WnbdStopDispatcher(Device, &RemoveOptions);
@@ -790,15 +753,15 @@ DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
 
 DWORD WnbdWaitDispatcher(PWNBD_DEVICE Device)
 {
-    LogDebug(Device, "Waiting for the dispatcher to stop.");
+    LogDebug("Waiting for the dispatcher to stop.");
     if (!Device->Started) {
-        LogError(Device, "The dispatcher hasn't been started.");
+        LogError("The dispatcher hasn't been started.");
         return ERROR_PIPE_NOT_CONNECTED;
     }
 
     if (!Device->DispatcherThreads || !Device->DispatcherThreadsCount ||
             !WnbdIsRunning(Device)) {
-        LogInfo(Device, "The dispatcher isn't running.");
+        LogInfo("The dispatcher isn't running.");
         return 0;
     }
 
@@ -810,11 +773,11 @@ DWORD WnbdWaitDispatcher(PWNBD_DEVICE Device)
 
     if (Ret == WAIT_FAILED) {
         DWORD Err = GetLastError();
-        LogError(Device, "Failed waiting for the dispatcher. Error: %d.", Err);
+        LogError("Failed waiting for the dispatcher. Error: %d.", Err);
         return Err;
     }
 
-    LogDebug(Device, "The dispatcher stopped.");
+    LogDebug("The dispatcher stopped.");
     return 0;
 }
 
@@ -826,5 +789,6 @@ HRESULT WnbdGetDiskNumberBySerialNumber(
 }
 
 HRESULT WnbdCoInitializeBasic() {
+    LogDebug("Initializing COM.");
     return CoInitializeBasic();
 }
