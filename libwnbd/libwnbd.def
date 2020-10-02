@@ -9,7 +9,9 @@ EXPORTS
     WnbdShow
     WnbdGetUserspaceStats
     WnbdGetDriverStats
-    WnbdRaiseLogLevel
+    WnbdSetLogger
+    WnbdSetLogLevel
+    WnbdRaiseDrvLogLevel
     WnbdSetSenseEx
     WnbdSetSense
     WnbdStartDispatcher

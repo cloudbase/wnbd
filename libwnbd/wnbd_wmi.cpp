@@ -5,6 +5,8 @@
  */
 
 #include "wnbd_wmi.h"
+#include "wnbd_log.h"
+#include "utils.h"
 
 #pragma comment(lib, "comsuppd.lib")
 #pragma comment(lib, "comsuppwd.lib")
@@ -13,8 +15,10 @@
 HRESULT CoInitializeBasic()
 {
     HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("CoInitializeEx failed. HRESULT: %d", hres);
         return hres;
+    }
 
     hres = CoInitializeSecurity(
         NULL, -1, NULL, NULL,
@@ -24,6 +28,7 @@ HRESULT CoInitializeBasic()
         EOAC_NONE,
         NULL);
     if (FAILED(hres)) {
+        LogError("CoInitializeSecurity failed. HRESULT: %d", hres);
         CoUninitialize();
         return hres;
     }
@@ -53,19 +58,26 @@ HRESULT CreateWmiConnection(
     HRESULT hres = CoCreateInstance(
         CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
         IID_IWbemLocator, (LPVOID*)&Connection->WbemLoc);
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("CoCreateInstance failed. HRESULT: %d", hres);
         goto Exit;
+    }
 
     hres = Connection->WbemLoc->ConnectServer(
         _bstr_t(Namespace).GetBSTR(), NULL, NULL, NULL,
         WBEM_FLAG_CONNECT_USE_MAX_WAIT, NULL, NULL,
         &Connection->WbemSvc);
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("Could not connect to WMI service. HRESULT: %d", hres);
         goto Exit;
+    }
 
     hres = CoSetProxyBlanket(
         Connection->WbemSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL,
         RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE);
+    if (FAILED(hres)) {
+        LogError("CoSetProxyBlanket failed. HRESULT: %d", hres);
+    }
 
 Exit:
     if (FAILED(hres)) {
@@ -95,6 +107,10 @@ HRESULT GetPropertyStr(
     }
     VariantClear(&vtProp);
 
+    if (FAILED(hres)) {
+        LogDebug("Could not get WMI property: %s. HRESULT: %d",
+                 to_string(property), hres);
+    }
     return hres;
 }
 
@@ -119,6 +135,10 @@ HRESULT GetPropertyInt(
     }
     VariantClear(&vtProp);
 
+    if (FAILED(hres)) {
+        LogDebug("Could not get WMI property: %s. HRESULT: %d",
+                 to_string(property), hres);
+    }
     return hres;
 }
 
@@ -135,6 +155,7 @@ HRESULT GetDiskDrives(
     if (!Connection->WbemSvc) {
         hres = MAKE_HRESULT(SEVERITY_ERROR, FACILITY_WIN32,
                             ERROR_INVALID_HANDLE);
+        LogError("Invalid WMI connection.");
         return hres;
     }
 
@@ -147,8 +168,10 @@ HRESULT GetDiskDrives(
     SysFreeString(BstrWql);
     SysFreeString(BstrQuery);
 
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("WMI query failed.");
         goto Exit;
+    }
 
     while (Enumerator) {
         Enumerator->Next(WBEM_INFINITE, 1, &ClsObj, &ReturnedCount);
@@ -193,19 +216,29 @@ HRESULT GetDiskInfoBySerialNumber(
 
     WMI_CONNECTION Connection = { 0 };
     HRESULT hres = CreateWmiConnection(L"root\\cimv2", &Connection);
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("Could not create WMI connection");
         return hres;
+    }
 
     hres = GetDiskDrives(&Connection, Query, Disks);
     CloseWmiConnecton(&Connection);
 
-    if (FAILED(hres))
+    if (FAILED(hres)) {
+        LogError("Could not get WMI disk drives.");
         return hres;
+    }
 
     if (Disks.size() > 1) {
+        LogError(
+            "Found %d disks having the same serial number: %s. "
+            "This can lead to data loss.",
+            Disks.size(), to_string(SerialNumber));
         return MAKE_HRESULT(SEVERITY_ERROR, FACILITY_WIN32, ERROR_DUP_NAME);
     }
     if (Disks.size() < 1) {
+        LogDebug("Could not find device having serial: %s.",
+                 to_string(SerialNumber));
         return MAKE_HRESULT(SEVERITY_ERROR, FACILITY_WIN32, ERROR_FILE_NOT_FOUND);
     }
 

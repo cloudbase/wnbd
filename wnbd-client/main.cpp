@@ -29,7 +29,6 @@ int main(int argc, PCHAR argv[])
     // possible to avoid having issues because of uninitialized COM.
     HRESULT hres = WnbdCoInitializeBasic();
     if (FAILED(hres)) {
-        fprintf(stderr, "Failed to initialize COM. HRESULT: 0x%x.\n", hres);
         return HRESULT_CODE(hres);
     }
 

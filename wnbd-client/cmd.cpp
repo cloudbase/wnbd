@@ -62,16 +62,6 @@ void PrintLastError()
     PrintFormattedError(GetLastError());
 }
 
-// We're doing this check quite often, so this little helper comes in handy.
-void CheckOpenFailed(DWORD Status)
-{
-    if (Status == ERROR_OPEN_FAILED) {
-        fprintf(stderr,
-                "Could not open WNBD device. Make sure that the driver "
-                "is installed.\n");
-    }
-}
-
 DWORD CmdMap(
     PCHAR InstanceName,
     PCHAR HostName,
@@ -125,10 +115,6 @@ DWORD CmdMap(
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
     Status = WnbdIoctlCreate(WnbdDriverHandle, &Props, &ConnectionInfo);
-    if (Status) {
-        fprintf(stderr, "Could not create mapping.\n");
-        PrintFormattedError(Status);
-    }
 
     CloseHandle(WnbdDriverHandle);
     return Status;
@@ -145,11 +131,6 @@ DWORD CmdUnmap(PCHAR InstanceName, BOOLEAN HardRemove)
     RemoveOptions.SoftRemoveRetryIntervalMs = WNBD_DEFAULT_RM_RETRY_INTERVAL_MS;
 
     DWORD Status = WnbdRemoveEx(InstanceName, &RemoveOptions);
-    if (Status) {
-        CheckOpenFailed(Status);
-        fprintf(stderr, "Could not disconnect WNBD device.\n");
-        PrintFormattedError(Status);
-    }
     return Status;
 }
 
@@ -158,9 +139,6 @@ DWORD CmdStats(PCHAR InstanceName)
     WNBD_DRV_STATS Stats = {0};
     DWORD Status = WnbdGetDriverStats(InstanceName, &Stats);
     if (Status) {
-        CheckOpenFailed(Status);
-        fprintf(stderr, "Could not get IO stats.\n");
-        PrintFormattedError(Status);
         return Status;
     }
 
@@ -209,10 +187,6 @@ DWORD GetList(PWNBD_CONNECTION_LIST* ConnectionList)
     } while (CurrentBufferSize < BufferSize);
 
     if (Status) {
-        CheckOpenFailed(Status);
-        fprintf(stderr, "Could not get connection list.\n");
-        PrintFormattedError(Status);
-
         if (TempList)
             free(TempList);
     }
@@ -258,12 +232,7 @@ DWORD CmdList()
 
 DWORD CmdRaiseLogLevel(UINT32 LogLevel)
 {
-    DWORD Status = WnbdRaiseLogLevel(LogLevel);
-    if (Status) {
-        CheckOpenFailed(Status);
-        fprintf(stderr, "Could not get connection list.\n");
-        PrintFormattedError(Status);
-    }
+    DWORD Status = WnbdRaiseDrvLogLevel(LogLevel);
     return Status;
 }
 
@@ -276,11 +245,7 @@ DWORD CmdVersion() {
 
     Version = { 0 };
     DWORD Status = WnbdGetDriverVersion(&Version);
-    if (Status) {
-        fprintf(stderr, "Could not get WNBD driver version.\n");
-        PrintFormattedError(Status);
-    }
-    else {
+    if (!Status) {
         printf("wnbd.sys: %s\n", Version.Description);
     }
 

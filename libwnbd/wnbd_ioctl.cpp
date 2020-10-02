@@ -7,6 +7,8 @@
 #include <string.h>
 
 #include "wnbd.h"
+#include "wnbd_log.h"
+#include "utils.h"
 
 #pragma comment(lib, "Setupapi.lib")
 
@@ -92,7 +94,12 @@ Exit:
         *Handle = WnbdDriverHandle;
         *CMDeviceInstance = DevInfoData.DevInst;
     }
-
+    else {
+        LogError(
+            "Could not oped WNBD device. Please make sure that the "
+            "driver is installed. Error: %d. Error message: %s",
+            ErrorCode, win32_strerror(ErrorCode).c_str());
+    }
     return ErrorCode;
 }
 
@@ -127,11 +134,14 @@ DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
         STRING_OVERFLOWS(Properties->NbdProperties.Hostname, WNBD_MAX_NAME_LENGTH) ||
         STRING_OVERFLOWS(Properties->NbdProperties.ExportName, WNBD_MAX_NAME_LENGTH))
     {
+        LogError("Invalid WNBD properties. Buffer overflow.");
         return ERROR_BUFFER_OVERFLOW;
     }
 
-    if (!Properties->InstanceName)
+    if (!Properties->InstanceName) {
+        LogError("Missing instance name.");
         return ERROR_INVALID_PARAMETER;
+    }
 
     DWORD BytesReturned = 0;
     WNBD_IOCTL_CREATE_COMMAND Command = { 0 };
@@ -145,6 +155,8 @@ DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
         &BytesReturned, NULL);
     if (!DevStatus) {
         ErrorCode = GetLastError();
+        LogError("Could not create WNBD disk. Error: %d. Error message: %s",
+                 ErrorCode, win32_strerror(ErrorCode).c_str());
     }
 
     return ErrorCode;
@@ -157,11 +169,14 @@ DWORD WnbdIoctlRemove(
     DWORD Status = ERROR_SUCCESS;
 
     if (STRING_OVERFLOWS(InstanceName, WNBD_MAX_NAME_LENGTH)) {
+        LogError("Invalid instance name. Buffer overflow.");
         return ERROR_BUFFER_OVERFLOW;
     }
 
-    if (!InstanceName)
+    if (!InstanceName) {
+        LogError("Missing instance name.");
         return ERROR_INVALID_PARAMETER;
+    }
 
     DWORD BytesReturned = 0;
     WNBD_IOCTL_REMOVE_COMMAND Command = { 0 };
@@ -179,6 +194,13 @@ DWORD WnbdIoctlRemove(
         Status = GetLastError();
     }
 
+    if (Status == ERROR_FILE_NOT_FOUND) {
+        LogDebug("Could not find the disk to be removed.");
+    }
+    else {
+        LogError("Could not remove WNBD disk. Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
+    }
     return Status;
 }
 
@@ -206,6 +228,12 @@ DWORD WnbdIoctlFetchRequest(
         &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
+        LogWarning(
+            "Could not fetch request. Error: %d. "
+            "Buffer: %p, buffer size: %d, connection id: %llu. "
+            "Error message: %s",
+            Status, DataBuffer, DataBufferSize, ConnectionId,
+            win32_strerror(Status).c_str());
     }
     else {
         memcpy(Request, &Command.Request, sizeof(WNBD_IO_REQUEST));
@@ -239,6 +267,10 @@ DWORD WnbdIoctlSendResponse(
 
     if (!DevStatus) {
         Status = GetLastError();
+        LogWarning(
+            "Could not send response. Error: %d. "
+            "Connection id: %llu. Error message: %s",
+            Status, ConnectionId, win32_strerror(Status).c_str());
     }
 
     return Status;
@@ -259,6 +291,8 @@ DWORD WnbdIoctlList(
 
     if (!DevStatus) {
         Status = GetLastError();
+        LogError("Could not get disk list. Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
     }
 
     return Status;
@@ -281,6 +315,13 @@ DWORD WnbdIoctlStats(HANDLE Device, const char* InstanceName,
 
     if (!DevStatus) {
         Status = GetLastError();
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogInfo("Could not find the specified disk.");
+        }
+        else {
+            LogError("Could not get disk stats. Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
     }
 
     return Status;
@@ -303,6 +344,13 @@ DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
 
     if (!DevStatus) {
         Status = GetLastError();
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogInfo("Could not find the specified disk.");
+        }
+        else {
+            LogError("Could not get disk details. Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
     }
 
     return Status;
@@ -311,31 +359,39 @@ DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
 DWORD WnbdIoctlReloadConfig(HANDLE Device)
 {
     DWORD BytesReturned = 0;
+    DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_RELOAD_CONFIG_COMMAND Command = { IOCTL_WNBD_RELOAD_CONFIG };
 
     BOOL DevStatus = DeviceIoControl(
         Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
-        return GetLastError();
+        Status = GetLastError();
+        LogError("Could not get reload driver config. "
+                 "Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
     }
 
-    return ERROR_SUCCESS;
+    return Status;
 }
 
 DWORD WnbdIoctlPing(HANDLE Device)
 {
     DWORD BytesReturned = 0;
+    DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_PING_COMMAND Command = { IOCTL_WNBD_PING };
 
     BOOL DevStatus = DeviceIoControl(
         Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
-        return GetLastError();
+        Status = GetLastError();
+        LogError("Failed while pinging driver."
+                 "Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
     }
 
-    return ERROR_SUCCESS;
+    return Status;
 }
 
 DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version)
@@ -353,6 +409,9 @@ DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version)
 
     if (!DevStatus) {
         Status = GetLastError();
+        LogError("Could not get driver version. "
+                 "Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
     }
 
     return Status;
