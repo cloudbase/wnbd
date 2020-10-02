@@ -97,10 +97,10 @@ NTSTATUS WnbdDispatchRequest(
 
     // We're looping through the requests until we manage to dispatch one.
     // Unsupported requests as well as most errors will be hidden from the caller.
-    while (!Device->HardTerminateDevice) {
+    while (!Device->HardRemoveDevice) {
         PVOID WaitObjects[2];
         WaitObjects[0] = &Device->DeviceEvent;
-        WaitObjects[1] = &Device->TerminateEvent;
+        WaitObjects[1] = &Device->DeviceRemovalEvent;
         NTSTATUS WaitResult = KeWaitForMultipleObjects(
             2, WaitObjects, WaitAny, Executive, KernelMode,
             TRUE, NULL, NULL);
@@ -111,7 +111,7 @@ NTSTATUS WnbdDispatchRequest(
             // This happens when the calling thread is terminating.
             // TODO: ensure that we haven't been alerted for some other reason.
             WNBD_LOG_INFO("Wait alterted, terminating.");
-            KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+            KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
             break;
         }
 
@@ -119,7 +119,7 @@ NTSTATUS WnbdDispatchRequest(
             &Device->PendingReqListHead,
             &Device->PendingReqListLock);
 
-        if (Device->HardTerminateDevice) {
+        if (Device->HardRemoveDevice) {
             break;
         }
         if (!RequestEntry) {
@@ -210,7 +210,7 @@ Exit:
         IoFreeMdl(Mdl);
     }
 
-    if (Device->HardTerminateDevice) {
+    if (Device->HardRemoveDevice) {
         Request->RequestType = WnbdReqTypeDisconnect;
         Status = 0;
     }

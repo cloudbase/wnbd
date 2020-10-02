@@ -57,8 +57,8 @@ typedef struct _WNBD_SCSI_DEVICE
     PVOID                       DeviceRequestThread;
     PVOID                       DeviceReplyThread;
     PVOID                       DeviceMonitorThread;
-    BOOLEAN                     HardTerminateDevice;
-    KEVENT                      TerminateEvent;
+    BOOLEAN                     HardRemoveDevice;
+    KEVENT                      DeviceRemovalEvent;
     // The rundown protection provides device reference counting, preventing
     // it from being deallocated while still being accessed. This is
     // especially important for IO dispatching.

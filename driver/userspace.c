@@ -136,8 +136,8 @@ Exit:
         ZwClose(request_thread_handle);
     if (reply_thread_handle)
         ZwClose(reply_thread_handle);
-    Device->HardTerminateDevice = TRUE;
-    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    Device->HardRemoveDevice = TRUE;
+    KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
 
     WNBD_LOG_LOUD(": Exit");
     return Status;
@@ -153,15 +153,15 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     PWNBD_EXTENSION DeviceExtension = Device->DeviceExtension;
     PVOID WaitObjects[2];
     WaitObjects[0] = &DeviceExtension->GlobalDeviceRemovalEvent;
-    WaitObjects[1] = &Device->TerminateEvent;
+    WaitObjects[1] = &Device->DeviceRemovalEvent;
     KeWaitForMultipleObjects(
         2, WaitObjects, WaitAny, Executive, KernelMode,
         FALSE, NULL, NULL);
 
     // Soft termination is currently handled by the userspace,
     // which notifies the PnP stack.
-    Device->HardTerminateDevice = TRUE;
-    KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+    Device->HardRemoveDevice = TRUE;
+    KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
     LARGE_INTEGER Timeout;
     // TODO: consider making this configurable, currently 120s.
     // TODO: move this timeout to ksocket.
@@ -236,7 +236,7 @@ WnbdInitializeDevice(_In_ PWNBD_SCSI_DEVICE Device, BOOLEAN UseNbd)
     KeInitializeSpinLock(&Device->SubmittedReqListLock);
     ExInitializeRundownProtection(&Device->RundownProtection);
     KeInitializeSemaphore(&Device->DeviceEvent, 0, 1 << 30);
-    KeInitializeEvent(&Device->TerminateEvent, NotificationEvent, FALSE);
+    KeInitializeEvent(&Device->DeviceRemovalEvent, NotificationEvent, FALSE);
     // TODO: check if this is still needed.
     Status = ExInitializeResourceLite(&Device->SocketLock);
     if (!NT_SUCCESS(Status)) {

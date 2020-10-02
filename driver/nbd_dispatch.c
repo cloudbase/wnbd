@@ -109,7 +109,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_SCSI_DEVICE Device)
             }
         case NBD_CMD_READ:
         case NBD_CMD_FLUSH:
-            if (Device->HardTerminateDevice) {
+            if (Device->HardRemoveDevice) {
                 return;
             }
             ExInterlockedInsertTailList(
@@ -162,21 +162,21 @@ NbdDeviceRequestThread(_In_ PVOID Context)
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
     PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
-    while (!Device->HardTerminateDevice) {
+    while (!Device->HardRemoveDevice) {
         PVOID WaitObjects[2];
         WaitObjects[0] = &Device->DeviceEvent;
-        WaitObjects[1] = &Device->TerminateEvent;
+        WaitObjects[1] = &Device->DeviceRemovalEvent;
         NTSTATUS WaitResult = KeWaitForMultipleObjects(
             2, WaitObjects, WaitAny, Executive, KernelMode,
             TRUE, NULL, NULL);
-        if (STATUS_WAIT_1 == WaitResult || Device->HardTerminateDevice)
+        if (STATUS_WAIT_1 == WaitResult || Device->HardRemoveDevice)
             break;
 
         if (STATUS_ALERTED == WaitResult) {
             // This happens when the calling thread is terminating.
             // TODO: ensure that we haven't been alerted for some other reason.
             WNBD_LOG_INFO("Wait alterted, terminating.");
-            KeSetEvent(&Device->TerminateEvent, IO_NO_INCREMENT, FALSE);
+            KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
             break;
         }
 
@@ -196,7 +196,7 @@ NbdDeviceReplyThread(_In_ PVOID Context)
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
     PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
-    while (!Device->HardTerminateDevice) {
+    while (!Device->HardRemoveDevice) {
         NbdProcessDeviceThreadReplies(Device);
     }
 
