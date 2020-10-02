@@ -9,38 +9,6 @@
 
 #define CASE_STR(x) case x: return #x;
 
-// TODO: unused, remove this.
-PCHAR SRB_STATUS_STRINGS[] = {
-    (PCHAR)"SRB_STATUS_PENDING                  0x00",
-    (PCHAR)"SRB_STATUS_SUCCESS                  0x01",
-    (PCHAR)"SRB_STATUS_ABORTED                  0x02",
-    (PCHAR)"SRB_STATUS_ABORT_FAILED             0x03",
-    (PCHAR)"SRB_STATUS_ERROR                    0x04",
-    (PCHAR)"SRB_STATUS_BUSY                     0x05",
-    (PCHAR)"SRB_STATUS_INVALID_REQUEST          0x06",
-    (PCHAR)"SRB_STATUS_INVALID_PATH_ID          0x07",
-    (PCHAR)"SRB_STATUS_NO_DEVICE                0x08",
-    (PCHAR)"SRB_STATUS_TIMEOUT                  0x09",
-    (PCHAR)"SRB_STATUS_SELECTION_TIMEOUT        0x0A",
-    (PCHAR)"SRB_STATUS_COMMAND_TIMEOUT          0x0B",
-    (PCHAR)"SRB_STATUS_MESSAGE_REJECTED         0x0D",
-    (PCHAR)"SRB_STATUS_BUS_RESET                0x0E",
-    (PCHAR)"SRB_STATUS_PARITY_ERROR             0x0F",
-    (PCHAR)"SRB_STATUS_REQUEST_SENSE_FAILED     0x10",
-    (PCHAR)"SRB_STATUS_NO_HBA                   0x11",
-    (PCHAR)"SRB_STATUS_DATA_OVERRUN             0x12",
-    (PCHAR)"SRB_STATUS_UNEXPECTED_BUS_FREE      0x13",
-    (PCHAR)"SRB_STATUS_PHASE_SEQUENCE_FAILURE   0x14",
-    (PCHAR)"SRB_STATUS_BAD_SRB_BLOCK_LENGTH     0x15",
-    (PCHAR)"SRB_STATUS_REQUEST_FLUSHED          0x16",
-    (PCHAR)"SRB_STATUS_INVALID_LUN              0x20",
-    (PCHAR)"SRB_STATUS_INVALID_TARGET_ID        0x21",
-    (PCHAR)"SRB_STATUS_BAD_FUNCTION             0x22",
-    (PCHAR)"SRB_STATUS_ERROR_RECOVERY           0x23",
-    (PCHAR)"SRB_STATUS_NOT_POWERED              0x24",
-    (PCHAR)"SRB_STATUS_LINK_DOWN                0x25"
-};
-
 _Use_decl_annotations_
 PCHAR
 WnbdToStringSrbFunction(UCHAR SrbFunction)
@@ -122,5 +90,55 @@ WnbdToStringSrbStatus(UCHAR SrbStatus)
 #endif
     default:
         return "UNKNOWN_SRB_STATUS";
+    }
+}
+
+_Use_decl_annotations_
+PCHAR
+WnbdToStringPnpMinorFunction(UCHAR PnpMinorFunction)
+{
+    switch (PnpMinorFunction) {
+    CASE_STR(IRP_MN_START_DEVICE)
+    CASE_STR(IRP_MN_QUERY_REMOVE_DEVICE)
+    CASE_STR(IRP_MN_REMOVE_DEVICE)
+    CASE_STR(IRP_MN_CANCEL_REMOVE_DEVICE)
+    CASE_STR(IRP_MN_STOP_DEVICE)
+    CASE_STR(IRP_MN_QUERY_STOP_DEVICE)
+    CASE_STR(IRP_MN_CANCEL_STOP_DEVICE)
+    CASE_STR(IRP_MN_QUERY_DEVICE_RELATIONS)
+    CASE_STR(IRP_MN_QUERY_INTERFACE)
+    CASE_STR(IRP_MN_QUERY_CAPABILITIES)
+    CASE_STR(IRP_MN_QUERY_RESOURCES)
+    CASE_STR(IRP_MN_QUERY_RESOURCE_REQUIREMENTS)
+    CASE_STR(IRP_MN_QUERY_DEVICE_TEXT)
+    CASE_STR(IRP_MN_FILTER_RESOURCE_REQUIREMENTS)
+    CASE_STR(IRP_MN_READ_CONFIG)
+    CASE_STR(IRP_MN_WRITE_CONFIG)
+    CASE_STR(IRP_MN_EJECT)
+    CASE_STR(IRP_MN_SET_LOCK)
+    CASE_STR(IRP_MN_QUERY_ID)
+    CASE_STR(IRP_MN_QUERY_PNP_DEVICE_STATE)
+    CASE_STR(IRP_MN_QUERY_BUS_INFORMATION)
+    CASE_STR(IRP_MN_DEVICE_USAGE_NOTIFICATION)
+    CASE_STR(IRP_MN_SURPRISE_REMOVAL)
+    CASE_STR(IRP_MN_DEVICE_ENUMERATED)
+    default:
+        return "IRP_MN_UNKNOWN";
+    }
+}
+
+_Use_decl_annotations_
+PCHAR
+WnbdToStringScsiAdapterCtrlType(UCHAR ControlType)
+{
+    switch (ControlType){
+    CASE_STR(ScsiQuerySupportedControlTypes)
+    CASE_STR(ScsiStopAdapter)
+    CASE_STR(ScsiRestartAdapter)
+    CASE_STR(ScsiSetBootConfig)
+    CASE_STR(ScsiSetRunningConfig)
+    CASE_STR(ScsiAdapterControlMax)
+    default:
+        return "Unknown";
     }
 }

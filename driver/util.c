@@ -99,23 +99,41 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
 BOOLEAN
 WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device)
 {
-    // TODO: limit the scopes of critical regions.
     BOOLEAN Acquired = FALSE;
+    // TODO: limit the scope of critical regions.
+    if (!Device)
+        return Acquired;
 
-    KeEnterCriticalRegion();
-    if (Device)
-        Acquired = ExAcquireRundownProtection(&Device->RundownProtection);
-    KeLeaveCriticalRegion();
+    KIRQL Irql = KeGetCurrentIrql();
+    if (Irql <= APC_LEVEL) {
+        KeEnterCriticalRegion();
+    }
+
+    Acquired = ExAcquireRundownProtection(&Device->RundownProtection);
+
+    if (Irql <= APC_LEVEL) {
+        KeLeaveCriticalRegion();
+    }
+
     return Acquired;
 }
 
 VOID
 WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device)
 {
-    KeEnterCriticalRegion();
-    if (Device)
-        ExReleaseRundownProtection(&Device->RundownProtection);
-    KeLeaveCriticalRegion();
+    if (!Device)
+        return;
+
+    KIRQL Irql = KeGetCurrentIrql();
+    if (Irql <= APC_LEVEL) {
+        KeEnterCriticalRegion();
+    }
+
+    ExReleaseRundownProtection(&Device->RundownProtection);
+
+    if (Irql <= APC_LEVEL) {
+        KeLeaveCriticalRegion();
+    }
 }
 
 // The returned device must be subsequently relased using WnbdReleaseDevice,
@@ -389,4 +407,68 @@ VOID CompleteRequest(
     if (FreeElement) {
         ExFreePool(Element);
     }
+}
+
+VOID WnbdSendIoctl(
+    ULONG ControlCode,
+    PDEVICE_OBJECT DeviceObject,
+    PVOID InputBuffer,
+    ULONG InputBufferLength,
+    PVOID OutputBuffer,
+    ULONG OutputBufferLength,
+    PIO_STATUS_BLOCK IoStatus)
+{
+    ASSERT(!KeAreAllApcsDisabled());
+
+    KEVENT Event;
+    KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+    PIRP Irp = IoBuildDeviceIoControlRequest(
+        ControlCode,
+        DeviceObject,
+        InputBuffer,
+        InputBufferLength,
+        OutputBuffer,
+        OutputBufferLength,
+        FALSE,
+        &Event,
+        IoStatus);
+    if (!Irp)
+    {
+        IoStatus->Information = 0;
+        IoStatus->Status = STATUS_INSUFFICIENT_RESOURCES;
+        return;
+    }
+
+    NTSTATUS Result = IoCallDriver(DeviceObject, Irp);
+    if (NT_ERROR(Result))
+    {
+        IoStatus->Status = Result;
+        IoStatus->Information = 0;
+    }
+    if (STATUS_PENDING == Result) {
+        KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, 0);
+    }
+}
+
+NTSTATUS WnbdGetScsiAddress(
+    PDEVICE_OBJECT DeviceObject,
+    PSCSI_ADDRESS ScsiAddress)
+{
+    IO_STATUS_BLOCK IoStatus = { 0 };
+
+    RtlZeroMemory(ScsiAddress, sizeof(SCSI_ADDRESS));
+    WnbdSendIoctl(
+        IOCTL_SCSI_GET_ADDRESS,
+        DeviceObject,
+        0, 0,
+        ScsiAddress, sizeof(SCSI_ADDRESS),
+        &IoStatus);
+    if (!NT_SUCCESS(IoStatus.Status))
+        return IoStatus.Status;
+
+    if (IoStatus.Information < sizeof(ScsiAddress))
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+
+    return STATUS_SUCCESS;
 }
