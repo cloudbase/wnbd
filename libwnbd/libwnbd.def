@@ -24,9 +24,9 @@ EXPORTS
     WnbdGetDriverVersion
     WnbdGetLibVersion
 
-    WnbdOpenDevice
-    WnbdOpenDeviceEx
-    WnbdOpenCMDeviceInstance
+    WnbdOpenAdapter
+    WnbdOpenAdapterEx
+    WnbdOpenAdapterCMDeviceInstance
     WnbdIoctlPing
     WnbdIoctlCreate
     WnbdIoctlRemove

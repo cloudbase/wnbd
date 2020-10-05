@@ -15,21 +15,21 @@ DWORD WnbdCreate(
     const PWNBD_PROPERTIES Properties,
     const PWNBD_INTERFACE Interface,
     PVOID Context,
-    PWNBD_DEVICE* PDevice)
+    PWNBD_DISK* PDisk)
 {
     DWORD ErrorCode = ERROR_SUCCESS;
-    PWNBD_DEVICE Device = NULL;
+    PWNBD_DISK Disk = NULL;
 
-    Device = (PWNBD_DEVICE) calloc(1, sizeof(WNBD_DEVICE));
-    if (!Device) {
-        LogError("Failed to allocate %d bytes.", sizeof(WNBD_DEVICE));
+    Disk = (PWNBD_DISK) calloc(1, sizeof(WNBD_DISK));
+    if (!Disk) {
+        LogError("Failed to allocate %d bytes.", sizeof(WNBD_DISK));
         return ERROR_OUTOFMEMORY;
     }
 
-    Device->Context = Context;
-    Device->Interface = Interface;
-    Device->Properties = *Properties;
-    ErrorCode = WnbdOpenDevice(&Device->Handle);
+    Disk->Context = Context;
+    Disk->Interface = Interface;
+    Disk->Properties = *Properties;
+    ErrorCode = WnbdOpenAdapter(&Disk->Handle);
 
     LogDebug("Mapping device. Name=%s, Serial=%s, Owner=%s, "
              "BC=%llu, BS=%lu, RO=%u, Flush=%u, "
@@ -60,19 +60,19 @@ DWORD WnbdCreate(
     }
 
     ErrorCode = WnbdIoctlCreate(
-        Device->Handle, &Device->Properties, &Device->ConnectionInfo);
+        Disk->Handle, &Disk->Properties, &Disk->ConnectionInfo);
     if (ErrorCode) {
         goto Exit;
     }
 
     LogDebug("Mapped device. Connection id: %llu.",
-             Device->ConnectionInfo.ConnectionId);
+             Disk->ConnectionInfo.ConnectionId);
 
-    *PDevice = Device;
+    *PDisk = Disk;
 
 Exit:
     if (ErrorCode) {
-        WnbdClose(Device);
+        WnbdClose(Disk);
     }
 
     return ErrorCode;
@@ -138,7 +138,7 @@ DWORD GetCMDeviceInstanceByID(
     BOOLEAN MoreSiblings = TRUE;
     DEVINST AdapterDevInst = 0;
 
-    DWORD Status = WnbdOpenCMDeviceInstance(&AdapterDevInst);
+    DWORD Status = WnbdOpenAdapterCMDeviceInstance(&AdapterDevInst);
     if (Status) {
         return Status;
     }
@@ -205,20 +205,20 @@ DWORD WnbdPnpRemoveDevice(
 }
 
 DWORD WnbdRemove(
-    PWNBD_DEVICE Device,
+    PWNBD_DISK Disk,
     PWNBD_REMOVE_OPTIONS RemoveOptions)
 {
     // TODO: check for null pointers.
     DWORD ErrorCode = ERROR_SUCCESS;
 
     LogDebug("Unmapping device %s.",
-             Device->Properties.InstanceName);
-    if (!Device->Handle || Device->Handle == INVALID_HANDLE_VALUE) {
+             Disk->Properties.InstanceName);
+    if (!Disk->Handle || Disk->Handle == INVALID_HANDLE_VALUE) {
         LogDebug("WNBD device already removed.");
         return 0;
     }
 
-    return WnbdRemoveEx(Device->Properties.InstanceName, RemoveOptions);
+    return WnbdRemoveEx(Disk->Properties.InstanceName, RemoveOptions);
 }
 
 DWORD WnbdRemoveEx(
@@ -226,7 +226,7 @@ DWORD WnbdRemoveEx(
     PWNBD_REMOVE_OPTIONS RemoveOptions)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -240,14 +240,14 @@ DWORD WnbdRemoveEx(
         RemoveOptions = &DefaultRmOpt;
     }
 
-    BOOLEAN DeviceFound = FALSE;
+    BOOLEAN DiskFound = FALSE;
     if (!RemoveOptions->Flags.HardRemove) {
         WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
         Status = WnbdShow(InstanceName, &ConnectionInfo);
         if (Status) {
             return Status;
         }
-        DeviceFound = TRUE;
+        DiskFound = TRUE;
         // PnP subscribers are notified that the device is about to be removed
         // and can block the remove until ready.
         Status = WnbdPnpRemoveDevice(
@@ -272,7 +272,7 @@ DWORD WnbdRemoveEx(
     // We'll mask ERROR_FILE_NOT_FOUND errors that occur after actually
     // managing to locate the device. It might've been removed by the
     // PnP request.
-    if (DeviceFound && Status == ERROR_FILE_NOT_FOUND) {
+    if (DiskFound && Status == ERROR_FILE_NOT_FOUND) {
         Status = 0;
     }
 
@@ -284,7 +284,7 @@ DWORD WnbdList(
     PDWORD BufferSize)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -300,7 +300,7 @@ DWORD WnbdShow(
     PWNBD_CONNECTION_INFO ConnectionInfo)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -312,15 +312,15 @@ DWORD WnbdShow(
 }
 
 DWORD WnbdGetUserspaceStats(
-    PWNBD_DEVICE Device,
+    PWNBD_DISK Disk,
     PWNBD_USR_STATS Stats)
 {
-    if (!Device) {
+    if (!Disk) {
         LogError("No device specified.");
         return ERROR_INVALID_PARAMETER;
     }
 
-    memcpy(Stats, &Device->Stats, sizeof(WNBD_USR_STATS));
+    memcpy(Stats, &Disk->Stats, sizeof(WNBD_USR_STATS));
     return ERROR_SUCCESS;
 }
 
@@ -330,7 +330,7 @@ DWORD WnbdGetDriverStats(
     PWNBD_DRV_STATS Stats)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -360,7 +360,7 @@ DWORD WnbdGetLibVersion(PWNBD_VERSION Version)
 DWORD WnbdGetDriverVersion(PWNBD_VERSION Version)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -372,15 +372,15 @@ DWORD WnbdGetDriverVersion(PWNBD_VERSION Version)
 }
 
 DWORD WnbdGetConnectionInfo(
-    PWNBD_DEVICE Device,
+    PWNBD_DISK Disk,
     PWNBD_CONNECTION_INFO ConnectionInfo)
 {
-    if (!Device) {
+    if (!Disk) {
         LogError("No device specified.");
         return ERROR_INVALID_PARAMETER;
     }
 
-    memcpy(ConnectionInfo, &Device->ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
+    memcpy(ConnectionInfo, &Disk->ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
     return ERROR_SUCCESS;
 }
 
@@ -418,7 +418,7 @@ DWORD WnbdRaiseDrvLogLevel(USHORT LogLevel)
 {
     HANDLE Handle = INVALID_HANDLE_VALUE;
     DWORD dwLogLevel = (DWORD)LogLevel;
-    DWORD Status = WnbdOpenDevice(&Handle);
+    DWORD Status = WnbdOpenAdapter(&Handle);
     if (Status) {
         return ERROR_OPEN_FAILED;
     }
@@ -446,39 +446,39 @@ Exit:
     return Status;
 }
 
-void WnbdClose(PWNBD_DEVICE Device)
+void WnbdClose(PWNBD_DISK Disk)
 {
-    if (!Device)
+    if (!Disk)
         return;
 
     LogDebug("Closing device");
-    if (Device->Handle)
-        CloseHandle(Device->Handle);
+    if (Disk->Handle)
+        CloseHandle(Disk->Handle);
 
-    if (Device->DispatcherThreads)
-        free(Device->DispatcherThreads);
+    if (Disk->DispatcherThreads)
+        free(Disk->DispatcherThreads);
 
-    free(Device);
+    free(Disk);
 }
 
-VOID WnbdSignalStopped(PWNBD_DEVICE Device)
+VOID WnbdSignalStopped(PWNBD_DISK Disk)
 {
     LogDebug("Marking device as stopped.");
-    if (Device)
-        Device->Stopped = TRUE;
+    if (Disk)
+        Disk->Stopped = TRUE;
 }
 
-BOOLEAN WnbdIsStopped(PWNBD_DEVICE Device)
+BOOLEAN WnbdIsStopped(PWNBD_DISK Disk)
 {
-    return Device->Stopped;
+    return Disk->Stopped;
 }
 
-BOOLEAN WnbdIsRunning(PWNBD_DEVICE Device)
+BOOLEAN WnbdIsRunning(PWNBD_DISK Disk)
 {
-    return Device->Started && !WnbdIsStopped(Device);
+    return Disk->Started && !WnbdIsStopped(Disk);
 }
 
-DWORD WnbdStopDispatcher(PWNBD_DEVICE Device, PWNBD_REMOVE_OPTIONS RemoveOptions)
+DWORD WnbdStopDispatcher(PWNBD_DISK Disk, PWNBD_REMOVE_OPTIONS RemoveOptions)
 {
     // By not setting the "Stopped" event, we allow the driver to finish
     // pending IO requests, which we'll continue processing until getting
@@ -486,8 +486,8 @@ DWORD WnbdStopDispatcher(PWNBD_DEVICE Device, PWNBD_REMOVE_OPTIONS RemoveOptions
     DWORD Ret = 0;
 
     LogDebug("Stopping dispatcher.");
-    if (!InterlockedExchange8((CHAR*)&Device->Stopping, 1)) {
-        Ret = WnbdRemove(Device, RemoveOptions);
+    if (!InterlockedExchange8((CHAR*)&Disk->Stopping, 1)) {
+        Ret = WnbdRemove(Disk, RemoveOptions);
     }
 
     return Ret;
@@ -512,7 +512,7 @@ void WnbdSetSense(PWNBD_STATUS Status, UINT8 SenseKey, UINT8 Asc)
 }
 
 DWORD WnbdSendResponse(
-    PWNBD_DEVICE Device,
+    PWNBD_DISK Disk,
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
     UINT32 DataBufferSize)
@@ -530,115 +530,115 @@ DWORD WnbdSendResponse(
         DataBuffer,
         DataBufferSize);
 
-    InterlockedIncrement64((PLONG64)&Device->Stats.TotalReceivedReplies);
-    InterlockedDecrement64((PLONG64)&Device->Stats.PendingSubmittedRequests);
+    InterlockedIncrement64((PLONG64)&Disk->Stats.TotalReceivedReplies);
+    InterlockedDecrement64((PLONG64)&Disk->Stats.PendingSubmittedRequests);
 
     if (Response->Status.ScsiStatus) {
         switch(Response->RequestType) {
             case WnbdReqTypeRead:
-                InterlockedIncrement64((PLONG64)&Device->Stats.ReadErrors);
+                InterlockedIncrement64((PLONG64)&Disk->Stats.ReadErrors);
             case WnbdReqTypeWrite:
-                InterlockedIncrement64((PLONG64)&Device->Stats.WriteErrors);
+                InterlockedIncrement64((PLONG64)&Disk->Stats.WriteErrors);
             case WnbdReqTypeFlush:
-                InterlockedIncrement64((PLONG64)&Device->Stats.FlushErrors);
+                InterlockedIncrement64((PLONG64)&Disk->Stats.FlushErrors);
             case WnbdReqTypeUnmap:
-                InterlockedIncrement64((PLONG64)&Device->Stats.UnmapErrors);
+                InterlockedIncrement64((PLONG64)&Disk->Stats.UnmapErrors);
         }
     }
 
-    if (!WnbdIsRunning(Device)) {
-        LogDebug("Device disconnected, cannot send response.");
+    if (!WnbdIsRunning(Disk)) {
+        LogDebug("Disk disconnected, cannot send response.");
         return ERROR_PIPE_NOT_CONNECTED;
     }
 
-    InterlockedIncrement64((PLONG64)&Device->Stats.PendingReplies);
+    InterlockedIncrement64((PLONG64)&Disk->Stats.PendingReplies);
     DWORD Status = WnbdIoctlSendResponse(
-        Device->Handle,
-        Device->ConnectionInfo.ConnectionId,
+        Disk->Handle,
+        Disk->ConnectionInfo.ConnectionId,
         Response,
         DataBuffer,
         DataBufferSize);
-    InterlockedDecrement64((PLONG64)&Device->Stats.PendingReplies);
+    InterlockedDecrement64((PLONG64)&Disk->Stats.PendingReplies);
 
     return Status;
 }
 
-VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
+VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                        PVOID Buffer)
 {
     UINT8 AdditionalSenseCode = 0;
     BOOLEAN IsValid = TRUE;
 
-    InterlockedIncrement64((PLONG64)&Device->Stats.TotalReceivedRequests);
-    InterlockedIncrement64((PLONG64)&Device->Stats.UnsubmittedRequests);
+    InterlockedIncrement64((PLONG64)&Disk->Stats.TotalReceivedRequests);
+    InterlockedIncrement64((PLONG64)&Disk->Stats.UnsubmittedRequests);
 
     switch (Request->RequestType) {
         case WnbdReqTypeDisconnect:
             LogInfo("Received disconnect request.");
-            WnbdSignalStopped(Device);
+            WnbdSignalStopped(Disk);
             break;
         case WnbdReqTypeRead:
-            if (!Device->Interface->Read)
+            if (!Disk->Interface->Read)
                 goto Unsupported;
             LogDebug("Dispatching READ @ 0x%llx~0x%x # %llx.",
                      Request->Cmd.Read.BlockAddress,
                      Request->Cmd.Read.BlockCount,
                      Request->RequestHandle);
-            Device->Interface->Read(
-                Device,
+            Disk->Interface->Read(
+                Disk,
                 Request->RequestHandle,
                 Buffer,
                 Request->Cmd.Read.BlockAddress,
                 Request->Cmd.Read.BlockCount,
                 Request->Cmd.Read.ForceUnitAccess);
 
-            InterlockedIncrement64((PLONG64)&Device->Stats.TotalRWRequests);
-            InterlockedAdd64((PLONG64)&Device->Stats.TotalReadBlocks,
+            InterlockedIncrement64((PLONG64)&Disk->Stats.TotalRWRequests);
+            InterlockedAdd64((PLONG64)&Disk->Stats.TotalReadBlocks,
                              Request->Cmd.Read.BlockCount);
             break;
         case WnbdReqTypeWrite:
-            if (!Device->Interface->Write)
+            if (!Disk->Interface->Write)
                 goto Unsupported;
             LogDebug("Dispatching WRITE @ 0x%llx~0x%x # %llx." ,
                      Request->Cmd.Write.BlockAddress,
                      Request->Cmd.Write.BlockCount,
                      Request->RequestHandle);
-            Device->Interface->Write(
-                Device,
+            Disk->Interface->Write(
+                Disk,
                 Request->RequestHandle,
                 Buffer,
                 Request->Cmd.Write.BlockAddress,
                 Request->Cmd.Write.BlockCount,
                 Request->Cmd.Write.ForceUnitAccess);
 
-            InterlockedIncrement64((PLONG64)&Device->Stats.TotalRWRequests);
-            InterlockedAdd64((PLONG64)&Device->Stats.TotalWrittenBlocks,
+            InterlockedIncrement64((PLONG64)&Disk->Stats.TotalRWRequests);
+            InterlockedAdd64((PLONG64)&Disk->Stats.TotalWrittenBlocks,
                              Request->Cmd.Write.BlockCount);
             break;
         case WnbdReqTypeFlush:
             // TODO: should it be a no-op when unsupported?
-            if (!Device->Interface->Flush || !Device->Properties.Flags.FlushSupported)
+            if (!Disk->Interface->Flush || !Disk->Properties.Flags.FlushSupported)
                 goto Unsupported;
             LogDebug("Dispatching FLUSH @ 0x%llx~0x%x # %llx." ,
                      Request->Cmd.Flush.BlockAddress,
                      Request->Cmd.Flush.BlockCount,
                      Request->RequestHandle);
-            Device->Interface->Flush(
-                Device,
+            Disk->Interface->Flush(
+                Disk,
                 Request->RequestHandle,
                 Request->Cmd.Flush.BlockAddress,
                 Request->Cmd.Flush.BlockCount);
         case WnbdReqTypeUnmap:
-            if (!Device->Interface->Unmap || !Device->Properties.Flags.UnmapSupported)
+            if (!Disk->Interface->Unmap || !Disk->Properties.Flags.UnmapSupported)
                 goto Unsupported;
-            if (!Device->Properties.Flags.UnmapAnchorSupported &&
+            if (!Disk->Properties.Flags.UnmapAnchorSupported &&
                 Request->Cmd.Unmap.Anchor)
             {
                 AdditionalSenseCode = SCSI_ADSENSE_INVALID_CDB;
                 goto Unsupported;
             }
 
-            if (Device->Properties.MaxUnmapDescCount <=
+            if (Disk->Properties.MaxUnmapDescCount <=
                 Request->Cmd.Unmap.Count)
             {
                 AdditionalSenseCode = SCSI_ADSENSE_INVALID_FIELD_PARAMETER_LIST;
@@ -647,8 +647,8 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
 
             LogDebug("Dispatching UNMAP # %llx.",
                      Request->RequestHandle);
-            Device->Interface->Unmap(
-                Device,
+            Disk->Interface->Unmap(
+                Disk,
                 Request->RequestHandle,
                 (PWNBD_UNMAP_DESCRIPTOR)Buffer,
                 Request->Cmd.Unmap.Count);
@@ -667,48 +667,48 @@ VOID WnbdHandleRequest(PWNBD_DEVICE Device, PWNBD_IO_REQUEST Request,
             WnbdSetSense(&Response.Status,
                          SCSI_SENSE_ILLEGAL_REQUEST,
                          AdditionalSenseCode);
-            WnbdSendResponse(Device, &Response, NULL, 0);
+            WnbdSendResponse(Disk, &Response, NULL, 0);
             break;
     }
 
-    InterlockedDecrement64((PLONG64)&Device->Stats.UnsubmittedRequests);
+    InterlockedDecrement64((PLONG64)&Disk->Stats.UnsubmittedRequests);
     if (IsValid) {
-        InterlockedIncrement64((PLONG64)&Device->Stats.TotalSubmittedRequests);
-        InterlockedIncrement64((PLONG64)&Device->Stats.PendingSubmittedRequests);
+        InterlockedIncrement64((PLONG64)&Disk->Stats.TotalSubmittedRequests);
+        InterlockedIncrement64((PLONG64)&Disk->Stats.PendingSubmittedRequests);
     } else {
-        InterlockedIncrement64((PLONG64)&Device->Stats.InvalidRequests);
+        InterlockedIncrement64((PLONG64)&Disk->Stats.InvalidRequests);
     }
 }
 
-DWORD WnbdDispatcherLoop(PWNBD_DEVICE Device)
+DWORD WnbdDispatcherLoop(PWNBD_DISK Disk)
 {
     DWORD ErrorCode = 0;
     WNBD_IO_REQUEST Request;
     DWORD BufferSize = WNBD_DEFAULT_MAX_TRANSFER_LENGTH;
     PVOID Buffer = malloc(BufferSize);
 
-    while (WnbdIsRunning(Device)) {
+    while (WnbdIsRunning(Disk)) {
         ErrorCode = WnbdIoctlFetchRequest(
-            Device->Handle,
-            Device->ConnectionInfo.ConnectionId,
+            Disk->Handle,
+            Disk->ConnectionInfo.ConnectionId,
             &Request,
             Buffer,
             BufferSize);
         if (ErrorCode) {
             break;
         }
-        WnbdHandleRequest(Device, &Request, Buffer);
+        WnbdHandleRequest(Disk, &Request, Buffer);
     }
 
     WNBD_REMOVE_OPTIONS RemoveOptions = {0};
     RemoveOptions.Flags.HardRemove = TRUE;
-    WnbdStopDispatcher(Device, &RemoveOptions);
+    WnbdStopDispatcher(Disk, &RemoveOptions);
     free(Buffer);
 
     return ErrorCode;
 }
 
-DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
+DWORD WnbdStartDispatcher(PWNBD_DISK Disk, DWORD ThreadCount)
 {
     DWORD ErrorCode = ERROR_SUCCESS;
     if (ThreadCount < WNBD_MIN_DISPATCHER_THREAD_COUNT ||
@@ -719,19 +719,19 @@ DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
     }
 
     LogDebug("Starting dispatcher. Threads: %u", ThreadCount);
-    Device->DispatcherThreads = (HANDLE*)malloc(sizeof(HANDLE) * ThreadCount);
-    if (!Device->DispatcherThreads) {
+    Disk->DispatcherThreads = (HANDLE*)malloc(sizeof(HANDLE) * ThreadCount);
+    if (!Disk->DispatcherThreads) {
         LogError("Could not allocate memory.");
         return ERROR_OUTOFMEMORY;
     }
 
-    Device->Started = TRUE;
-    Device->DispatcherThreadsCount = 0;
+    Disk->Started = TRUE;
+    Disk->DispatcherThreadsCount = 0;
 
     for (DWORD i = 0; i < ThreadCount; i++)
     {
         HANDLE Thread = CreateThread(
-            0, 0, (LPTHREAD_START_ROUTINE )WnbdDispatcherLoop, Device, 0, 0);
+            0, 0, (LPTHREAD_START_ROUTINE )WnbdDispatcherLoop, Disk, 0, 0);
         if (!Thread)
         {
             ErrorCode = GetLastError();
@@ -740,34 +740,34 @@ DWORD WnbdStartDispatcher(PWNBD_DEVICE Device, DWORD ThreadCount)
                      ErrorCode, win32_strerror(ErrorCode).c_str());
             WNBD_REMOVE_OPTIONS RemoveOptions = {0};
             RemoveOptions.Flags.HardRemove = TRUE;
-            WnbdStopDispatcher(Device, &RemoveOptions);
-            WnbdWaitDispatcher(Device);
+            WnbdStopDispatcher(Disk, &RemoveOptions);
+            WnbdWaitDispatcher(Disk);
             break;
         }
-        Device->DispatcherThreads[Device->DispatcherThreadsCount] = Thread;
-        Device->DispatcherThreadsCount++;
+        Disk->DispatcherThreads[Disk->DispatcherThreadsCount] = Thread;
+        Disk->DispatcherThreadsCount++;
     }
 
     return ErrorCode;
 }
 
-DWORD WnbdWaitDispatcher(PWNBD_DEVICE Device)
+DWORD WnbdWaitDispatcher(PWNBD_DISK Disk)
 {
     LogDebug("Waiting for the dispatcher to stop.");
-    if (!Device->Started) {
+    if (!Disk->Started) {
         LogError("The dispatcher hasn't been started.");
         return ERROR_PIPE_NOT_CONNECTED;
     }
 
-    if (!Device->DispatcherThreads || !Device->DispatcherThreadsCount ||
-            !WnbdIsRunning(Device)) {
+    if (!Disk->DispatcherThreads || !Disk->DispatcherThreadsCount ||
+            !WnbdIsRunning(Disk)) {
         LogInfo("The dispatcher isn't running.");
         return 0;
     }
 
     DWORD Ret = WaitForMultipleObjects(
-        Device->DispatcherThreadsCount,
-        Device->DispatcherThreads,
+        Disk->DispatcherThreadsCount,
+        Disk->DispatcherThreads,
         TRUE, // WaitAll
         INFINITE);
 

@@ -15,7 +15,7 @@
 #define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
 
 // Open the WNBD SCSI adapter device.
-DWORD WnbdOpenDeviceEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
+DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
 {
     HDEVINFO DevInfo = { 0 };
     SP_DEVINFO_DATA DevInfoData = { 0 };
@@ -104,17 +104,17 @@ Exit:
 }
 
 // Open the WNBD SCSI adapter device.
-DWORD WnbdOpenDevice(PHANDLE Handle)
+DWORD WnbdOpenAdapter(PHANDLE Handle)
 {
     DEVINST DevInst = { 0 };
-    return WnbdOpenDeviceEx(Handle, &DevInst);
+    return WnbdOpenAdapterEx(Handle, &DevInst);
 }
 
 // Open the WNBD SCSI adapter device.
-DWORD WnbdOpenCMDeviceInstance(PDEVINST DeviceInstance)
+DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance)
 {
     HANDLE Handle;
-    DWORD Status = WnbdOpenDeviceEx(&Handle, DeviceInstance);
+    DWORD Status = WnbdOpenAdapterEx(&Handle, DeviceInstance);
 
     if (!Status) {
         CloseHandle(&Handle);
@@ -122,7 +122,7 @@ DWORD WnbdOpenCMDeviceInstance(PDEVINST DeviceInstance)
     return Status;
 }
 
-DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
+DWORD WnbdIoctlCreate(HANDLE Adapter, PWNBD_PROPERTIES Properties,
                       PWNBD_CONNECTION_INFO ConnectionInfo)
 {
     DWORD ErrorCode = ERROR_SUCCESS;
@@ -150,7 +150,7 @@ DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
     memcpy(&Command.Properties, Properties, sizeof(WNBD_PROPERTIES));
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), ConnectionInfo, sizeof(WNBD_CONNECTION_INFO),
         &BytesReturned, NULL);
     if (!DevStatus) {
@@ -163,7 +163,7 @@ DWORD WnbdIoctlCreate(HANDLE Device, PWNBD_PROPERTIES Properties,
 }
 
 DWORD WnbdIoctlRemove(
-    HANDLE Device, const char* InstanceName,
+    HANDLE Adapter, const char* InstanceName,
     PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions)
 {
     DWORD Status = ERROR_SUCCESS;
@@ -188,7 +188,7 @@ DWORD WnbdIoctlRemove(
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
@@ -205,7 +205,7 @@ DWORD WnbdIoctlRemove(
 }
 
 DWORD WnbdIoctlFetchRequest(
-    HANDLE Device,
+    HANDLE Adapter,
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_REQUEST Request,
     PVOID DataBuffer,
@@ -222,7 +222,7 @@ DWORD WnbdIoctlFetchRequest(
     Command.DataBufferSize = DataBufferSize;
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND),
         &Command, sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND),
         &BytesReturned, NULL);
@@ -243,7 +243,7 @@ DWORD WnbdIoctlFetchRequest(
 }
 
 DWORD WnbdIoctlSendResponse(
-    HANDLE Device,
+    HANDLE Adapter,
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
@@ -261,7 +261,7 @@ DWORD WnbdIoctlSendResponse(
     memcpy(&Command.Response, Response, sizeof(WNBD_IO_RESPONSE));
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(WNBD_IOCTL_SEND_RSP_COMMAND),
         NULL, 0, &BytesReturned, NULL);
 
@@ -277,7 +277,7 @@ DWORD WnbdIoctlSendResponse(
 }
 
 DWORD WnbdIoctlList(
-    HANDLE Device,
+    HANDLE Adapter,
     PWNBD_CONNECTION_LIST ConnectionList,
     PDWORD BufferSize)
 {
@@ -285,7 +285,7 @@ DWORD WnbdIoctlList(
     WNBD_IOCTL_LIST_COMMAND Command = { IOCTL_WNBD_LIST };
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), ConnectionList,
         *BufferSize, BufferSize, NULL);
 
@@ -298,7 +298,7 @@ DWORD WnbdIoctlList(
     return Status;
 }
 
-DWORD WnbdIoctlStats(HANDLE Device, const char* InstanceName,
+DWORD WnbdIoctlStats(HANDLE Adapter, const char* InstanceName,
                      PWNBD_DRV_STATS Stats)
 {
     DWORD Status = ERROR_SUCCESS;
@@ -309,7 +309,7 @@ DWORD WnbdIoctlStats(HANDLE Device, const char* InstanceName,
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         Stats, sizeof(WNBD_DRV_STATS), &BytesReturned, NULL);
 
@@ -327,7 +327,7 @@ DWORD WnbdIoctlStats(HANDLE Device, const char* InstanceName,
     return Status;
 }
 
-DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
+DWORD WnbdIoctlShow(HANDLE Adapter, const char* InstanceName,
                     PWNBD_CONNECTION_INFO ConnectionInfo)
 {
     DWORD Status = ERROR_SUCCESS;
@@ -338,7 +338,7 @@ DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         ConnectionInfo, sizeof(WNBD_CONNECTION_INFO), &BytesReturned, NULL);
 
@@ -356,14 +356,14 @@ DWORD WnbdIoctlShow(HANDLE Device, const char* InstanceName,
     return Status;
 }
 
-DWORD WnbdIoctlReloadConfig(HANDLE Device)
+DWORD WnbdIoctlReloadConfig(HANDLE Adapter)
 {
     DWORD BytesReturned = 0;
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_RELOAD_CONFIG_COMMAND Command = { IOCTL_WNBD_RELOAD_CONFIG };
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
@@ -375,14 +375,14 @@ DWORD WnbdIoctlReloadConfig(HANDLE Device)
     return Status;
 }
 
-DWORD WnbdIoctlPing(HANDLE Device)
+DWORD WnbdIoctlPing(HANDLE Adapter)
 {
     DWORD BytesReturned = 0;
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_PING_COMMAND Command = { IOCTL_WNBD_PING };
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
@@ -394,7 +394,7 @@ DWORD WnbdIoctlPing(HANDLE Device)
     return Status;
 }
 
-DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version)
+DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -403,7 +403,7 @@ DWORD WnbdIoctlVersion(HANDLE Device, PWNBD_VERSION Version)
     Command.IoControlCode = IOCTL_WNBD_VERSION;
 
     BOOL DevStatus = DeviceIoControl(
-        Device, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         Version, sizeof(WNBD_VERSION), &BytesReturned, NULL);
 

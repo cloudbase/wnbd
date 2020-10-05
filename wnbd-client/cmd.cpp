@@ -83,7 +83,7 @@ DWORD CmdMap(
 
     WNBD_PROPERTIES Props = { 0 };
     HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenDevice(&WnbdDriverHandle);
+    DWORD Status = WnbdOpenAdapter(&WnbdDriverHandle);
     if (Status) {
         fprintf(
             stderr,
@@ -142,7 +142,7 @@ DWORD CmdStats(PCHAR InstanceName)
         return Status;
     }
 
-    printf("Device stats:\n");
+    printf("Disk stats:\n");
     printf("TotalReceivedIORequests: %llu\n", Stats.TotalReceivedIORequests);
     printf("TotalSubmittedIORequests: %llu\n", Stats.TotalSubmittedIORequests);
     printf("TotalReceivedIOReplies: %llu\n", Stats.TotalReceivedIOReplies);
