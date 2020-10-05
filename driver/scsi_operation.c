@@ -14,7 +14,7 @@
 #include "util.h"
 
 UCHAR
-WnbdReadCapacity(_In_ PWNBD_SCSI_DEVICE Device,
+WnbdReadCapacity(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ PSCSI_REQUEST_BLOCK Srb,
                  _In_ PCDB Cdb,
                  _In_ UINT BlockSize,
@@ -161,7 +161,7 @@ WnbdSetVpdSerialNumber(_In_ PVOID Data,
 
 VOID
 WnbdSetVpdBlockLimits(_In_ PVOID Data,
-                      _In_ PWNBD_SCSI_DEVICE Device,
+                      _In_ PWNBD_DISK_DEVICE Device,
                       _In_ PSCSI_REQUEST_BLOCK Srb,
                       _In_ UINT32 MaximumTransferLength)
 {
@@ -199,7 +199,7 @@ WnbdSetVpdBlockLimits(_In_ PVOID Data,
 VOID
 WnbdSetVpdLogicalBlockProvisioning(
     _In_ PVOID Data,
-    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSCSI_REQUEST_BLOCK Srb)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -226,7 +226,7 @@ WnbdSetVpdLogicalBlockProvisioning(
 VOID
 WnbdSetVpdBlockDeviceCharacteristics(
     _In_ PVOID Data,
-    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSCSI_REQUEST_BLOCK Srb)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -252,7 +252,7 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
                            _In_ ULONG Length,
                            _In_ PSCSI_REQUEST_BLOCK Srb,
                            _In_ PCDB Cdb,
-                           _In_ PWNBD_SCSI_DEVICE Device)
+                           _In_ PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Data);
@@ -313,7 +313,7 @@ Exit:
 }
 
 UCHAR
-WnbdInquiry(_In_ PWNBD_SCSI_DEVICE Device,
+WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
             _In_ PSCSI_REQUEST_BLOCK Srb,
             _In_ PCDB Cdb)
 {
@@ -439,7 +439,7 @@ Exit:
 }
 
 UCHAR
-WnbdModeSense(_In_ PWNBD_SCSI_DEVICE Device,
+WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
               _In_ PSCSI_REQUEST_BLOCK Srb,
               _In_ PCDB Cdb)
 {
@@ -484,7 +484,7 @@ Exit:
 
 NTSTATUS
 WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
-                _In_ PWNBD_SCSI_DEVICE Device,
+                _In_ PWNBD_DISK_DEVICE Device,
                 _In_ PSCSI_REQUEST_BLOCK Srb,
                 _In_ UINT64 StartingLbn,
                 _In_ UINT64 DataLength,
@@ -522,7 +522,7 @@ Exit:
 
 NTSTATUS
 WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
-                  _In_ PWNBD_SCSI_DEVICE Device,
+                  _In_ PWNBD_DISK_DEVICE Device,
                   _In_ PSCSI_REQUEST_BLOCK Srb)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -644,7 +644,7 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
 _Use_decl_annotations_
 NTSTATUS
 WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
-                       PWNBD_SCSI_DEVICE Device,
+                       PWNBD_DISK_DEVICE Device,
                        PSCSI_REQUEST_BLOCK Srb)
 {
     WNBD_LOG_LOUD(": Enter");

@@ -11,12 +11,12 @@
 #include "scsi_driver_extensions.h"
 
 VOID
-DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
+DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ BOOLEAN SubmittedRequests);
 VOID
-AbortSubmittedRequests(_In_ PWNBD_SCSI_DEVICE Device);
+AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device);
 VOID
-CompleteRequest(_In_ PWNBD_SCSI_DEVICE Device,
+CompleteRequest(_In_ PWNBD_DISK_DEVICE Device,
                 _In_ PSRB_QUEUE_ELEMENT Element,
                 _In_ BOOLEAN FreeElement);
 
@@ -26,36 +26,36 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension);
 // Increments the device rundown protection reference count, preventing
 // it from being cleaned up.
 BOOLEAN
-WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device);
+WnbdAcquireDevice(_In_ PWNBD_DISK_DEVICE Device);
 // Decrements the reference count. All "WnbdAcquireDevice" calls must
 // be paired with a "WnbdReleaseDevice" call.
 VOID
-WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device);
+WnbdReleaseDevice(_In_ PWNBD_DISK_DEVICE Device);
 // Signals the device cleanup thread, setting the "*TerminateDevice" flags
 // to avoid further processing.
 VOID
-WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device);
+WnbdDisconnectAsync(PWNBD_DISK_DEVICE Device);
 // The specified device must be acquired. It will be released by
 // WnbdDisconnectSync.
 VOID
-WnbdDisconnectSync(_In_ PWNBD_SCSI_DEVICE Device);
+WnbdDisconnectSync(_In_ PWNBD_DISK_DEVICE Device);
 
 // Device returned by WnbdFindDevice* functions must be subsequently
 // relased using WnbdReleaseDevice, if "Acquire" is set.
 // Unacquired device pointers must not be dereferenced.
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByAddr(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UCHAR PathId,
     _In_ UCHAR TargetId,
     _In_ UCHAR Lun,
     _In_ BOOLEAN Acquire);
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByConnId(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UINT64 ConnectionId,
     _In_ BOOLEAN Acquire);
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByInstanceName(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ PCHAR InstanceName,
@@ -64,11 +64,11 @@ WnbdFindDeviceByInstanceName(
 BOOLEAN
 IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
 
-VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device);
-VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device);
+VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device);
+VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device);
 int ScsiOpToNbdReqType(_In_ int ScsiOp);
 BOOLEAN ValidateScsiRequest(
-    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element);
 
 #define LIST_FORALL_SAFE(_headPtr, _itemPtr, _nextPtr)                \

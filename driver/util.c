@@ -16,7 +16,7 @@
 #include "userspace.h"
 #include "util.h"
 
-VOID DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
+VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
                       _In_ BOOLEAN SubmittedRequests)
 {
     WNBD_LOG_LOUD(": Enter");
@@ -50,7 +50,7 @@ VOID DrainDeviceQueue(_In_ PWNBD_SCSI_DEVICE Device,
     }
 }
 
-VOID AbortSubmittedRequests(_In_ PWNBD_SCSI_DEVICE Device)
+VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
 {
     // We're marking submitted requests as aborted and notifying Storport. We only cleaning
     // them up when eventually receiving a reply from the storage backend (needed by NBD,
@@ -97,7 +97,7 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
 }
 
 BOOLEAN
-WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device)
+WnbdAcquireDevice(_In_ PWNBD_DISK_DEVICE Device)
 {
     BOOLEAN Acquired = FALSE;
     // TODO: limit the scope of critical regions.
@@ -119,7 +119,7 @@ WnbdAcquireDevice(_In_ PWNBD_SCSI_DEVICE Device)
 }
 
 VOID
-WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device)
+WnbdReleaseDevice(_In_ PWNBD_DISK_DEVICE Device)
 {
     if (!Device)
         return;
@@ -138,7 +138,7 @@ WnbdReleaseDevice(_In_ PWNBD_SCSI_DEVICE Device)
 
 // The returned device must be subsequently relased using WnbdReleaseDevice,
 // if "Acquire" is set. Unacquired device pointers must not be dereferenced.
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByAddr(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UCHAR PathId,
@@ -151,11 +151,11 @@ WnbdFindDeviceByAddr(
 
     KIRQL Irql = { 0 };
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    PWNBD_SCSI_DEVICE Device = NULL;
+    PWNBD_DISK_DEVICE Device = NULL;
     for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
          Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
     {
-        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        Device = (PWNBD_DISK_DEVICE) CONTAINING_RECORD(Entry, WNBD_DISK_DEVICE, ListEntry);
         if (Device->Bus == PathId
             && Device->Target == TargetId
             && Device->Lun == Lun)
@@ -174,7 +174,7 @@ WnbdFindDeviceByAddr(
 
 // The returned device must be subsequently relased using WnbdReleaseDevice,
 // if "Acquire" is set. Unacquired device pointers must not be dereferenced.
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByConnId(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ UINT64 ConnectionId,
@@ -185,11 +185,11 @@ WnbdFindDeviceByConnId(
 
     KIRQL Irql = { 0 };
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    PWNBD_SCSI_DEVICE Device = NULL;
+    PWNBD_DISK_DEVICE Device = NULL;
     for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
          Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
     {
-        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        Device = (PWNBD_DISK_DEVICE) CONTAINING_RECORD(Entry, WNBD_DISK_DEVICE, ListEntry);
         if (Device->ConnectionId == ConnectionId) {
             if (Acquire && !WnbdAcquireDevice(Device))
                 Device = NULL;
@@ -205,7 +205,7 @@ WnbdFindDeviceByConnId(
 
 // The returned device must be subsequently relased using WnbdReleaseDevice,
 // if "Acquire" is set. Unacquired device pointers must not be dereferenced.
-PWNBD_SCSI_DEVICE
+PWNBD_DISK_DEVICE
 WnbdFindDeviceByInstanceName(
     _In_ PWNBD_EXTENSION DeviceExtension,
     _In_ PCHAR InstanceName,
@@ -216,11 +216,11 @@ WnbdFindDeviceByInstanceName(
 
     KIRQL Irql = { 0 };
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    PWNBD_SCSI_DEVICE Device = NULL;
+    PWNBD_DISK_DEVICE Device = NULL;
     for (PLIST_ENTRY Entry = DeviceExtension->DeviceList.Flink;
          Entry != &DeviceExtension->DeviceList; Entry = Entry->Flink)
     {
-        Device = (PWNBD_SCSI_DEVICE) CONTAINING_RECORD(Entry, WNBD_SCSI_DEVICE, ListEntry);
+        Device = (PWNBD_DISK_DEVICE) CONTAINING_RECORD(Entry, WNBD_DISK_DEVICE, ListEntry);
         if (!strcmp((CONST CHAR*)&Device->Properties.InstanceName, InstanceName)) {
             if (Acquire && !WnbdAcquireDevice(Device))
                 Device = NULL;
@@ -234,7 +234,7 @@ WnbdFindDeviceByInstanceName(
     return Device;
 }
 
-VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device) {
+VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device) {
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
     if (-1 != Device->SocketToClose) {
@@ -252,7 +252,7 @@ VOID CloseSocket(_In_ PWNBD_SCSI_DEVICE Device) {
     KeLeaveCriticalRegion();
 }
 
-VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device) {
+VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device) {
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
     if (-1 != Device->NbdSocket) {
@@ -269,7 +269,7 @@ VOID DisconnectSocket(_In_ PWNBD_SCSI_DEVICE Device) {
 }
 
 VOID
-WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device)
+WnbdDisconnectAsync(PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
@@ -283,7 +283,7 @@ WnbdDisconnectAsync(PWNBD_SCSI_DEVICE Device)
 // The specified device must be acquired. It will be released by
 // WnbdDisconnectSync.
 VOID
-WnbdDisconnectSync(_In_ PWNBD_SCSI_DEVICE Device)
+WnbdDisconnectSync(_In_ PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     // We're holding a device reference, preventing it from being
@@ -322,7 +322,7 @@ IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
 
 BOOLEAN
 ValidateScsiRequest(
-    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element)
 {
     PCDB Cdb = (PCDB)&Element->Srb->Cdb;
@@ -389,7 +389,7 @@ UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
 }
 
 VOID CompleteRequest(
-    _In_ PWNBD_SCSI_DEVICE Device,
+    _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element,
     _In_ BOOLEAN FreeElement)
 {

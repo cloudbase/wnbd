@@ -23,7 +23,7 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     ASSERT(DeviceExtension);
 
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
-    PWNBD_SCSI_DEVICE Device;
+    PWNBD_DISK_DEVICE Device;
 
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
@@ -120,7 +120,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
 
     NTSTATUS Status = STATUS_SUCCESS;
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
-    PWNBD_SCSI_DEVICE Device;
+    PWNBD_DISK_DEVICE Device;
     *Complete = TRUE;
 
     if (SrbGetCdb(Srb)) {

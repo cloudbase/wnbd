@@ -70,7 +70,7 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
 }
 
 NTSTATUS
-WnbdInitializeNbdClient(_In_ PWNBD_SCSI_DEVICE Device)
+WnbdInitializeNbdClient(_In_ PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
@@ -146,7 +146,7 @@ Exit:
 VOID
 WnbdDeviceMonitorThread(_In_ PVOID Context)
 {
-    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    PWNBD_DISK_DEVICE Device = (PWNBD_DISK_DEVICE) Context;
     ASSERT(Device);
     ASSERT(Device->DeviceExtension);
 
@@ -224,7 +224,7 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
 }
 
 NTSTATUS
-WnbdInitializeDevice(_In_ PWNBD_SCSI_DEVICE Device, BOOLEAN UseNbd)
+WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
 {
     // Internal resource initialization.
     WNBD_LOG_LOUD(": Enter");
@@ -299,12 +299,12 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         goto Exit;
     }
 
-    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Malloc(sizeof(WNBD_SCSI_DEVICE));
+    PWNBD_DISK_DEVICE Device = (PWNBD_DISK_DEVICE) Malloc(sizeof(WNBD_DISK_DEVICE));
     if (!Device) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
-    RtlZeroMemory(Device, sizeof(WNBD_SCSI_DEVICE));
+    RtlZeroMemory(Device, sizeof(WNBD_DISK_DEVICE));
     RtlCopyMemory(&Device->Properties, Properties, sizeof(WNBD_PROPERTIES));
 
     Device->DeviceExtension = DeviceExtension;
@@ -439,7 +439,7 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
     ASSERT(DeviceExtension);
     ASSERT(InstanceName);
 
-    PWNBD_SCSI_DEVICE Device = WnbdFindDeviceByInstanceName(
+    PWNBD_DISK_DEVICE Device = WnbdFindDeviceByInstanceName(
         DeviceExtension, InstanceName, TRUE);
     if (!Device) {
         WNBD_LOG_ERROR("Could not find connection to delete");
@@ -460,7 +460,7 @@ WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
     ASSERT(DeviceExtension);
     ASSERT(Irp);
 
-    PWNBD_SCSI_DEVICE CurrentEntry = (PWNBD_SCSI_DEVICE)DeviceExtension->DeviceList.Flink;
+    PWNBD_DISK_DEVICE CurrentEntry = (PWNBD_DISK_DEVICE)DeviceExtension->DeviceList.Flink;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
     PWNBD_CONNECTION_LIST OutList = (
         PWNBD_CONNECTION_LIST) Irp->AssociatedIrp.SystemBuffer;
@@ -478,7 +478,7 @@ WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 
     KIRQL Irql = { 0 };
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    while ((CurrentEntry != (PWNBD_SCSI_DEVICE) &DeviceExtension->DeviceList.Flink) && Remaining) {
+    while ((CurrentEntry != (PWNBD_DISK_DEVICE) &DeviceExtension->DeviceList.Flink) && Remaining) {
         OutEntry = &OutList->Connections[OutList->Count];
         RtlZeroMemory(OutEntry, sizeof(WNBD_CONNECTION_INFO));
         RtlCopyMemory(OutEntry, &CurrentEntry->Properties, sizeof(WNBD_PROPERTIES));
@@ -490,11 +490,11 @@ WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
         OutList->Count++;
         Remaining--;
 
-        CurrentEntry = (PWNBD_SCSI_DEVICE)CurrentEntry->ListEntry.Flink;
+        CurrentEntry = (PWNBD_DISK_DEVICE)CurrentEntry->ListEntry.Flink;
     }
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    if (CurrentEntry == (PWNBD_SCSI_DEVICE) &DeviceExtension->DeviceList.Flink) {
+    if (CurrentEntry == (PWNBD_DISK_DEVICE) &DeviceExtension->DeviceList.Flink) {
         Status = STATUS_SUCCESS;
     }
 
@@ -518,7 +518,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
     NTSTATUS Status = STATUS_SUCCESS;
 
-    PWNBD_SCSI_DEVICE Device = NULL;
+    PWNBD_DISK_DEVICE Device = NULL;
     DWORD Ioctl = IoLocation->Parameters.DeviceIoControl.IoControlCode;
     WNBD_LOG_LOUD("DeviceIoControl = 0x%x.", Ioctl);
 
