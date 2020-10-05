@@ -68,7 +68,7 @@ NTSTATUS LockUsermodeBuffer(
 
 NTSTATUS WnbdDispatchRequest(
     PIRP Irp,
-    PWNBD_SCSI_DEVICE Device,
+    PWNBD_DISK_DEVICE Device,
     PWNBD_IOCTL_FETCH_REQ_COMMAND Command)
 {
     PVOID Buffer;
@@ -220,7 +220,7 @@ Exit:
 
 NTSTATUS WnbdHandleResponse(
     PIRP Irp,
-    PWNBD_SCSI_DEVICE Device,
+    PWNBD_DISK_DEVICE Device,
     PWNBD_IOCTL_SEND_RSP_COMMAND Command)
 {
     PSRB_QUEUE_ELEMENT Element = NULL;

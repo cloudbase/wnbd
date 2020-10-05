@@ -201,7 +201,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
             }
 
             WNBD_LOG_INFO("Removing device.");
-            PWNBD_SCSI_DEVICE Device = WnbdFindDeviceByAddr(
+            PWNBD_DISK_DEVICE Device = WnbdFindDeviceByAddr(
                 GlobalExt, ScsiAddress.PathId,
                 ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
             if (!Device) {

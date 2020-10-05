@@ -26,7 +26,7 @@ typedef struct _WNBD_EXTENSION {
     KEVENT                            GlobalDeviceRemovalEvent;
 } WNBD_EXTENSION, *PWNBD_EXTENSION;
 
-typedef struct _WNBD_SCSI_DEVICE
+typedef struct _WNBD_DISK_DEVICE
 {
     LIST_ENTRY                  ListEntry;
     PWNBD_EXTENSION             DeviceExtension;
@@ -67,7 +67,7 @@ typedef struct _WNBD_SCSI_DEVICE
     ULONG                       ReadPreallocatedBufferLength;
     PVOID                       WritePreallocatedBuffer;
     ULONG                       WritePreallocatedBufferLength;
-} WNBD_SCSI_DEVICE, *PWNBD_SCSI_DEVICE;
+} WNBD_DISK_DEVICE, *PWNBD_DISK_DEVICE;
 
 typedef struct _SRB_QUEUE_ELEMENT {
     LIST_ENTRY Link;

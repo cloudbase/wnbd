@@ -36,7 +36,7 @@ ScsiOpToNbdReqType(int ScsiOp)
 }
 
 NTSTATUS
-WnbdRequestWrite(_In_ PWNBD_SCSI_DEVICE Device,
+WnbdRequestWrite(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ PSRB_QUEUE_ELEMENT Element,
                  _In_ DWORD NbdTransmissionFlags)
 {
@@ -69,7 +69,7 @@ WnbdRequestWrite(_In_ PWNBD_SCSI_DEVICE Device,
 }
 
 VOID
-WnbdProcessDeviceThreadRequests(_In_ PWNBD_SCSI_DEVICE Device)
+WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
@@ -161,7 +161,7 @@ NbdDeviceRequestThread(_In_ PVOID Context)
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
-    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    PWNBD_DISK_DEVICE Device = (PWNBD_DISK_DEVICE) Context;
     while (!Device->HardRemoveDevice) {
         PVOID WaitObjects[2];
         WaitObjects[0] = &Device->DeviceEvent;
@@ -195,7 +195,7 @@ NbdDeviceReplyThread(_In_ PVOID Context)
 
     KeSetPriorityThread(KeGetCurrentThread(), LOW_REALTIME_PRIORITY);
 
-    PWNBD_SCSI_DEVICE Device = (PWNBD_SCSI_DEVICE) Context;
+    PWNBD_DISK_DEVICE Device = (PWNBD_DISK_DEVICE) Context;
     while (!Device->HardRemoveDevice) {
         NbdProcessDeviceThreadReplies(Device);
     }
@@ -204,7 +204,7 @@ NbdDeviceReplyThread(_In_ PVOID Context)
 }
 
 VOID
-NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device)
+NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
 {
     WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);

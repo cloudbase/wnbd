@@ -14,4 +14,4 @@ VOID
 NbdDeviceReplyThread(_In_ PVOID Context);
 #pragma alloc_text (PAGE, NbdDeviceReplyThread)
 VOID
-NbdProcessDeviceThreadReplies(_In_ PWNBD_SCSI_DEVICE Device);
+NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device);
