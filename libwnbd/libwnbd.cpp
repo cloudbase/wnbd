@@ -324,6 +324,18 @@ DWORD WnbdGetUserspaceStats(
     return ERROR_SUCCESS;
 }
 
+DWORD WnbdGetUserContext(
+    PWNBD_DISK Disk,
+    PVOID* Context)
+{
+    if (!Disk) {
+        LogError("No device specified.");
+        return ERROR_INVALID_PARAMETER;
+    }
+
+    *Context = Disk->Context;
+    return ERROR_SUCCESS;
+}
 
 DWORD WnbdGetDriverStats(
     const char* InstanceName,

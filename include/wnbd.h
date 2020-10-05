@@ -150,6 +150,9 @@ DWORD WnbdShow(
 DWORD WnbdGetUserspaceStats(
     PWNBD_DISK Disk,
     PWNBD_USR_STATS Stats);
+DWORD WnbdGetUserContext(
+    PWNBD_DISK Disk,
+    PVOID* Context);
 // Driver counters
 DWORD WnbdGetDriverStats(
     const char* InstanceName,
