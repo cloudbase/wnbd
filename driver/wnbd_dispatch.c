@@ -126,7 +126,6 @@ NTSTATUS WnbdDispatchRequest(
             continue;
         }
 
-        // TODO: consider moving this part to a helper function.
         PSRB_QUEUE_ELEMENT Element = CONTAINING_RECORD(RequestEntry, SRB_QUEUE_ELEMENT, Link);
         Element->Tag = InterlockedIncrement64(&(LONG64)RequestHandle);
         Element->Srb->DataTransferLength = 0;
@@ -136,15 +135,8 @@ NTSTATUS WnbdDispatchRequest(
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
         WNBD_LOG_LOUD("Processing request. Address: %p Tag: 0x%llx Type: %d",
                       Element->Srb, Element->Tag, RequestType);
-        // TODO: check if the device supports the requested operation
-        switch(RequestType) {
-        case WnbdReqTypeRead:
-        case WnbdReqTypeWrite:
-            Request->RequestType = RequestType;
-            Request->RequestHandle = Element->Tag;
-            break;
-        // TODO: flush/unmap
-        default:
+
+        if (!ValidateScsiRequest(Device, Element)) {
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             CompleteRequest(Device, Element, TRUE);
@@ -152,20 +144,27 @@ NTSTATUS WnbdDispatchRequest(
             continue;
         }
 
-        PWNBD_PROPERTIES DevProps = &Device->Properties;
+        Request->RequestType = RequestType;
+        Request->RequestHandle = Element->Tag;
 
+        PWNBD_PROPERTIES DevProps = &Device->Properties;
         switch(RequestType) {
         case WnbdReqTypeRead:
             Request->Cmd.Read.BlockAddress =
-                Element->StartingLbn / DevProps->BlockSize;;
+                Element->StartingLbn / DevProps->BlockSize;
             Request->Cmd.Read.BlockCount =
                 Element->DataLength / DevProps->BlockSize;
+            Request->Cmd.Read.ForceUnitAccess =
+                Element->FUA && DevProps->Flags.FUASupported;
             break;
         case WnbdReqTypeWrite:
             Request->Cmd.Write.BlockAddress =
                 Element->StartingLbn / DevProps->BlockSize;
             Request->Cmd.Write.BlockCount =
                 Element->DataLength / DevProps->BlockSize;
+            Request->Cmd.Write.ForceUnitAccess =
+                Element->FUA && DevProps->Flags.FUASupported;
+
             if (Element->DataLength > Command->DataBufferSize) {
                 // The user buffer must be at least as large as
                 // the specified maximum transfer length.
@@ -189,6 +188,35 @@ NTSTATUS WnbdDispatchRequest(
             }
 
             RtlCopyMemory(Buffer, SrbBuffer, Element->DataLength);
+            break;
+        case WnbdReqTypeFlush:
+            Request->Cmd.Flush.BlockAddress =
+                Element->StartingLbn / DevProps->BlockSize;
+            Request->Cmd.Flush.BlockCount =
+                Element->DataLength / DevProps->BlockSize;
+            break;
+        case WnbdReqTypeUnmap:
+            // At the moment, we only support sending one unmap
+            // descriptor at a time.
+            Request->Cmd.Unmap.Count = 1;
+
+            if (sizeof(WNBD_UNMAP_DESCRIPTOR) > Command->DataBufferSize) {
+                // The user buffer must be at least as large as
+                // the specified maximum transfer length, which in
+                // turn must fit a WNBD_UNMAP_DESCRIPTOR.
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                CompleteRequest(Device, Element, TRUE);
+                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
+                Status = STATUS_BUFFER_TOO_SMALL;
+                goto Exit;
+            }
+
+            PWNBD_UNMAP_DESCRIPTOR UnmapDescriptor = (
+                PWNBD_UNMAP_DESCRIPTOR) Buffer;
+            UnmapDescriptor->BlockAddress =
+                Element->StartingLbn / DevProps->BlockSize;
+            UnmapDescriptor->BlockCount =
+                Element->DataLength / DevProps->BlockSize;
             break;
         }
 
@@ -289,14 +317,14 @@ NTSTATUS WnbdHandleResponse(
             Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
             goto Exit;
         }
-
-        // TODO: compare data buffer size with the read length
-        if (!Element->Aborted) {
-            // SrbBuff can't be NULL
-#pragma warning(push)
-#pragma warning(disable:6387)
-            RtlCopyMemory(SrbBuff, LockedUserBuff, Element->DataLength);
-#pragma warning(pop)
+        if (!Element->Aborted && SrbBuff) {
+            RtlCopyMemory(SrbBuff, LockedUserBuff,
+                          min(Element->DataLength, Command->DataBufferSize));
+            if (Command->DataBufferSize < Element->DataLength) {
+                RtlZeroMemory(
+                    (char*)SrbBuff + Command->DataBufferSize,
+                    Element->DataLength - Command->DataBufferSize);
+            }
         }
     }
     if (Response->Status.ScsiStatus) {
