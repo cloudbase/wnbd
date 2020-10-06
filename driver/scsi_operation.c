@@ -213,8 +213,8 @@ WnbdSetVpdLogicalBlockProvisioning(
     if (Device->Properties.Flags.UnmapSupported)
     {
         LogicalBlockProvisioning->LBPU = 1;
-        // TODO: trim support doesn't imply thin provisioning, but there
-        // might be some assumptions. Check if we actually have to set this.
+        // Trim support doesn't imply thin provisioning, but there
+        // seem to be some assumptions.
         LogicalBlockProvisioning->ProvisioningType = PROVISIONING_TYPE_THIN;
     }
 
@@ -622,8 +622,6 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
             break;
         }
 
-        // TODO: can FUA be requested for UNMAP requests? NBD specs suggest
-        // that it can, storport.h and SCSI specs suggest otherwise.
         Status = WnbdPendElement(DeviceExtension, Device, Srb,
             BlockAddress * Device->Properties.BlockSize,
             (UINT64)BlockCount * Device->Properties.BlockSize,

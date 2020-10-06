@@ -118,9 +118,9 @@ DWORD PnpRemoveDevice(
 
             LogDebug(
                "Could not remove device. CM status: %d, "
-               "veto type %d, veto name: %s\n. Time elapsed: %llus",
+               "veto type %d, veto name: %s\n. Time elapsed: %.2fs",
                CMStatus, VetoType, VetoName,
-               ElapsedMs.QuadPart * 1000);
+               ElapsedMs.QuadPart / 1000.0);
         }
         if (RemoveVetoed && TimeLeft) {
             Sleep(RetryIntervalMs);
@@ -628,7 +628,6 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                              Request->Cmd.Write.BlockCount);
             break;
         case WnbdReqTypeFlush:
-            // TODO: should it be a no-op when unsupported?
             if (!Disk->Interface->Flush || !Disk->Properties.Flags.FlushSupported)
                 goto Unsupported;
             LogDebug("Dispatching FLUSH @ 0x%llx~0x%x # %llx." ,
@@ -640,19 +639,22 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                 Request->RequestHandle,
                 Request->Cmd.Flush.BlockAddress,
                 Request->Cmd.Flush.BlockCount);
+            break;
         case WnbdReqTypeUnmap:
             if (!Disk->Interface->Unmap || !Disk->Properties.Flags.UnmapSupported)
                 goto Unsupported;
             if (!Disk->Properties.Flags.UnmapAnchorSupported &&
                 Request->Cmd.Unmap.Anchor)
             {
+                LogDebug("Unmap 'anchored' state not supported.");
                 AdditionalSenseCode = SCSI_ADSENSE_INVALID_CDB;
                 goto Unsupported;
             }
 
-            if (Disk->Properties.MaxUnmapDescCount <=
-                Request->Cmd.Unmap.Count)
+            if (Disk->Properties.MaxUnmapDescCount < Request->Cmd.Unmap.Count)
             {
+                LogDebug("Too many unmap descriptors: %d. Maximum supported: %d",
+                         Request->Cmd.Unmap.Count, Disk->Properties.MaxUnmapDescCount);
                 AdditionalSenseCode = SCSI_ADSENSE_INVALID_FIELD_PARAMETER_LIST;
                 goto Unsupported;
             }
@@ -664,6 +666,7 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                 Request->RequestHandle,
                 (PWNBD_UNMAP_DESCRIPTOR)Buffer,
                 Request->Cmd.Unmap.Count);
+            break;
         default:
         Unsupported:
             LogDebug("Received unsupported command. "
@@ -675,10 +678,13 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                 AdditionalSenseCode = SCSI_ADSENSE_ILLEGAL_COMMAND;
 
             WNBD_IO_RESPONSE Response = { 0 };
+            Response.RequestType = Request->RequestType;
             Response.RequestHandle = Request->RequestHandle;
             WnbdSetSense(&Response.Status,
                          SCSI_SENSE_ILLEGAL_REQUEST,
                          AdditionalSenseCode);
+            // Avoid negative count
+            InterlockedIncrement64((PLONG64)&Disk->Stats.PendingSubmittedRequests);
             WnbdSendResponse(Disk, &Response, NULL, 0);
             break;
     }

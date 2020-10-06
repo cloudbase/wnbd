@@ -104,7 +104,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         switch (NbdReqType) {
         case NBD_CMD_WRITE:
         case NBD_CMD_TRIM:
-            if (Element->FUA && DevProps->Flags.UnmapSupported) {
+            if (Element->FUA && DevProps->Flags.FUASupported) {
                 NbdTransmissionFlags |= NBD_CMD_FLAG_FUA;
             }
         case NBD_CMD_READ:
