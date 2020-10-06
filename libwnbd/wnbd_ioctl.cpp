@@ -66,6 +66,10 @@ DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
             DevInterfaceDetailData->DevicePath,
             GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
             FILE_FLAG_OVERLAPPED, 0);
+        if (INVALID_HANDLE_VALUE == WnbdDriverHandle) {
+            ErrorCode = GetLastError();
+            goto Exit;
+        }
 
         ErrorCode = WnbdIoctlPing(WnbdDriverHandle);
         if (ErrorCode) {
@@ -95,10 +99,17 @@ Exit:
         *CMDeviceInstance = DevInfoData.DevInst;
     }
     else {
-        LogError(
-            "Could not oped WNBD device. Please make sure that the "
-            "driver is installed. Error: %d. Error message: %s",
-            ErrorCode, win32_strerror(ErrorCode).c_str());
+        if (ErrorCode == ERROR_ACCESS_DENIED) {
+            LogError(
+                "Could not open WNBD adapter device. Access denied, try "
+                "using an elevated command prompt.");
+        }
+        else {
+            LogError(
+                "Could not open WNBD adapter device. Please make sure that "
+                "the driver is installed. Error: %d. Error message: %s",
+                ErrorCode, win32_strerror(ErrorCode).c_str());
+        }
     }
     return ErrorCode;
 }
@@ -386,7 +397,7 @@ DWORD WnbdIoctlPing(HANDLE Adapter)
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
-        LogError("Failed while pinging driver."
+        LogError("Failed while pinging driver. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
     }
