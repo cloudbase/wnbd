@@ -188,7 +188,10 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
         IoLocation->Parameters.DeviceCapabilities.Capabilities->Removable = 1;
         IoLocation->Parameters.DeviceCapabilities.Capabilities->EjectSupported = 1;
         break;
-    case IRP_MN_QUERY_REMOVE_DEVICE:
+    // We won't remove the device upon receiving IRP_MN_QUERY_REMOVE_DEVICE.
+    // The device removal might be vetoed by other parts of the storage stack,
+    // so we'd affect soft removals. The only downside is that if the remove
+    // gets vetoed, uninstalling the driver will require a reboot.
     case IRP_MN_REMOVE_DEVICE:
         {
             if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
