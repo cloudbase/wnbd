@@ -203,14 +203,13 @@ DWORD WnbdIoctlRemove(
         &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
     if (!DevStatus) {
         Status = GetLastError();
-    }
-
-    if (Status == ERROR_FILE_NOT_FOUND) {
-        LogDebug("Could not find the disk to be removed.");
-    }
-    else {
-        LogError("Could not remove WNBD disk. Error: %d. Error message: %s",
-                 Status, win32_strerror(Status).c_str());
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogDebug("Could not find the disk to be removed.");
+        }
+        else {
+            LogError("Could not remove WNBD disk. Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
     }
     return Status;
 }
