@@ -19,13 +19,12 @@
 #include "wnbd_ioctl.h"
 #include "util.h"
 #include "version.h"
+#include "options.h"
 
 #define CHECK_I_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.InputBufferLength < sizeof(Type))
 #define CHECK_O_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.OutputBufferLength < sizeof(Type))
 #define CHECK_O_LOCATION_SZ(Io, Size) (Io->Parameters.DeviceIoControl.OutputBufferLength < Size)
 #define Malloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, (S), 'DBNu')
-
-extern UNICODE_STRING GlobalRegistryPath;
 
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
 ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * MAX_NUMBER_OF_SCSI_TARGETS];
@@ -287,6 +286,13 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     BOOLEAN RPAcquired = ExAcquireRundownProtection(&DeviceExtension->RundownProtection);
     KeLeaveCriticalRegion();
 
+    BOOLEAN NewMappingsAllowed = WnbdDriverOptions[OptNewMappingsAllowed].Value.Data.AsBool;
+    if (!NewMappingsAllowed) {
+        WNBD_LOG_WARN("New mappings are not currently allowed. Please check the "
+                      "'NewMappingsAllowed' option.");
+        return STATUS_SHUTDOWN_IN_PROGRESS;
+    }
+
     if (!RPAcquired) {
         // This shouldn't really happen while having a pending "HwProcessServiceRequest".
         WNBD_LOG_WARN("The device extension is being removed.");
@@ -520,6 +526,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
     PWNBD_DISK_DEVICE Device = NULL;
     DWORD Ioctl = IoLocation->Parameters.DeviceIoControl.IoControlCode;
+    DWORD OutBuffLength = IoLocation->Parameters.DeviceIoControl.OutputBufferLength;
     WNBD_LOG_LOUD("DeviceIoControl = 0x%x.", Ioctl);
 
     if (IOCTL_MINIPORT_PROCESS_SERVICE_IRP != Ioctl) {
@@ -598,13 +605,15 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
         WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
         Status = WnbdCreateConnection(DeviceExtension, &Props, &ConnectionInfo);
+        if (!Status) {
+            PWNBD_CONNECTION_INFO OutInfo =
+                (PWNBD_CONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
+            RtlCopyMemory(OutInfo, &ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
+            Irp->IoStatus.Information = sizeof(WNBD_CONNECTION_INFO);
 
-        PWNBD_CONNECTION_INFO OutHandle = (PWNBD_CONNECTION_INFO) Irp->AssociatedIrp.SystemBuffer;
-        RtlCopyMemory(OutHandle, &ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
-        Irp->IoStatus.Information = sizeof(WNBD_CONNECTION_INFO);
-
-        WNBD_LOG_LOUD("Mapped disk. Name: %s, connection id: %llu",
-                      Props.InstanceName, ConnectionInfo.ConnectionId);
+            WNBD_LOG_LOUD("Mapped disk. Name: %s, connection id: %llu",
+                          Props.InstanceName, ConnectionInfo.ConnectionId);
+        }
 
         KeEnterCriticalRegion();
         ExReleaseResourceLite(&DeviceExtension->DeviceCreationLock);
@@ -698,14 +707,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
     case IOCTL_WNBD_RELOAD_CONFIG:
         WNBD_LOG_LOUD("IOCTL_WNBD_RELOAD_CONFIG");
-        WCHAR* KeyName = L"DebugLogLevel";
-        UINT32 U32Val = 0;
-        if (WNBDReadRegistryValue(
-                &GlobalRegistryPath, KeyName,
-                (REG_DWORD << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT), &U32Val))
-        {
-            WnbdSetLogLevel(U32Val);
-        }
+        WnbdReloadPersistentOptions();
         break;
 
     case IOCTL_WNBD_STATS:
@@ -836,8 +838,93 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         Status = STATUS_SUCCESS;
         break;
 
+    case IOCTL_WNBD_GET_DRV_OPT:
+        WNBD_LOG_LOUD("IOCTL_WNBD_GET_DRV_OPT");
+        PWNBD_IOCTL_GET_DRV_OPT_COMMAND GetOptCmd =
+            (PWNBD_IOCTL_GET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!GetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_GET_DRV_OPT_COMMAND)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_GET_DRV_OPT: Bad input or output buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+        if (!Irp->AssociatedIrp.SystemBuffer ||
+                CHECK_O_LOCATION(IoLocation, WNBD_OPTION_VALUE)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_GET_DRV_OPT: Bad output buffer");
+            Status = STATUS_BUFFER_OVERFLOW;
+            break;
+        }
+
+        GetOptCmd->Name[WNBD_MAX_OPT_NAME_LENGTH - 1] = L'\0';
+        PWNBD_OPTION_VALUE Value = (PWNBD_OPTION_VALUE) Irp->AssociatedIrp.SystemBuffer;
+        Status = WnbdGetDrvOpt(GetOptCmd->Name, Value, GetOptCmd->Persistent);
+
+        Irp->IoStatus.Information = sizeof(WNBD_OPTION_VALUE);
+        break;
+
+    case IOCTL_WNBD_SET_DRV_OPT:
+        WNBD_LOG_LOUD("IOCTL_WNBD_SET_DRV_OPT");
+        PWNBD_IOCTL_SET_DRV_OPT_COMMAND SetOptCmd =
+            (PWNBD_IOCTL_SET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!SetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_SET_DRV_OPT_COMMAND)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_SET_DRV_OPT: Bad input or output buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        SetOptCmd->Name[WNBD_MAX_OPT_NAME_LENGTH - 1] = L'\0';
+        Status = WnbdSetDrvOpt(SetOptCmd->Name, &SetOptCmd->Value, SetOptCmd->Persistent);
+        if (!Status && !_wcsicmp(L"NewMappingsAllowed", SetOptCmd->Name)
+                    && !SetOptCmd->Value.Data.AsBool) {
+            WNBD_LOG_INFO("No new mappings allowed. Waiting for pending mappings.");
+            KeEnterCriticalRegion();
+            ExAcquireResourceSharedLite(&DeviceExtension->DeviceCreationLock, TRUE);
+            ExReleaseResourceLite(&DeviceExtension->DeviceCreationLock);
+            KeLeaveCriticalRegion();
+            WNBD_LOG_INFO("Finished waiting for pending mappings. "
+                          "No new mappings allowed.");
+        }
+        break;
+
+    case IOCTL_WNBD_RESET_DRV_OPT:
+        WNBD_LOG_LOUD("IOCTL_WNBD_RESET_DRV_OPT");
+        PWNBD_IOCTL_RESET_DRV_OPT_COMMAND ResetOptCmd =
+            (PWNBD_IOCTL_RESET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!ResetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_RESET_DRV_OPT_COMMAND)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        ResetOptCmd->Name[WNBD_MAX_OPT_NAME_LENGTH - 1] = L'\0';
+        Status = WnbdResetDrvOpt(ResetOptCmd->Name, ResetOptCmd->Persistent);
+        break;
+
+    case IOCTL_WNBD_LIST_DRV_OPT:
+        WNBD_LOG_LOUD("IOCTL_WNBD_LIST_DRV_OPT");
+        PWNBD_IOCTL_LIST_DRV_OPT_COMMAND ListOptCmd =
+            (PWNBD_IOCTL_LIST_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
+
+        if (!ListOptCmd || CHECK_I_LOCATION(IoLocation, IOCTL_WNBD_LIST_DRV_OPT)) {
+            WNBD_LOG_ERROR("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
+        PWNBD_OPTION_LIST OptionList = (PWNBD_OPTION_LIST) Irp->AssociatedIrp.SystemBuffer;
+        Status = WnbdListDrvOpt(OptionList, &OutBuffLength, ListOptCmd->Persistent);
+        if (!Status || Status == STATUS_BUFFER_TOO_SMALL) {
+            // We're masking STATUS_BUFFER_TOO_SMALL so that the required
+            // buffer size gets gets passed to the userspace.
+            Status = STATUS_SUCCESS;
+            Irp->IoStatus.Information = OutBuffLength;
+        }
+        break;
+
     default:
-        WNBD_LOG_ERROR("Unsupported IOCTL command: %x");
+        WNBD_LOG_ERROR("Unsupported IOCTL command: %d", Cmd->IoControlCode);
         Status = STATUS_INVALID_DEVICE_REQUEST;
         break;
     }

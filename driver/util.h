@@ -116,3 +116,25 @@ NTSTATUS
 WnbdGetScsiAddress(
     PDEVICE_OBJECT DeviceObject,
     PSCSI_ADDRESS ScsiAddress);
+
+static inline NTSTATUS WstrToBool(const PWCHAR string, PBOOLEAN Value) {
+    if (!_wcsicmp(string, L"1") ||
+        !_wcsicmp(string, L"t") ||
+        !_wcsicmp(string, L"true") ||
+        !_wcsicmp(string, L"yes") ||
+        !_wcsicmp(string, L"y"))
+    {
+        *Value = TRUE;
+        return STATUS_SUCCESS;
+    }
+    if (!_wcsicmp(string, L"0") ||
+        !_wcsicmp(string, L"f") ||
+        !_wcsicmp(string, L"false") ||
+        !_wcsicmp(string, L"no") ||
+        !_wcsicmp(string, L"n"))
+    {
+        *Value = FALSE;
+        return STATUS_SUCCESS;
+    }
+    return STATUS_INVALID_PARAMETER;
+}
