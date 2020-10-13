@@ -12,7 +12,6 @@ EXPORTS
     WnbdGetDriverStats
     WnbdSetLogger
     WnbdSetLogLevel
-    WnbdRaiseDrvLogLevel
     WnbdSetSenseEx
     WnbdSetSense
     WnbdStartDispatcher
@@ -24,6 +23,10 @@ EXPORTS
     WnbdGetConnectionInfo
     WnbdGetDriverVersion
     WnbdGetLibVersion
+    WnbdGetDrvOpt
+    WnbdSetDrvOpt
+    WnbdResetDrvOpt
+    WnbdListDrvOpt
 
     WnbdOpenAdapter
     WnbdOpenAdapterEx
@@ -37,3 +40,7 @@ EXPORTS
     WnbdIoctlReloadConfig
     WnbdIoctlFetchRequest
     WnbdIoctlSendResponse
+    WnbdIoctlGetDrvOpt
+    WnbdIoctlSetDrvOpt
+    WnbdIoctlResetDrvOpt
+    WnbdIoctlListDrvOpt

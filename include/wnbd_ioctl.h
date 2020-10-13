@@ -13,6 +13,10 @@
 #define IOCTL_WNBD_RELOAD_CONFIG 8
 #define IOCTL_WNBD_VERSION 9
 #define IOCTL_WNBD_SHOW 10
+#define IOCTL_WNBD_GET_DRV_OPT 11
+#define IOCTL_WNBD_SET_DRV_OPT 12
+#define IOCTL_WNBD_RESET_DRV_OPT 13
+#define IOCTL_WNBD_LIST_DRV_OPT 14
 
 static const GUID WNBD_GUID = {
     0x949dd17c,
@@ -23,6 +27,7 @@ static const GUID WNBD_GUID = {
 
 #define WNBD_MAX_NAME_LENGTH 256
 #define WNBD_MAX_OWNER_LENGTH 16
+#define WNBD_MAX_OPT_NAME_LENGTH 64
 #define WNBD_MAX_VERSION_STR_LENGTH 128
 // For transfers larger than 16MB, Storport sends 0 sized buffers.
 #define WNBD_DEFAULT_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
@@ -205,6 +210,43 @@ typedef struct
     UINT64 Reserved[4];
 } WNBD_IO_RESPONSE, *PWNBD_IO_RESPONSE;
 
+typedef enum
+{
+    WnbdOptUnknon = 0,
+    WnbdOptBool = 1,
+    WnbdOptInt64 = 2,
+    WnbdOptWstr = 3,
+} WnbdOptValType;
+
+// Using fixed size strings makes it much easier to pass
+// data between userspace and the driver.
+typedef struct
+{
+    WnbdOptValType Type;
+    union {
+        BOOLEAN AsBool;
+        INT64 AsInt64;
+        WCHAR AsWstr[WNBD_MAX_NAME_LENGTH];
+    } Data;
+    BYTE Reserved[64];
+} WNBD_OPTION_VALUE, *PWNBD_OPTION_VALUE;
+
+typedef struct
+{
+    WCHAR Name[WNBD_MAX_OPT_NAME_LENGTH];
+    WnbdOptValType Type;
+    WNBD_OPTION_VALUE Default;
+    WNBD_OPTION_VALUE Value;
+    BYTE Reserved[64];
+} WNBD_OPTION, *PWNBD_OPTION;
+
+typedef struct
+{
+    UINT32 ElementSize;
+    UINT32 Count;
+    WNBD_OPTION Options[1];
+} WNBD_OPTION_LIST, *PWNBD_OPTION_LIST;
+
 typedef struct
 {
     ULONG IoControlCode;
@@ -284,6 +326,38 @@ typedef struct
     UINT32 DataBufferSize;
     UINT64 Reserved[4];
 } WNBD_IOCTL_SEND_RSP_COMMAND, *PWNBD_IOCTL_SEND_RSP_COMMAND;
+
+typedef struct
+{
+    ULONG IoControlCode;
+    WCHAR Name[WNBD_MAX_NAME_LENGTH];
+    BOOLEAN Persistent;
+    BYTE Reserved[32];
+} WNBD_IOCTL_GET_DRV_OPT_COMMAND, *PWNBD_IOCTL_GET_DRV_OPT_COMMAND;
+
+typedef struct
+{
+    ULONG IoControlCode;
+    WCHAR Name[WNBD_MAX_NAME_LENGTH];
+    WNBD_OPTION_VALUE Value;
+    BOOLEAN Persistent;
+    BYTE Reserved[32];
+} WNBD_IOCTL_SET_DRV_OPT_COMMAND, *PWNBD_IOCTL_SET_DRV_OPT_COMMAND;
+
+typedef struct
+{
+    ULONG IoControlCode;
+    WCHAR Name[WNBD_MAX_NAME_LENGTH];
+    BOOLEAN Persistent;
+    BYTE Reserved[32];
+} WNBD_IOCTL_RESET_DRV_OPT_COMMAND, *PWNBD_IOCTL_RESET_DRV_OPT_COMMAND;
+
+typedef struct
+{
+    ULONG IoControlCode;
+    BOOLEAN Persistent;
+    BYTE Reserved[32];
+} WNBD_IOCTL_LIST_DRV_OPT_COMMAND, *PWNBD_IOCTL_LIST_DRV_OPT_COMMAND;
 
 static inline const CHAR* WnbdRequestTypeToStr(WnbdRequestType RequestType) {
     switch(RequestType)

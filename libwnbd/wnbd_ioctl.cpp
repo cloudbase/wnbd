@@ -404,6 +404,137 @@ DWORD WnbdIoctlPing(HANDLE Adapter)
     return Status;
 }
 
+DWORD WnbdIoctlGetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_GET_DRV_OPT_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_GET_DRV_OPT;
+    Command.Persistent = Persistent;
+    to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
+
+    BOOL DevStatus = DeviceIoControl(
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command),
+        Value, sizeof(WNBD_OPTION_VALUE),
+        &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogError("Could not find driver option: %s.", Name);
+        }
+        else {
+            LogError("Could not get adapter option. "
+                     "Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
+    }
+
+    return Status;
+}
+
+DWORD WnbdIoctlSetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_SET_DRV_OPT_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_SET_DRV_OPT;
+    Command.Persistent = Persistent;
+    Command.Value = *Value;
+    to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
+
+    BOOL DevStatus = DeviceIoControl(
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command),
+        NULL, 0,
+        &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogError("Could not find driver option: %s.", Name);
+        }
+        else {
+            LogError("Could not set adapter option. "
+                     "Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
+    }
+
+    return Status;
+}
+
+DWORD WnbdIoctlResetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    BOOLEAN Persistent)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_RESET_DRV_OPT_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_RESET_DRV_OPT;
+    Command.Persistent = Persistent;
+    to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
+
+    BOOL DevStatus = DeviceIoControl(
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command),
+        NULL, 0,
+        &BytesReturned, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        if (Status == ERROR_FILE_NOT_FOUND) {
+            LogError("Could not find driver option: %s.", Name);
+        }
+        else {
+            LogError("Could not reset adapter option. "
+                     "Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+        }
+    }
+
+    return Status;
+}
+
+DWORD WnbdIoctlListDrvOpt(
+    HANDLE Adapter,
+    PWNBD_OPTION_LIST OptionList,
+    PDWORD BufferSize,
+    BOOLEAN Persistent)
+{
+    DWORD Status = ERROR_SUCCESS;
+    WNBD_IOCTL_LIST_DRV_OPT_COMMAND Command = { 0 };
+    Command.IoControlCode = IOCTL_WNBD_LIST_DRV_OPT;
+    Command.Persistent = Persistent;
+
+    BOOL DevStatus = DeviceIoControl(
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command), OptionList,
+        *BufferSize, BufferSize, NULL);
+
+    if (!DevStatus) {
+        Status = GetLastError();
+        LogError("Could not get option list. "
+                 "Error: %d. Error message: %s",
+                 Status, win32_strerror(Status).c_str());
+    }
+
+    return Status;
+}
+
 DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version)
 {
     DWORD Status = ERROR_SUCCESS;
