@@ -192,6 +192,64 @@ DWORD WnbdSendResponse(
     PVOID DataBuffer,
     UINT32 DataBufferSize);
 
+/**
+* Retrieve a specific WNBD option.
+*
+* \param Name The option name
+* \param Value A pointer to receive the value
+* \param Persistent If set, the persistent value is retrieved instead of the
+*                   current runtime value.
+* \return a non-zero error code in case of failure. ERROR_FILE_NOT_FOUND
+*         is returned if the option is not defined or if a persistent value
+*         was requested but it hasn't been set.
+*/
+DWORD WnbdGetDrvOpt(
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent);
+
+/**
+* Set a WNBD option.
+*
+* \param Name The option name
+* \param Value The new option value
+* \param Persistent If set, the option will survive reboots.
+* \return a non-zero error code in case of failure.
+*/
+DWORD WnbdSetDrvOpt(
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent);
+
+/**
+* Reset a WNBD option, applying the default value.
+*
+* \param Name The option name
+* \param Persistent If set, the persistent value is removed as well.
+* \return a non-zero error code in case of failure.
+*/
+DWORD WnbdResetDrvOpt(
+    const char* Name,
+    BOOLEAN Persistent);
+
+/**
+* List WNBD options.
+*
+* \param OptionList An option list buffer to receive the options.
+* \param BufferSize A pointer to the input buffer size. If the buffer
+                    size is too small, it will be updated with the
+                    required buffer size and the return value will be 0.
+                    It might seem a bit counterintuitive but we're
+                    preserving the DeviceIoControl behavior.
+* \param Persistent If set, the currently set persistent options are
+                    retrieved.
+* \return a non-zero error code in case of failure.
+*/
+DWORD WnbdListDrvOpt(
+    PWNBD_OPTION_LIST OptionList,
+    PDWORD BufferSize,
+    BOOLEAN Persistent);
+
 // Open the WNBD SCSI adapter device.
 DWORD WnbdOpenAdapter(PHANDLE Handle);
 DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance);
@@ -223,6 +281,25 @@ DWORD WnbdIoctlStats(
 // Reload the persistent settings provided through registry keys.
 DWORD WnbdIoctlReloadConfig(HANDLE Adapter);
 DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version);
+DWORD WnbdIoctlGetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent);
+DWORD WnbdIoctlSetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent);
+DWORD WnbdIoctlResetDrvOpt(
+    HANDLE Adapter,
+    const char* Name,
+    BOOLEAN Persistent);
+DWORD WnbdIoctlListDrvOpt(
+    HANDLE Adapter,
+    PWNBD_OPTION_LIST OptionList,
+    PDWORD BufferSize,
+    BOOLEAN Persistent);
 
 // The connection id should be handled carefully in order to avoid delayed replies
 // from being submitted to other disks after being remapped.

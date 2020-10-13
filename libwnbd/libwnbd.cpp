@@ -383,6 +383,73 @@ DWORD WnbdGetDriverVersion(PWNBD_VERSION Version)
     return Status;
 }
 
+DWORD WnbdGetDrvOpt(
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent)
+{
+    HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD Status = WnbdOpenAdapter(&Handle);
+    if (Status) {
+        return ERROR_OPEN_FAILED;
+    }
+
+    Status = WnbdIoctlGetDrvOpt(Handle, Name, Value, Persistent);
+
+    CloseHandle(Handle);
+    return Status;
+}
+
+DWORD WnbdSetDrvOpt(
+    const char* Name,
+    PWNBD_OPTION_VALUE Value,
+    BOOLEAN Persistent)
+{
+    HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD Status = WnbdOpenAdapter(&Handle);
+    if (Status) {
+        return ERROR_OPEN_FAILED;
+    }
+
+    Status = WnbdIoctlSetDrvOpt(Handle, Name, Value, Persistent);
+
+    CloseHandle(Handle);
+    return Status;
+}
+
+DWORD WnbdResetDrvOpt(
+    const char* Name,
+    BOOLEAN Persistent)
+{
+    HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD Status = WnbdOpenAdapter(&Handle);
+    if (Status) {
+        return ERROR_OPEN_FAILED;
+    }
+
+    Status = WnbdIoctlResetDrvOpt(Handle, Name, Persistent);
+
+    CloseHandle(Handle);
+    return Status;
+}
+
+DWORD WnbdListDrvOpt(
+    PWNBD_OPTION_LIST OptionList,
+    PDWORD BufferSize,
+    BOOLEAN Persistent)
+{
+    HANDLE Handle = INVALID_HANDLE_VALUE;
+    DWORD Status = WnbdOpenAdapter(&Handle);
+    if (Status) {
+        return ERROR_OPEN_FAILED;
+    }
+
+    Status = WnbdIoctlListDrvOpt(Handle, OptionList, BufferSize, Persistent);
+
+    CloseHandle(Handle);
+    return Status;
+}
+
 DWORD WnbdGetConnectionInfo(
     PWNBD_DISK Disk,
     PWNBD_CONNECTION_INFO ConnectionInfo)
@@ -423,38 +490,6 @@ DWORD OpenRegistryKey(HKEY RootKey, LPCSTR KeyName, BOOLEAN Create, HKEY* OutKey
         *OutKey = Key;
     }
 
-    return Status;
-}
-
-DWORD WnbdRaiseDrvLogLevel(USHORT LogLevel)
-{
-    HANDLE Handle = INVALID_HANDLE_VALUE;
-    DWORD dwLogLevel = (DWORD)LogLevel;
-    DWORD Status = WnbdOpenAdapter(&Handle);
-    if (Status) {
-        return ERROR_OPEN_FAILED;
-    }
-
-    HKEY hKey = NULL;
-    Status = OpenRegistryKey(HKEY_LOCAL_MACHINE, WNBD_REGISTRY_KEY,
-                             TRUE, &hKey);
-    if (Status) {
-        goto Exit;
-    }
-
-    Status = RegSetValueExA(hKey, "DebugLogLevel", 0, REG_DWORD,
-                            (LPBYTE)&dwLogLevel, sizeof(DWORD));
-    if (Status) {
-        LogError("Could not set registry value. "
-                 "Error: %d. Error message: %s",
-                 Status, win32_strerror(Status).c_str());
-        goto Exit;
-    }
-
-    Status = WnbdIoctlReloadConfig(Handle);
-
-Exit:
-    CloseHandle(Handle);
     return Status;
 }
 
