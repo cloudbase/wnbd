@@ -23,6 +23,10 @@ int main(int argc, PCHAR argv[])
     PCHAR ExportName = NULL;
     PCHAR HostName = NULL;
 
+    BOOLEAN PersistentOpt = FALSE;
+    PCHAR OptName = NULL;
+    PCHAR OptValue = NULL;
+
     Command = argv[1];
 
     // This must be called only once. We're going to do it as early as
@@ -70,11 +74,33 @@ int main(int argc, PCHAR argv[])
         CmdStats(InstanceName);
     } else if (argc == 2 && !strcmp(Command, "list")) {
         return CmdList();
-    } else if (argc == 3 && !strcmp(Command, "set-debug")) {
-        CmdRaiseLogLevel(arg_to_bool(argv[2]));
     } else if (argc == 2 && (
             !strcmp(Command, "version") || !strcmp(Command, "-v"))) {
         return CmdVersion();
+    } else if (argc >= 2 && !strcmp(Command, "list-opt")) {
+        if (argc > 2) {
+            PersistentOpt = arg_to_bool(argv[2]);
+        }
+        CmdListOpt(PersistentOpt);
+    } else if (argc >= 3 && !strcmp(Command, "get-opt")) {
+        OptName = argv[2];
+        if (argc > 3) {
+            PersistentOpt = arg_to_bool(argv[3]);
+        }
+        CmdGetOpt(OptName, PersistentOpt);
+    } else if (argc >= 3 && !strcmp(Command, "reset-opt")) {
+        OptName = argv[2];
+        if (argc > 3) {
+            PersistentOpt = arg_to_bool(argv[3]);
+        }
+        CmdResetOpt(OptName, PersistentOpt);
+    } else if (argc >= 4 && !strcmp(Command, "set-opt")) {
+        OptName = argv[2];
+        OptValue = argv[3];
+        if (argc > 4) {
+            PersistentOpt = arg_to_bool(argv[4]);
+        }
+        CmdSetOpt(OptName, OptValue, PersistentOpt);
     } else {
         PrintSyntax();
         return -1;
