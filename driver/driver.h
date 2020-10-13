@@ -18,11 +18,4 @@
 // Placeholder
 #define WNBD_INQUIRY_VENDOR_SPECIFIC     ""
 
-_Success_(return)
-BOOLEAN
-WNBDReadRegistryValue(_In_ PUNICODE_STRING RegistryPath,
-                      _In_ PWSTR Key,
-                      _In_ ULONG Type,
-                      _Out_ PVOID Value);
-
 #endif

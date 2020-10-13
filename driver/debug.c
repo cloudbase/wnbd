@@ -9,23 +9,9 @@
 #include <wdm.h>
 
 #include "debug.h"
+#include "options.h"
 
 #define WNBD_LOG_BUFFER_SIZE 512
-#define WNBD_DBG_DEFAULT     WNBD_DBG_INFO
-
-UINT32  WnbdLogLevel = WNBD_DBG_DEFAULT;
-extern UINT32 GlobalLogLevel;
-
-_Use_decl_annotations_
-VOID
-WnbdSetLogLevel(UINT32 Level)
-{
-    // FIXME: This will actually override the log level of every log record.
-    // It's ok when you want to get debug messages, but can be confusing if you want
-    // to avoid info messages. If we set it to "1", all log messages become error messages.
-    // If we set it to "3", all messages become INFO messages.
-    GlobalLogLevel = Level;
-}
 
 _Use_decl_annotations_
 VOID
@@ -43,10 +29,7 @@ WnbdLog(UINT32 Level,
     va_list Args;
     CHAR Buf[WNBD_LOG_BUFFER_SIZE];
 
-    if(GlobalLogLevel) {
-        Level = GlobalLogLevel - 1;
-    }
-
+    UINT64 WnbdLogLevel = WnbdDriverOptions[OptLogLevel].Value.Data.AsInt64;
     if (Level > WnbdLogLevel) {
         return;
     }
