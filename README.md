@@ -157,11 +157,15 @@ wnbd-client.exe -h
 ```
 ```
 Syntax:
+wnbd-client version
 wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> [<SkipNBDNegotiation> <ReadOnly> <DiskSize> <BlockSize>]
 wnbd-client unmap <InstanceName> [HardRemove]
 wnbd-client list
-wnbd-client set-debug <DebugMode>
 wnbd-client stats <InstanceName>
+wnbd-client get-opt <OptionName> [Persistent]
+wnbd-client set-opt <OptionName> <OptionValue> [Persistent]
+wnbd-client reset-opt <OptionName> [Persistent]
+wnbd-client list-opt [Persistent]
 ```
 
 

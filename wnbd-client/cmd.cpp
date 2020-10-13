@@ -12,6 +12,7 @@
 #include <string>
 #include <codecvt>
 #include <locale>
+#include <sstream>
 
 #pragma comment(lib, "Setupapi.lib")
 #pragma comment(lib, "CfgMgr32.lib")
@@ -20,6 +21,33 @@ std::wstring to_wstring(std::string str)
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> strconverter;
     return strconverter.from_bytes(str);
+}
+
+std::string to_string(std::wstring wstr)
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> strconverter;
+    return strconverter.to_bytes(wstr);
+}
+
+std::string OptValToString(PWNBD_OPTION_VALUE Value)
+{
+    std::ostringstream stream;
+    switch(Value->Type) {
+    case WnbdOptBool:
+        stream << (Value->Data.AsBool ? "true" : "false");
+        break;
+    case WnbdOptInt64:
+        stream << Value->Data.AsInt64;
+        break;
+    case WnbdOptWstr:
+        stream << to_string(Value->Data.AsWstr);
+        break;
+    default:
+        stream << "UNKNOWN TYPE (" << Value->Type << ")";
+        break;
+    }
+
+    return stream.str();
 }
 
 void PrintSyntax()
@@ -31,8 +59,11 @@ void PrintSyntax()
                     "<ReadOnly> <DiskSize> <BlockSize>]\n");
     fprintf(stderr, "wnbd-client unmap <InstanceName> [HardRemove]\n");
     fprintf(stderr, "wnbd-client list \n");
-    fprintf(stderr, "wnbd-client set-debug <DebugMode>\n");
     fprintf(stderr, "wnbd-client stats <InstanceName>\n");
+    fprintf(stderr, "wnbd-client get-opt <OptionName> [Persistent]\n");
+    fprintf(stderr, "wnbd-client set-opt <OptionName> <OptionValue> [Persistent]\n");
+    fprintf(stderr, "wnbd-client reset-opt <OptionName> [Persistent]\n");
+    fprintf(stderr, "wnbd-client list-opt [Persistent]\n");
 }
 
 void PrintFormattedError(DWORD Error)
@@ -230,12 +261,6 @@ DWORD CmdList()
     return Status;
 }
 
-DWORD CmdRaiseLogLevel(UINT32 LogLevel)
-{
-    DWORD Status = WnbdRaiseDrvLogLevel(LogLevel);
-    return Status;
-}
-
 DWORD CmdVersion() {
     printf("wnbd-client.exe: %s\n", WNBD_VERSION_STR);
 
@@ -250,4 +275,92 @@ DWORD CmdVersion() {
     }
 
     return Status;
+}
+
+DWORD
+CmdGetOpt(const char* Name, BOOLEAN Persistent)
+{
+    WNBD_OPTION_VALUE Value;
+    DWORD Status = WnbdGetDrvOpt(Name, &Value, Persistent);
+    if (Status) {
+        return Status;
+    }
+
+    printf("Name: %s\n", Name);
+    printf("Value: %s\n", OptValToString(&Value).c_str());
+    return Status;
+}
+
+DWORD
+CmdSetOpt(const char* Name, const char* Value, BOOLEAN Persistent)
+{
+    WNBD_OPTION_VALUE OptValue = { WnbdOptWstr };
+    to_wstring(Value).copy((PWCHAR)&OptValue.Data.AsWstr, WNBD_MAX_NAME_LENGTH);
+    return WnbdSetDrvOpt(Name, &OptValue, Persistent);
+}
+
+DWORD
+CmdResetOpt(const char* Name, BOOLEAN Persistent)
+{
+    return WnbdResetDrvOpt(Name, Persistent);
+}
+
+DWORD GetOptList(PWNBD_OPTION_LIST* OptionList, BOOLEAN Persistent)
+{
+    DWORD CurrentBufferSize = 0;
+    DWORD BufferSize = 0;
+    DWORD Status = 0;
+    PWNBD_OPTION_LIST TempList = NULL;
+
+    do {
+        if (TempList)
+            free(TempList);
+
+        if (BufferSize) {
+            TempList = (PWNBD_OPTION_LIST) calloc(1, BufferSize);
+            if (!TempList) {
+                fprintf(stderr, "Could not allocate %d bytes.\n", BufferSize);
+                Status = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            }
+        }
+
+        CurrentBufferSize = BufferSize;
+        // If the buffer is too small, the return value is 0 and "BufferSize"
+        // will contain the required size.
+        Status = WnbdListDrvOpt(TempList, &BufferSize, Persistent);
+        if (Status)
+            break;
+    } while (CurrentBufferSize < BufferSize);
+
+    if (Status) {
+        if (TempList)
+            free(TempList);
+    }
+    else {
+        *OptionList = TempList;
+    }
+    return Status;
+}
+
+DWORD
+CmdListOpt(BOOLEAN Persistent)
+{
+    PWNBD_OPTION_LIST OptList = NULL;
+    DWORD Status = GetOptList(&OptList, Persistent);
+    if (Status) {
+        return Status;
+    }
+
+    for (ULONG index = 0; index < OptList->Count; index++) {
+        PWNBD_OPTION Option = &OptList->Options[index];
+        printf(
+            "%s: %s (Default: %s)\n",
+            to_string(Option->Name).c_str(),
+            OptValToString(&Option->Value).c_str(),
+            OptValToString(&Option->Default).c_str());
+    }
+
+    free(OptList);
+    return 0;
 }

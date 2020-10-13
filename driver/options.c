@@ -47,7 +47,6 @@ ReadRegistryValue(
     ULONG Type,
     PVOID Value)
 {
-    ASSERT(GlobalRegistryPath);
     ASSERT(Key);
     ASSERT(Value);
 

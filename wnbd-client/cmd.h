@@ -50,10 +50,19 @@ DWORD
 CmdList();
 
 DWORD
-CmdRaiseLogLevel(UINT32 LogLevel);
+CmdVersion();
 
 DWORD
-CmdVersion();
+CmdGetOpt(const char* Name, BOOLEAN Persistent);
+
+DWORD
+CmdSetOpt(const char* Name, const char* Value, BOOLEAN Persistent);
+
+DWORD
+CmdResetOpt(const char* Name, BOOLEAN Persistent);
+
+DWORD
+CmdListOpt(BOOLEAN Persistent);
 
 #ifdef __cplusplus
 }
