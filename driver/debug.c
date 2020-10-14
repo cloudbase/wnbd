@@ -40,4 +40,5 @@ WnbdLog(UINT32 Level,
     va_end(Args);
 
     DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    WnbdWppTrace(Level, "%s:%lu %s\n", FuncName, Line, Buf);
 }

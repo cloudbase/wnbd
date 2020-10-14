@@ -29,6 +29,7 @@ NTSTATUS
 DriverEntry(PDRIVER_OBJECT DriverObject,
             PUNICODE_STRING RegistryPath)
 {
+    WPP_INIT_TRACING(DriverObject, RegistryPath);
     WNBD_LOG_LOUD(": Enter");
 
     /*
@@ -181,4 +182,5 @@ WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
     }
 
     WNBD_LOG_LOUD(": Exit");
+    WPP_CLEANUP(DriverObject);
 }

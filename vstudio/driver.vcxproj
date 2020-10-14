@@ -79,6 +79,11 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WppEnabled>true</WppEnabled>
+      <WppPreprocessorDefinitions>WPP_INLINE __inline</WppPreprocessorDefinitions>
+      <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <WppTraceFunction>WnbdWppTrace{FLAGS=MYDRIVER_ALL_INFO}(LEVEL,MSG,...)</WppTraceFunction>
+      <WppScanConfigurationData>$(KMDF_INC_PATH)$(KMDF_VER_PATH)\WdfTraceEnums.h</WppScanConfigurationData>
     </ClCompile>
     <Link />
     <Link />
