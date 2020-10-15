@@ -71,7 +71,7 @@ DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
             goto Exit;
         }
 
-        ErrorCode = WnbdIoctlPing(WnbdDriverHandle);
+        ErrorCode = WnbdIoctlPing(WnbdDriverHandle, NULL);
         if (ErrorCode) {
             CloseHandle(WnbdDriverHandle);
             WnbdDriverHandle = INVALID_HANDLE_VALUE;
@@ -133,10 +133,64 @@ DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance)
     return Status;
 }
 
-DWORD WnbdIoctlCreate(HANDLE Adapter, PWNBD_PROPERTIES Properties,
-                      PWNBD_CONNECTION_INFO ConnectionInfo)
+DWORD WnbdDeviceIoControl(
+    HANDLE hDevice,
+    DWORD dwIoControlCode,
+    LPVOID lpInBuffer,
+    DWORD nInBufferSize,
+    LPVOID lpOutBuffer,
+    DWORD nOutBufferSize,
+    LPDWORD lpBytesReturned,
+    LPOVERLAPPED lpOverlapped)
 {
-    DWORD ErrorCode = ERROR_SUCCESS;
+    OVERLAPPED InternalOverlapped = { 0 };
+    DWORD Status = ERROR_SUCCESS;
+    HANDLE TempEvent = NULL;
+
+    // DeviceIoControl can hang when FILE_FLAG_OVERLAPPED is used
+    // without a valid overlapped structure. We're providing one and also
+    // do the wait on behalf of the caller when lpOverlapped is NULL,
+    // mimicking the Windows API.
+    if (!lpOverlapped) {
+        TempEvent = CreateEventA(0, FALSE, FALSE, NULL);
+        if (!TempEvent) {
+            Status = GetLastError();
+            LogError("Could not create event. Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+            return Status;
+        }
+        InternalOverlapped.hEvent = TempEvent;
+        lpOverlapped = &InternalOverlapped;
+    }
+
+    BOOL DevStatus = DeviceIoControl(
+        hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer,
+        nOutBufferSize, lpBytesReturned, lpOverlapped);
+    if (DevStatus) {
+        Status = GetLastError();
+        if (Status == ERROR_IO_PENDING && TempEvent) {
+            // We might consider an alertable wait using GetOverlappedResultEx.
+            if (!GetOverlappedResult(hDevice, lpOverlapped,
+                                     lpBytesReturned, TRUE)) {
+                Status = GetLastError();
+            }
+        }
+    }
+
+    if (TempEvent) {
+        CloseHandle(TempEvent);
+    }
+
+    return Status;
+}
+
+DWORD WnbdIoctlCreate(
+    HANDLE Adapter,
+    PWNBD_PROPERTIES Properties,
+    PWNBD_CONNECTION_INFO ConnectionInfo,
+    LPOVERLAPPED Overlapped)
+{
+    DWORD Status = ERROR_SUCCESS;
 
     // Perform some minimal input validation before passing the request.
     if (STRING_OVERFLOWS(Properties->InstanceName, WNBD_MAX_NAME_LENGTH) ||
@@ -160,22 +214,22 @@ DWORD WnbdIoctlCreate(HANDLE Adapter, PWNBD_PROPERTIES Properties,
     Command.IoControlCode = IOCTL_WNBD_CREATE;
     memcpy(&Command.Properties, Properties, sizeof(WNBD_PROPERTIES));
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), ConnectionInfo, sizeof(WNBD_CONNECTION_INFO),
-        &BytesReturned, NULL);
-    if (!DevStatus) {
-        ErrorCode = GetLastError();
+        &BytesReturned, Overlapped);
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Could not create WNBD disk. Error: %d. Error message: %s",
-                 ErrorCode, win32_strerror(ErrorCode).c_str());
+                 Status, win32_strerror(Status).c_str());
     }
 
-    return ErrorCode;
+    return Status;
 }
 
 DWORD WnbdIoctlRemove(
     HANDLE Adapter, const char* InstanceName,
-    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions)
+    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
 
@@ -198,11 +252,11 @@ DWORD WnbdIoctlRemove(
     }
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
-    if (!DevStatus) {
-        Status = GetLastError();
+        &Command, sizeof(Command), NULL, 0, &BytesReturned, Overlapped);
+
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogDebug("Could not find the disk to be removed.");
         }
@@ -219,7 +273,8 @@ DWORD WnbdIoctlFetchRequest(
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_REQUEST Request,
     PVOID DataBuffer,
-    UINT32 DataBufferSize)
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
 
@@ -231,13 +286,13 @@ DWORD WnbdIoctlFetchRequest(
     Command.DataBuffer = DataBuffer;
     Command.DataBufferSize = DataBufferSize;
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND),
         &Command, sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND),
-        &BytesReturned, NULL);
-    if (!DevStatus) {
-        Status = GetLastError();
+        &BytesReturned, Overlapped);
+
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogWarning(
             "Could not fetch request. Error: %d. "
             "Buffer: %p, buffer size: %d, connection id: %llu. "
@@ -257,7 +312,8 @@ DWORD WnbdIoctlSendResponse(
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
-    UINT32 DataBufferSize)
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
 
@@ -270,13 +326,12 @@ DWORD WnbdIoctlSendResponse(
     Command.DataBufferSize = DataBufferSize;
     memcpy(&Command.Response, Response, sizeof(WNBD_IO_RESPONSE));
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(WNBD_IOCTL_SEND_RSP_COMMAND),
-        NULL, 0, &BytesReturned, NULL);
+        NULL, 0, &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogWarning(
             "Could not send response. Error: %d. "
             "Connection id: %llu. Error message: %s",
@@ -289,18 +344,18 @@ DWORD WnbdIoctlSendResponse(
 DWORD WnbdIoctlList(
     HANDLE Adapter,
     PWNBD_CONNECTION_LIST ConnectionList,
-    PDWORD BufferSize)
+    PDWORD BufferSize,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_LIST_COMMAND Command = { IOCTL_WNBD_LIST };
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), ConnectionList,
-        *BufferSize, BufferSize, NULL);
+        *BufferSize, BufferSize, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Could not get disk list. Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
     }
@@ -308,8 +363,11 @@ DWORD WnbdIoctlList(
     return Status;
 }
 
-DWORD WnbdIoctlStats(HANDLE Adapter, const char* InstanceName,
-                     PWNBD_DRV_STATS Stats)
+DWORD WnbdIoctlStats(
+    HANDLE Adapter,
+    const char* InstanceName,
+    PWNBD_DRV_STATS Stats,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -318,13 +376,12 @@ DWORD WnbdIoctlStats(HANDLE Adapter, const char* InstanceName,
     Command.IoControlCode = IOCTL_WNBD_STATS;
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
-        Stats, sizeof(WNBD_DRV_STATS), &BytesReturned, NULL);
+        Stats, sizeof(WNBD_DRV_STATS), &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogInfo("Could not find the specified disk.");
         }
@@ -337,8 +394,11 @@ DWORD WnbdIoctlStats(HANDLE Adapter, const char* InstanceName,
     return Status;
 }
 
-DWORD WnbdIoctlShow(HANDLE Adapter, const char* InstanceName,
-                    PWNBD_CONNECTION_INFO ConnectionInfo)
+DWORD WnbdIoctlShow(
+    HANDLE Adapter,
+    const char* InstanceName,
+    PWNBD_CONNECTION_INFO ConnectionInfo,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -347,13 +407,13 @@ DWORD WnbdIoctlShow(HANDLE Adapter, const char* InstanceName,
     Command.IoControlCode = IOCTL_WNBD_SHOW;
     memcpy(Command.InstanceName, InstanceName, strlen(InstanceName));
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
-        ConnectionInfo, sizeof(WNBD_CONNECTION_INFO), &BytesReturned, NULL);
+        ConnectionInfo, sizeof(WNBD_CONNECTION_INFO),
+        &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogInfo("Could not find the specified disk.");
         }
@@ -366,17 +426,19 @@ DWORD WnbdIoctlShow(HANDLE Adapter, const char* InstanceName,
     return Status;
 }
 
-DWORD WnbdIoctlReloadConfig(HANDLE Adapter)
+DWORD WnbdIoctlReloadConfig(
+    HANDLE Adapter,
+    LPOVERLAPPED Overlapped)
 {
     DWORD BytesReturned = 0;
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_RELOAD_CONFIG_COMMAND Command = { IOCTL_WNBD_RELOAD_CONFIG };
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
-    if (!DevStatus) {
-        Status = GetLastError();
+        &Command, sizeof(Command), NULL, 0, &BytesReturned, Overlapped);
+
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Could not get reload driver config. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
@@ -385,17 +447,19 @@ DWORD WnbdIoctlReloadConfig(HANDLE Adapter)
     return Status;
 }
 
-DWORD WnbdIoctlPing(HANDLE Adapter)
+DWORD WnbdIoctlPing(
+    HANDLE Adapter,
+    LPOVERLAPPED Overlapped)
 {
     DWORD BytesReturned = 0;
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_PING_COMMAND Command = { IOCTL_WNBD_PING };
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
-        &Command, sizeof(Command), NULL, 0, &BytesReturned, NULL);
-    if (!DevStatus) {
-        Status = GetLastError();
+        &Command, sizeof(Command), NULL, 0, &BytesReturned, Overlapped);
+
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Failed while pinging driver. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
@@ -408,7 +472,8 @@ DWORD WnbdIoctlGetDrvOpt(
     HANDLE Adapter,
     const char* Name,
     PWNBD_OPTION_VALUE Value,
-    BOOLEAN Persistent)
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -418,14 +483,13 @@ DWORD WnbdIoctlGetDrvOpt(
     Command.Persistent = Persistent;
     to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         Value, sizeof(WNBD_OPTION_VALUE),
-        &BytesReturned, NULL);
+        &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogError("Could not find driver option: %s.", Name);
         }
@@ -443,7 +507,8 @@ DWORD WnbdIoctlSetDrvOpt(
     HANDLE Adapter,
     const char* Name,
     PWNBD_OPTION_VALUE Value,
-    BOOLEAN Persistent)
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -454,14 +519,13 @@ DWORD WnbdIoctlSetDrvOpt(
     Command.Value = *Value;
     to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         NULL, 0,
-        &BytesReturned, NULL);
+        &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogError("Could not find driver option: %s.", Name);
         }
@@ -478,7 +542,8 @@ DWORD WnbdIoctlSetDrvOpt(
 DWORD WnbdIoctlResetDrvOpt(
     HANDLE Adapter,
     const char* Name,
-    BOOLEAN Persistent)
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -488,14 +553,13 @@ DWORD WnbdIoctlResetDrvOpt(
     Command.Persistent = Persistent;
     to_wstring(Name).copy(Command.Name, WNBD_MAX_OPT_NAME_LENGTH);
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
         NULL, 0,
-        &BytesReturned, NULL);
+        &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
             LogError("Could not find driver option: %s.", Name);
         }
@@ -513,20 +577,20 @@ DWORD WnbdIoctlListDrvOpt(
     HANDLE Adapter,
     PWNBD_OPTION_LIST OptionList,
     PDWORD BufferSize,
-    BOOLEAN Persistent)
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     WNBD_IOCTL_LIST_DRV_OPT_COMMAND Command = { 0 };
     Command.IoControlCode = IOCTL_WNBD_LIST_DRV_OPT;
     Command.Persistent = Persistent;
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command), OptionList,
-        *BufferSize, BufferSize, NULL);
+        *BufferSize, BufferSize, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Could not get option list. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
@@ -535,7 +599,10 @@ DWORD WnbdIoctlListDrvOpt(
     return Status;
 }
 
-DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version)
+DWORD WnbdIoctlVersion(
+    HANDLE Adapter,
+    PWNBD_VERSION Version,
+    LPOVERLAPPED Overlapped)
 {
     DWORD Status = ERROR_SUCCESS;
     DWORD BytesReturned = 0;
@@ -543,13 +610,13 @@ DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version)
     WNBD_IOCTL_VERSION_COMMAND Command = { 0 };
     Command.IoControlCode = IOCTL_WNBD_VERSION;
 
-    BOOL DevStatus = DeviceIoControl(
+    Status = WnbdDeviceIoControl(
         Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
         &Command, sizeof(Command),
-        Version, sizeof(WNBD_VERSION), &BytesReturned, NULL);
+        Version, sizeof(WNBD_VERSION),
+        &BytesReturned, Overlapped);
 
-    if (!DevStatus) {
-        Status = GetLastError();
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogError("Could not get driver version. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());

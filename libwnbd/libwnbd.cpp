@@ -60,7 +60,8 @@ DWORD WnbdCreate(
     }
 
     ErrorCode = WnbdIoctlCreate(
-        Disk->Handle, &Disk->Properties, &Disk->ConnectionInfo);
+        Disk->Handle, &Disk->Properties,
+        &Disk->ConnectionInfo, NULL);
     if (ErrorCode) {
         goto Exit;
     }
@@ -266,7 +267,7 @@ DWORD WnbdRemoveEx(
             }
         }
     }
-    Status = WnbdIoctlRemove(Handle, InstanceName, NULL);
+    Status = WnbdIoctlRemove(Handle, InstanceName, NULL, NULL);
     CloseHandle(Handle);
 
     // We'll mask ERROR_FILE_NOT_FOUND errors that occur after actually
@@ -289,7 +290,7 @@ DWORD WnbdList(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlList(Handle, ConnectionList, BufferSize);
+    Status = WnbdIoctlList(Handle, ConnectionList, BufferSize, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -305,7 +306,7 @@ DWORD WnbdShow(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlShow(Handle, InstanceName, ConnectionInfo);
+    Status = WnbdIoctlShow(Handle, InstanceName, ConnectionInfo, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -347,7 +348,7 @@ DWORD WnbdGetDriverStats(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlStats(Handle, InstanceName, Stats);
+    Status = WnbdIoctlStats(Handle, InstanceName, Stats, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -377,7 +378,7 @@ DWORD WnbdGetDriverVersion(PWNBD_VERSION Version)
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlVersion(Handle, Version);
+    Status = WnbdIoctlVersion(Handle, Version, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -394,7 +395,7 @@ DWORD WnbdGetDrvOpt(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlGetDrvOpt(Handle, Name, Value, Persistent);
+    Status = WnbdIoctlGetDrvOpt(Handle, Name, Value, Persistent, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -411,7 +412,7 @@ DWORD WnbdSetDrvOpt(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlSetDrvOpt(Handle, Name, Value, Persistent);
+    Status = WnbdIoctlSetDrvOpt(Handle, Name, Value, Persistent, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -427,7 +428,7 @@ DWORD WnbdResetDrvOpt(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlResetDrvOpt(Handle, Name, Persistent);
+    Status = WnbdIoctlResetDrvOpt(Handle, Name, Persistent, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -444,7 +445,7 @@ DWORD WnbdListDrvOpt(
         return ERROR_OPEN_FAILED;
     }
 
-    Status = WnbdIoctlListDrvOpt(Handle, OptionList, BufferSize, Persistent);
+    Status = WnbdIoctlListDrvOpt(Handle, OptionList, BufferSize, Persistent, NULL);
 
     CloseHandle(Handle);
     return Status;
@@ -558,11 +559,12 @@ void WnbdSetSense(PWNBD_STATUS Status, UINT8 SenseKey, UINT8 Asc)
     Status->InformationValid = 0;
 }
 
-DWORD WnbdSendResponse(
+DWORD WnbdSendResponseEx(
     PWNBD_DISK Disk,
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
-    UINT32 DataBufferSize)
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped)
 {
     LogDebug(
         "Sending response: [%s] : (SS:%u, SK:%u, ASC:%u, I:%llu) # %llx "
@@ -604,10 +606,20 @@ DWORD WnbdSendResponse(
         Disk->ConnectionInfo.ConnectionId,
         Response,
         DataBuffer,
-        DataBufferSize);
+        DataBufferSize,
+        Overlapped);
     InterlockedDecrement64((PLONG64)&Disk->Stats.PendingReplies);
 
     return Status;
+}
+
+DWORD WnbdSendResponse(
+    PWNBD_DISK Disk,
+    PWNBD_IO_RESPONSE Response,
+    PVOID DataBuffer,
+    UINT32 DataBufferSize)
+{
+    return WnbdSendResponseEx(Disk, Response, DataBuffer, DataBufferSize, NULL);
 }
 
 VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
@@ -738,25 +750,67 @@ DWORD WnbdDispatcherLoop(PWNBD_DISK Disk)
     DWORD ErrorCode = 0;
     WNBD_IO_REQUEST Request;
     DWORD BufferSize = WNBD_DEFAULT_MAX_TRANSFER_LENGTH;
-    PVOID Buffer = malloc(BufferSize);
+    PVOID Buffer = NULL;
+    OVERLAPPED Overlapped = { 0 };
+
+    HANDLE OverlappedEvent = CreateEventA(0, TRUE, TRUE, NULL);
+    if (!OverlappedEvent) {
+        ErrorCode = GetLastError();
+        LogError("Could not create event. Error: %d. Error message: %s",
+                 ErrorCode, win32_strerror(ErrorCode).c_str());
+        goto Exit;
+        
+    }
+    Overlapped.hEvent = OverlappedEvent;
+
+    Buffer = malloc(BufferSize);
+    if (!Buffer) {
+        LogError("Could not allocate %d bytes.", BufferSize);
+        ErrorCode = ERROR_OUTOFMEMORY;
+        goto Exit;
+    }
 
     while (WnbdIsRunning(Disk)) {
+        if (!ResetEvent(OverlappedEvent)) {
+            ErrorCode = GetLastError();
+            LogError("Could not reset event. Error: %d. Error message: %s",
+                     ErrorCode, win32_strerror(ErrorCode).c_str());
+            break;
+        }
+
         ErrorCode = WnbdIoctlFetchRequest(
             Disk->Handle,
             Disk->ConnectionInfo.ConnectionId,
             &Request,
             Buffer,
-            BufferSize);
+            BufferSize,
+            &Overlapped);
+
+        if (ErrorCode == ERROR_IO_PENDING) {
+            DWORD BytesReturned = 0;
+            if (!GetOverlappedResult(Disk->Handle, &Overlapped,
+                                     &BytesReturned, TRUE)) {
+                ErrorCode = GetLastError();
+            }
+        }
+
         if (ErrorCode) {
             break;
         }
+
         WnbdHandleRequest(Disk, &Request, Buffer);
     }
 
+Exit:
     WNBD_REMOVE_OPTIONS RemoveOptions = {0};
     RemoveOptions.Flags.HardRemove = TRUE;
     WnbdStopDispatcher(Disk, &RemoveOptions);
-    free(Buffer);
+
+    if (OverlappedEvent)
+        CloseHandle(OverlappedEvent);
+
+    if (Buffer)
+        free(Buffer);
 
     return ErrorCode;
 }

@@ -145,7 +145,7 @@ DWORD CmdMap(
     Props.BlockCount = BlockSize ? DiskSize / BlockSize : 0;
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    Status = WnbdIoctlCreate(WnbdDriverHandle, &Props, &ConnectionInfo);
+    Status = WnbdIoctlCreate(WnbdDriverHandle, &Props, &ConnectionInfo, NULL);
 
     CloseHandle(WnbdDriverHandle);
     return Status;

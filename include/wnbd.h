@@ -191,6 +191,12 @@ DWORD WnbdSendResponse(
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
     UINT32 DataBufferSize);
+DWORD WnbdSendResponseEx(
+    PWNBD_DISK Disk,
+    PWNBD_IO_RESPONSE Response,
+    PVOID DataBuffer,
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped);
 
 /**
 * Retrieve a specific WNBD option.
@@ -254,52 +260,74 @@ DWORD WnbdListDrvOpt(
 DWORD WnbdOpenAdapter(PHANDLE Handle);
 DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance);
 DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance);
-DWORD WnbdIoctlPing(HANDLE Adapter);
+DWORD WnbdIoctlPing(HANDLE Adapter, LPOVERLAPPED Overlapped);
 
+// The "Overlapped" parameter used by WnbdIoctl* functions allows
+// asynchronous calls. If NULL, a valid overlapped structure is
+// provided by libwnbd, also performing the wait on behalf of the
+// caller.
+//
+// NOTE: Overlapped structures should be re-used as much as possible,
+// avoiding the need of reinitializing the embedded event all the time,
+// especially for functions that are used in the IO path.
 DWORD WnbdIoctlCreate(
     HANDLE Adapter,
     PWNBD_PROPERTIES Properties,
     // The resulting connecting info.
-    PWNBD_CONNECTION_INFO ConnectionInfo);
+    PWNBD_CONNECTION_INFO ConnectionInfo,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlRemove(
     HANDLE Adapter,
     const char* InstanceName,
-    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions);
+    PWNBD_REMOVE_COMMAND_OPTIONS RemoveOptions,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlList(
     HANDLE Adapter,
     PWNBD_CONNECTION_LIST ConnectionList,
     // Connection list buffer size.
-    PDWORD BufferSize);
+    PDWORD BufferSize,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlShow(
     HANDLE Adapter,
     const char* InstanceName,
-    PWNBD_CONNECTION_INFO ConnectionInfo);
+    PWNBD_CONNECTION_INFO ConnectionInfo,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlStats(
     HANDLE Adapter,
     const char* InstanceName,
-    PWNBD_DRV_STATS Stats);
+    PWNBD_DRV_STATS Stats,
+    LPOVERLAPPED Overlapped);
 // Reload the persistent settings provided through registry keys.
-DWORD WnbdIoctlReloadConfig(HANDLE Adapter);
-DWORD WnbdIoctlVersion(HANDLE Adapter, PWNBD_VERSION Version);
+DWORD WnbdIoctlReloadConfig(
+    HANDLE Adapter,
+    LPOVERLAPPED Overlapped);
+DWORD WnbdIoctlVersion(
+    HANDLE Adapter,
+    PWNBD_VERSION Version,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlGetDrvOpt(
     HANDLE Adapter,
     const char* Name,
     PWNBD_OPTION_VALUE Value,
-    BOOLEAN Persistent);
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlSetDrvOpt(
     HANDLE Adapter,
     const char* Name,
     PWNBD_OPTION_VALUE Value,
-    BOOLEAN Persistent);
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlResetDrvOpt(
     HANDLE Adapter,
     const char* Name,
-    BOOLEAN Persistent);
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlListDrvOpt(
     HANDLE Adapter,
     PWNBD_OPTION_LIST OptionList,
     PDWORD BufferSize,
-    BOOLEAN Persistent);
+    BOOLEAN Persistent,
+    LPOVERLAPPED Overlapped);
 
 // The connection id should be handled carefully in order to avoid delayed replies
 // from being submitted to other disks after being remapped.
@@ -308,13 +336,15 @@ DWORD WnbdIoctlFetchRequest(
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_REQUEST Request,
     PVOID DataBuffer,
-    UINT32 DataBufferSize);
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlSendResponse(
     HANDLE Adapter,
     WNBD_CONNECTION_ID ConnectionId,
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
-    UINT32 DataBufferSize);
+    UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped);
 
 HRESULT WnbdCoInitializeBasic();
 // Requires COM. For convenience, WnbdCoInitializeBasic may be used.

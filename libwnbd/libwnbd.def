@@ -18,6 +18,7 @@ EXPORTS
     WnbdStopDispatcher
     WnbdWaitDispatcher
     WnbdSendResponse
+    WnbdSendResponseEx
     WnbdCoInitializeBasic
     WnbdGetDiskNumberBySerialNumber
     WnbdGetConnectionInfo
