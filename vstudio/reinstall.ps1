@@ -5,6 +5,7 @@ $devconBin = "$scriptLocation\devcon.exe"
 $wnbdInf = "$scriptLocation\wnbd.inf"
 $wnbdCat = "$scriptLocation\wnbd.cat"
 $wnbdSys = "$scriptLocation\wnbd.sys"
+$wnbdevents = "$scriptLocation\wnbdevents.xml"
 
 $requiredFiles = @($devconBin, $wnbdInf, $wnbdCat, $wnbdSys)
 foreach ($path in $requiredFiles) {
@@ -14,8 +15,10 @@ foreach ($path in $requiredFiles) {
 }
 
 & $devconBin remove "root\wnbd"
+wevtutil um $wnbdevents
 
 pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
     % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] /force }
 
 & $devconBin install $wnbdInf root\wnbd
+wevtutil im $wnbdevents

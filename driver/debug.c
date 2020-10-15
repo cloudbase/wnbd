@@ -10,6 +10,7 @@
 
 #include "debug.h"
 #include "options.h"
+#include "events.h"
 
 #define WNBD_LOG_BUFFER_SIZE 512
 
@@ -39,6 +40,23 @@ WnbdLog(UINT32 Level,
     RtlStringCbVPrintfA(Buf, sizeof(Buf), Format, Args);
     va_end(Args);
 
-    DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    /* Log via ETW */
+    switch (Level) {
+        case WNBD_LVL_ERROR:
+            EventWriteErrorEvent(NULL, FuncName, Line, Buf);
+        break;
+        case WNBD_LVL_WARN:
+            EventWriteWarningEvent(NULL, FuncName, Line, Buf);
+        break;
+        default:
+            EventWriteInformationalEvent(NULL, FuncName, Line, Buf);
+        break;
+    }
+
+    /* Log via WPP */
     WnbdWppTrace(Level, "%s:%lu %s\n", FuncName, Line, Buf);
+
+
+    /* Default logging */
+    DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
 }
