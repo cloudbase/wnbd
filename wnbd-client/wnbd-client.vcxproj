@@ -96,6 +96,7 @@
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
+      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\..\get_dependencies.ps1"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
@@ -121,6 +122,7 @@
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
+      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\..\get_dependencies.ps1"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -142,6 +144,7 @@
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
+      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\..\get_dependencies.ps1"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -151,7 +154,19 @@
   <ItemGroup>
     <ClInclude Include="cmd.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config"/>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets" Condition="Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" />
+    <Import Project="$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets" Condition="Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" AfterTargets="PreBuildEvent">
+    <PropertyGroup>
+      <ErrorText>Missing dependency: {0}. Please use "get_dependencies.ps1" before building WNBD.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets'))" />
+    <Error Condition="!Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets'))" />
+  </Target>
 </Project>
