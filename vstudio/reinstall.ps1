@@ -6,28 +6,11 @@ $wnbdInf = "$scriptLocation\wnbd.inf"
 $wnbdCat = "$scriptLocation\wnbd.cat"
 $wnbdSys = "$scriptLocation\wnbd.sys"
 
-$status = Test-Path -Path $devconBin -PathType leaf
-
-if ($status -eq $false) {
-    Write-Host "Devcon utility not found in $scriptLocation"
-}
-
-$status = Test-Path -Path $wnbdInf -PathType leaf
-
-if ($status -eq $false) {
-    Write-Host "wnbd.inf not found in $scriptLocation"
-}
-
-$status = Test-Path -Path $wnbdCat -PathType leaf
-
-if ($status -eq $false) {
-    Write-Host "wnbd.cat not found in $scriptLocation"
-}
-
-$status = Test-Path -Path $wnbdSys -PathType leaf
-
-if ($status -eq $false) {
-    Write-Host "wnbd.sys not found in $scriptLocation"
+$requiredFiles = @($devconBin, $wnbdInf, $wnbdCat, $wnbdSys)
+foreach ($path in $requiredFiles) {
+    if (!(Test-Path -Path $path -PathType leaf)) {
+        Write-Warning "Could not find file: $path"
+    }
 }
 
 & $devconBin remove "root\wnbd"
