@@ -30,17 +30,17 @@ void
 PrintSyntax();
 
 DWORD
-CmdUnmap(PCHAR InstanceName, BOOLEAN HardRemove);
+CmdUnmap(PCSTR InstanceName, BOOLEAN HardRemove);
 
 DWORD
-CmdStats(PCHAR InstanceName);
+CmdStats(PCSTR InstanceName);
 
 DWORD
 CmdMap(
-    PCHAR InstanceName,
-    PCHAR HostName,
+    PCSTR InstanceName,
+    PCSTR HostName,
     DWORD PortNumber,
-    PCHAR ExportName,
+    PCSTR ExportName,
     UINT64 DiskSize,
     UINT32 BlockSize,
     BOOLEAN MustNegotiate,

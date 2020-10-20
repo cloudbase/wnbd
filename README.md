@@ -150,24 +150,8 @@ The following samples describe configuring a Linux NBD server and connecting to 
 Please check [this page](https://github.com/NetworkBlockDevice/nbd#using-nbd) for more details
 about using NBD.
 
-### ``wnbd-client`` Syntax
-
-```PowerShell
-wnbd-client.exe -h
-```
-```
-Syntax:
-wnbd-client version
-wnbd-client map  <InstanceName> <HostName> <PortName> <ExportName> [<SkipNBDNegotiation> <ReadOnly> <DiskSize> <BlockSize>]
-wnbd-client unmap <InstanceName> [HardRemove]
-wnbd-client list
-wnbd-client stats <InstanceName>
-wnbd-client get-opt <OptionName> [Persistent]
-wnbd-client set-opt <OptionName> <OptionValue> [Persistent]
-wnbd-client reset-opt <OptionName> [Persistent]
-wnbd-client list-opt [Persistent]
-```
-
+Use ``wnbd-client help [<command-name>]`` to get the full list of commands as well as the
+available options.
 
 ### NBD server configuration
 

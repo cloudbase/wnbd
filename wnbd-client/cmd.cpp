@@ -50,22 +50,6 @@ std::string OptValToString(PWNBD_OPTION_VALUE Value)
     return stream.str();
 }
 
-void PrintSyntax()
-{
-    fprintf(stderr, "Syntax:\n");
-    fprintf(stderr, "wnbd-client -v\n");
-    fprintf(stderr, "wnbd-client map  <InstanceName> <HostName> "
-                    "<PortName> <ExportName> [<SkipNBDNegotiation> "
-                    "<ReadOnly> <DiskSize> <BlockSize>]\n");
-    fprintf(stderr, "wnbd-client unmap <InstanceName> [HardRemove]\n");
-    fprintf(stderr, "wnbd-client list \n");
-    fprintf(stderr, "wnbd-client stats <InstanceName>\n");
-    fprintf(stderr, "wnbd-client get-opt <OptionName> [Persistent]\n");
-    fprintf(stderr, "wnbd-client set-opt <OptionName> <OptionValue> [Persistent]\n");
-    fprintf(stderr, "wnbd-client reset-opt <OptionName> [Persistent]\n");
-    fprintf(stderr, "wnbd-client list-opt [Persistent]\n");
-}
-
 void PrintFormattedError(DWORD Error)
 {
     LPVOID LpMsgBuf;
@@ -94,10 +78,10 @@ void PrintLastError()
 }
 
 DWORD CmdMap(
-    PCHAR InstanceName,
-    PCHAR HostName,
+    PCSTR InstanceName,
+    PCSTR HostName,
     DWORD PortNumber,
-    PCHAR ExportName,
+    PCSTR ExportName,
     UINT64 DiskSize,
     UINT32 BlockSize,
     BOOLEAN SkipNegotiation,
@@ -105,11 +89,24 @@ DWORD CmdMap(
 {
     if (!PortNumber) {
         fprintf(stderr, "Missing NBD server port number.\n");
+        return ERROR_INVALID_PARAMETER;
     }
     if (SkipNegotiation && !(BlockSize && DiskSize)) {
         fprintf(stderr,
                 "The disk size and block size must be provided when "
                 "skipping NBD negotiation.\n");
+        return ERROR_INVALID_PARAMETER;
+    }
+    if (!strlen(ExportName)) {
+        ExportName = InstanceName;
+    }
+    if (!strlen(InstanceName)) {
+        fprintf(stderr, "Missing instace name.\n");
+        return ERROR_INVALID_PARAMETER;
+    }
+    if (!strlen(HostName)) {
+        fprintf(stderr, "Missing NBD hostname.\n");
+        return ERROR_INVALID_PARAMETER;
     }
 
     WNBD_PROPERTIES Props = { 0 };
@@ -151,7 +148,7 @@ DWORD CmdMap(
     return Status;
 }
 
-DWORD CmdUnmap(PCHAR InstanceName, BOOLEAN HardRemove)
+DWORD CmdUnmap(PCSTR InstanceName, BOOLEAN HardRemove)
 {
     WNBD_REMOVE_OPTIONS RemoveOptions = {0};
     RemoveOptions.Flags.HardRemove = HardRemove;
@@ -165,7 +162,7 @@ DWORD CmdUnmap(PCHAR InstanceName, BOOLEAN HardRemove)
     return Status;
 }
 
-DWORD CmdStats(PCHAR InstanceName)
+DWORD CmdStats(PCSTR InstanceName)
 {
     WNBD_DRV_STATS Stats = {0};
     DWORD Status = WnbdGetDriverStats(InstanceName, &Stats);
