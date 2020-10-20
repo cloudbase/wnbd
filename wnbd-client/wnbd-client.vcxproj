@@ -148,14 +148,18 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="client.cpp" />
     <ClCompile Include="cmd.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="usage.cc" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="client.h" />
     <ClInclude Include="cmd.h" />
+    <ClInclude Include="usage.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config"/>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
