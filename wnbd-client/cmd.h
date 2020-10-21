@@ -55,6 +55,9 @@ DWORD
 CmdList();
 
 DWORD
+CmdShow(PCSTR InstanceName);
+
+DWORD
 CmdVersion();
 
 DWORD

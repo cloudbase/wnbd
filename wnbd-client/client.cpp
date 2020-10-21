@@ -146,6 +146,20 @@ DWORD execute_list(const po::variables_map &vm)
     return CmdList();
 }
 
+void get_show_args(
+    po::positional_options_description &positonal_opts,
+    po::options_description &named_opts)
+{
+    positonal_opts.add("instance-name", 1);
+    named_opts.add_options()
+        ("instance-name", po::value<string>()->required(), "Disk identifier.");
+}
+
+DWORD execute_show(const po::variables_map &vm)
+{
+    return CmdShow(safe_get_param<string>(vm, "instance-name").c_str());
+}
+
 void get_map_args(
     po::positional_options_description &positonal_opts,
     po::options_description &named_opts)
@@ -313,6 +327,9 @@ Client::Command commands[] = {
     Client::Command(
         "list", {"ls"}, "List WNBD disks",
         execute_list),
+    Client::Command(
+        "show", {}, "Show detailed disk information.",
+        execute_show, get_show_args),
     Client::Command(
         "map", {}, "Create a new disk mapping, connecting to the "
                    "specified NBD server.",
