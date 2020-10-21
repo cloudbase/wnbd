@@ -13,9 +13,13 @@
 #include <codecvt>
 #include <locale>
 #include <sstream>
+#include <iostream>
+#include <iomanip>
 
 #pragma comment(lib, "Setupapi.lib")
 #pragma comment(lib, "CfgMgr32.lib")
+
+using namespace std;
 
 std::wstring to_wstring(std::string str)
 {
@@ -174,16 +178,55 @@ DWORD CmdStats(PCSTR InstanceName)
         return Status;
     }
 
-    printf("Disk stats:\n");
-    printf("TotalReceivedIORequests: %llu\n", Stats.TotalReceivedIORequests);
-    printf("TotalSubmittedIORequests: %llu\n", Stats.TotalSubmittedIORequests);
-    printf("TotalReceivedIOReplies: %llu\n", Stats.TotalReceivedIOReplies);
-    printf("UnsubmittedIORequests: %llu\n", Stats.UnsubmittedIORequests);
-    printf("PendingSubmittedIORequests: %llu\n", Stats.PendingSubmittedIORequests);
-    printf("AbortedSubmittedIORequests: %llu\n", Stats.AbortedSubmittedIORequests);
-    printf("AbortedUnsubmittedIORequests: %llu\n", Stats.AbortedUnsubmittedIORequests);
-    printf("CompletedAbortedIORequests: %llu\n", Stats.CompletedAbortedIORequests);
-    printf("OutstandingIOCount: %llu\n", Stats.OutstandingIOCount);
+    cout << "Disk stats" << endl << left
+         << setw(30) << "TotalReceivedIORequests" << " : " <<  Stats.TotalReceivedIORequests << endl
+         << setw(30) << "TotalSubmittedIORequests" << " : " <<  Stats.TotalSubmittedIORequests << endl
+         << setw(30) << "TotalReceivedIOReplies" << " : " <<  Stats.TotalReceivedIOReplies << endl
+         << setw(30) << "UnsubmittedIORequests" << " : " <<  Stats.UnsubmittedIORequests << endl
+         << setw(30) << "PendingSubmittedIORequests" << " : " <<  Stats.PendingSubmittedIORequests << endl
+         << setw(30) << "AbortedSubmittedIORequests" << " : " <<  Stats.AbortedSubmittedIORequests << endl
+         << setw(30) << "AbortedUnsubmittedIORequests" << " : " <<  Stats.AbortedUnsubmittedIORequests << endl
+         << setw(30) << "CompletedAbortedIORequests" << " : " <<  Stats.CompletedAbortedIORequests << endl
+         << setw(30) << "OutstandingIOCount" << " : " <<  Stats.OutstandingIOCount << endl
+         << endl;
+    return Status;
+}
+
+DWORD CmdShow(PCSTR InstanceName)
+{
+    WNBD_CONNECTION_INFO ConnInfo = {0};
+    DWORD Status = WnbdShow(InstanceName, &ConnInfo);
+    if (Status) {
+        return Status;
+    }
+
+    cout << "Connection info" << endl << left
+         << setw(25) << "InstanceName" << " : " <<  ConnInfo.Properties.InstanceName << endl
+         << setw(25) << "SerialNumber" << " : " <<  ConnInfo.Properties.SerialNumber << endl
+         << setw(25) << "Owner" << " : " <<  ConnInfo.Properties.Owner << endl
+         << setw(25) << "ReadOnly" << " : " <<  ConnInfo.Properties.Flags.ReadOnly << endl
+         << setw(25) << "FlushSupported" << " : " <<  ConnInfo.Properties.Flags.FlushSupported << endl
+         << setw(25) << "FUASupported" << " : " <<  ConnInfo.Properties.Flags.FUASupported << endl
+         << setw(25) << "UnmapSupported" << " : " <<  ConnInfo.Properties.Flags.UnmapSupported << endl
+         << setw(25) << "UnmapAnchorSupported " << " : "
+                     << ConnInfo.Properties.Flags.UnmapAnchorSupported << endl
+         << setw(25) << "UseNbd" << " : " <<  ConnInfo.Properties.Flags.UseNbd << endl
+         << setw(25) << "BlockCount" << " : " <<  ConnInfo.Properties.BlockCount << endl
+         << setw(25) << "BlockSize" << " : " <<  ConnInfo.Properties.BlockSize << endl
+         << setw(25) << "MaxUnmapDescCount" << " : " <<  ConnInfo.Properties.MaxUnmapDescCount << endl
+         << setw(25) << "Pid" << " : " <<  ConnInfo.Properties.Pid << endl
+         << endl;
+
+    if (ConnInfo.Properties.Flags.UseNbd) {
+        cout << "Nbd properties" << endl << left
+             << setw(25) << "Hostname" << " : " << ConnInfo.Properties.NbdProperties.Hostname << endl
+             << setw(25) << "PortNumber" << " : " << ConnInfo.Properties.NbdProperties.PortNumber << endl
+             << setw(25) << "ExportName" << " : " << ConnInfo.Properties.NbdProperties.ExportName << endl
+             << setw(25) << "SkipNegotiation" << " : "
+                         << ConnInfo.Properties.NbdProperties.Flags.SkipNegotiation << endl
+             << endl;
+    }
+
     return Status;
 }
 
@@ -228,7 +271,6 @@ DWORD GetList(PWNBD_CONNECTION_LIST* ConnectionList)
     return Status;
 }
 
-// TODO: add CmdShow
 DWORD CmdList()
 {
     PWNBD_CONNECTION_LIST ConnList = NULL;
