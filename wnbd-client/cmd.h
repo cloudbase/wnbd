@@ -30,7 +30,12 @@ void
 PrintSyntax();
 
 DWORD
-CmdUnmap(PCSTR InstanceName, BOOLEAN HardRemove);
+CmdUnmap(
+    PCSTR InstanceName,
+    BOOLEAN HardRemove,
+    BOOLEAN NoHardDisonnectFallback,
+    DWORD SoftDisconnectTimeout,
+    DWORD SoftDisconnectRetryInterval);
 
 DWORD
 CmdStats(PCSTR InstanceName);

@@ -190,7 +190,33 @@ void get_unmap_args(
     positonal_opts.add("instance-name", 1);
     named_opts.add_options()
         ("instance-name", po::value<string>()->required(), "Disk identifier.")
-        ("hard-disconnect", po::bool_switch(), "Perform a hard disconnect.");
+        ("hard-disconnect", po::bool_switch(),
+            "Perform a hard disconnect. Warning: pending IO operations as "
+            "well as unflushed data will be discarded.")
+        ("no-hard-disconnect-fallback", po::bool_switch(),
+            "Immediately return an error if the soft disconnect fails instead "
+            "of attempting a hard disconnect as fallback.")
+        ("soft-disconnect-timeout",
+            po::value<DWORD>()->default_value(WNBD_DEFAULT_RM_TIMEOUT_MS / 1000),
+            ("Soft disconnect timeout in seconds. The soft disconnect operation "
+             "uses PnP to notify the Windows storage stack that the device is "
+             "going to be disconnected. Storage drivers can block this operation "
+             "if there are pending operations, unflushed caches or open handles. "
+             "Default: " + to_string(WNBD_DEFAULT_RM_TIMEOUT_MS / 1000) + ".").c_str())
+        ("soft-disconnect-retry-interval",
+            po::value<DWORD>()->default_value(WNBD_DEFAULT_RM_RETRY_INTERVAL_MS / 1000),
+            ("Soft disconnect retry interval in seconds. "
+             "Default: " + to_string(WNBD_DEFAULT_RM_RETRY_INTERVAL_MS / 1000) + ".").c_str());
+}
+
+DWORD execute_unmap(const po::variables_map& vm)
+{
+    return CmdUnmap(
+        safe_get_param<string>(vm, "instance-name").c_str(),
+        safe_get_param<bool>(vm, "hard-disconnect"),
+        safe_get_param<bool>(vm, "no-hard-disconnect-fallback"),
+        safe_get_param<DWORD>(vm, "soft-disconnect-timeout"),
+        safe_get_param<DWORD>(vm, "soft-disconnect-retry-interval"));
 }
 
 DWORD execute_stats(const po::variables_map& vm)
@@ -206,14 +232,6 @@ void get_stats_args(
     positonal_opts.add("instance-name", 1);
     named_opts.add_options()
         ("instance-name", po::value<string>()->required(), "Disk identifier.");
-}
-
-// TODO: expose soft unmap parameters
-DWORD execute_unmap(const po::variables_map& vm)
-{
-    return CmdUnmap(
-        safe_get_param<string>(vm, "instance-name").c_str(),
-        safe_get_param<bool>(vm, "hard-disconnect"));
 }
 
 void get_list_opt_args(
