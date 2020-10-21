@@ -148,15 +148,19 @@ DWORD CmdMap(
     return Status;
 }
 
-DWORD CmdUnmap(PCSTR InstanceName, BOOLEAN HardRemove)
+DWORD CmdUnmap(
+    PCSTR InstanceName,
+    BOOLEAN HardRemove,
+    BOOLEAN NoHardDisonnectFallback,
+    DWORD SoftDisconnectTimeout,
+    DWORD SoftDisconnectRetryInterval)
 {
     WNBD_REMOVE_OPTIONS RemoveOptions = {0};
     RemoveOptions.Flags.HardRemove = HardRemove;
 
-    // TODO: make those configurable. We should use named arguments first.
-    RemoveOptions.Flags.HardRemoveFallback = TRUE;
-    RemoveOptions.SoftRemoveTimeoutMs = WNBD_DEFAULT_RM_TIMEOUT_MS;
-    RemoveOptions.SoftRemoveRetryIntervalMs = WNBD_DEFAULT_RM_RETRY_INTERVAL_MS;
+    RemoveOptions.Flags.HardRemoveFallback = !NoHardDisonnectFallback;
+    RemoveOptions.SoftRemoveTimeoutMs = SoftDisconnectTimeout * 1000;
+    RemoveOptions.SoftRemoveRetryIntervalMs = SoftDisconnectRetryInterval * 1000;
 
     DWORD Status = WnbdRemoveEx(InstanceName, &RemoveOptions);
     return Status;
