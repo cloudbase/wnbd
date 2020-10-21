@@ -166,13 +166,17 @@ DWORD WnbdDeviceIoControl(
     BOOL DevStatus = DeviceIoControl(
         hDevice, dwIoControlCode, lpInBuffer, nInBufferSize, lpOutBuffer,
         nOutBufferSize, lpBytesReturned, lpOverlapped);
-    if (DevStatus) {
+    if (!DevStatus) {
         Status = GetLastError();
         if (Status == ERROR_IO_PENDING && TempEvent) {
             // We might consider an alertable wait using GetOverlappedResultEx.
             if (!GetOverlappedResult(hDevice, lpOverlapped,
                                      lpBytesReturned, TRUE)) {
                 Status = GetLastError();
+            }
+            else {
+                // The asynchronous operation completed successfully.
+                Status = 0;
             }
         }
     }

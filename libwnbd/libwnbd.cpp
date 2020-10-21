@@ -792,6 +792,9 @@ DWORD WnbdDispatcherLoop(PWNBD_DISK Disk)
                                      &BytesReturned, TRUE)) {
                 ErrorCode = GetLastError();
             }
+            else {
+                ErrorCode = 0;
+            }
         }
 
         if (ErrorCode) {
