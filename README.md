@@ -41,15 +41,6 @@ contributed under the terms of the applicable license.
 
 Please check [SubmittingPatches.rst](SubmittingPatches.rst/) for more details.
 
-Prerequisites
--------------
-
-Visual Studio 2019 build tools or GUI ([Community version](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16)  or above)
-
-[Windows Driver Kit 1909](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
-
-As an alternative, you may use a [Docker Container](Dockerfile/Readme.md) that provides the build prerequisites.
-
 Folders
 -------
 
@@ -64,18 +55,44 @@ Folders
 How to build
 ------------
 
+### Prerequisites
+
+Visual Studio 2019 build tools or GUI ([Community version]
+(https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16) or above)
+
+[Windows Driver Kit 1909](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+
+As an alternative, you may use a [Docker Container](Dockerfile/Readme.md)
+that provides the build prerequisites.
+
+``wnbd-client`` uses Boost, other dependencies might be added as well in the future.
+The WNBD dependencies are fetched using [this script](get_dependencies.ps1), which
+is automatically invoked when building the solution.
+
+### Building and packaging
+
+The following snippet builds the WNBD project and copies the generated binaries to
+``$outDir``. The "reinstall.ps1" script removes existing WNBD devices and drivers,
+proceeding to install the driver placed in the same directory.
+
 ```PowerShell
 git clone https://github.com/cloudbase/wnbd
 msbuild wnbd\vstudio\wnbd.sln
-copy wnbd\vstudio\x64\Debug\driver\* .
-copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
-copy wnbd\vstudio\x64\Debug\libwnbd.dll .
+# The following binaries can be archived and copied to a destination
+# host. Use "reinstall.ps1" to install or reinstall the driver.
+copy wnbd\vstudio\x64\Debug\driver\* $outDir
+copy wnbd\vstudio\x64\Debug\wnbd-client.exe $outDir
+copy wnbd\vstudio\x64\Debug\libwnbd.dll $outDir
+copy wnbd\vstudio\reinstall.ps1 $outDir
 ```
 
-You can download the latest prebuilt packages from Appveyor via the links:
+You can also download the latest prebuilt packages from Appveyor via the links:
 
 * [Debug](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Debug.zip?job=Configuration%3A+Debug)
 * [Release](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Release.zip?job=Configuration%3A+Release)
+
+[This project](https://github.com/cloudbase/ceph-windows-installer) allows building
+an MSI installer that bundles WNBD and the Ceph Windows clients.
 
 How to install
 --------------
@@ -131,7 +148,11 @@ pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
 
 For convenience, we included [reinstall.ps1](vstudio/reinstall.ps1), which installs/reinstalls the driver.
 
-[This project](https://github.com/cloudbase/ceph-windows-installer) allows building MSI installers that bundle WNBD and the Ceph Windows clients.
+After installing the driver, you may want to copy ``wnbd-client.exe`` and ``libwnbd.dll``
+to a directory that's part of the ``PATH`` environment variable.
+
+[This project](https://github.com/cloudbase/ceph-windows-installer) allows building
+an MSI installer that bundles WNBD and the Ceph Windows clients.
 
 Ceph integration
 ----------------
@@ -181,8 +202,7 @@ copyonwrite = true
 ### Mapping an NBD export
 
 ```PowerShell
-# feel free to use a different name for the mapping
-wnbd-client.exe map test2 $nbdServerAddress 10809 foo
+wnbd-client.exe map foo $nbdServerAddress --port 10809
 Get-Disk
 ```
 ```
@@ -190,7 +210,7 @@ Number Friendly Name            Serial Number   HealthStatus         Operational
                                                                                                       Style
 ------ -------------            -------------   ------------         -----------------      ---------- ----------
 0      Msft Virtual Disk                        Healthy              Online                     127 GB GPT
-1      WNBD Dis WNBD_DISK_ID    test2           Healthy              Online                     256 MB RAW
+1      WNBD WNBD_DISK           foo             Healthy              Online                     256 MB RAW
 ```
 
 ### Listing mapped devices
@@ -200,11 +220,24 @@ wnbd-client.exe list
 ```
 ```
 Pid         DiskNumber  Nbd    Owner            InstanceName
-3508        1           true   wnbd-client      test2
+3508        1           true   wnbd-client      foo
 4024        2           false  ceph-rbd-wnbd    rbd/rbd_win_10g
 ```
 
 ### Unmapping the device
+
+By default, a soft disconnect is attempted. If that fails or times out,
+a hard disconnect is performed as fallback.
+
+A soft disconnect will notify other storage drivers that the disk is
+about to be removed. Such drivers can temporarily block the disk removal
+until ready (e.g. wait for pending IO, flush caches, wait for open files, etc).
+
+Using the ``--debug`` flag will tell what's blocking the soft device
+removal (for example, a volume ID if there are open files).
+
+A hard remove doesn't emit PnP notifications to other storage drivers,
+requesting the WNBD driver to remove the disk immediately.
 
 ```PowerShell
 wnbd-client.exe unmap test2
@@ -213,6 +246,6 @@ Get-Disk
 ```
 Number Friendly Name             Serial Number    HealthStatus         OperationalStatus      Total Size Partition
                                                                                                             Style
-    ------ -------------             -------------    ------------         -----------------      ---------- ----------
-    0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
+------ -------------             -------------    ------------         -----------------      ---------- ----------
+0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
 ```
