@@ -86,9 +86,6 @@
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;$(DDK_LIB_PATH )libcntpr.lib;$(DDK_LIB_PATH )wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -98,9 +95,6 @@
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <ClCompile>
@@ -110,9 +104,6 @@
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
     <PostBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(SolutionFileName) /p:Configuration=Release; msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Release /p:SolutionDir=$(SolutionDir); msbuild $(ProjectFileName) /p:Configuration=Release /P:RunCodeAnalysisOnce=True</Command>
     </PostBuildEvent>

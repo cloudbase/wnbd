@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This project handles build prerequisites, fetching dependencies and generating the
+     version header. It's provided merely as a convenience, avoiding the need of
+     explicitly invoking external scripts.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Analyze|x64">
+      <Configuration>Analyze</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>16.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{4ee28b36-2083-4fba-88d7-fe60027b81bb}</ProjectGuid>
+    <RootNamespace>builddeps</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Utility</ConfigurationType>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+
+  <Target Name="Build">
+    <Exec Command="powershell.exe -executionpolicy bypass -file &quot;$(SolutionDir)\generate_version_h.ps1&quot;" />
+    <Exec Command="powershell.exe -executionpolicy bypass -file &quot;$(SolutionDir)\..\get_dependencies.ps1&quot;" />
+    <PropertyGroup>
+      <MissingDepsError>Missing dependency: {0}. It was supposed to be retrieved using "get_dependencies.ps1".</MissingDepsError>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" Text="$([System.String]::Format('$(MissingDepsError)', '$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets'))" />
+    <Error Condition="!Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" Text="$([System.String]::Format('$(MissingDepsError)', '$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets'))" />
+  </Target>
+</Project>

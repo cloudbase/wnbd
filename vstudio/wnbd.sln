@@ -4,6 +4,7 @@ VisualStudioVersion = 16.0.29709.97
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver", "driver.vcxproj", "{0091FAE6-479E-40CB-985E-1AC3FB633391}"
 	ProjectSection(ProjectDependencies) = postProject
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB} = {4EE28B36-2083-4FBA-88D7-FE60027B81BB}
 		{8C21EBB6-5127-4D50-A418-69771C8EC40E} = {8C21EBB6-5127-4D50-A418-69771C8EC40E}
 	EndProjectSection
 EndProject
@@ -12,9 +13,15 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wnbd-client", "..\wnbd-client\wnbd-client.vcxproj", "{A9A19AD0-D8F6-4D41-9B82-375370C408D7}"
 	ProjectSection(ProjectDependencies) = postProject
 		{15FFEE2F-F65A-47D1-8389-15E5ADD971CA} = {15FFEE2F-F65A-47D1-8389-15E5ADD971CA}
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB} = {4EE28B36-2083-4FBA-88D7-FE60027B81BB}
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libwnbd", "..\libwnbd\libwnbd.vcxproj", "{15FFEE2F-F65A-47D1-8389-15E5ADD971CA}"
+	ProjectSection(ProjectDependencies) = postProject
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB} = {4EE28B36-2083-4FBA-88D7-FE60027B81BB}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "build_deps", "build_deps.vcxproj", "{4EE28B36-2083-4FBA-88D7-FE60027B81BB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +58,12 @@ Global
 		{15FFEE2F-F65A-47D1-8389-15E5ADD971CA}.Debug|x64.Build.0 = Debug|x64
 		{15FFEE2F-F65A-47D1-8389-15E5ADD971CA}.Release|x64.ActiveCfg = Release|x64
 		{15FFEE2F-F65A-47D1-8389-15E5ADD971CA}.Release|x64.Build.0 = Release|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Analyze|x64.ActiveCfg = Analyze|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Analyze|x64.Build.0 = Analyze|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Debug|x64.ActiveCfg = Debug|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Debug|x64.Build.0 = Debug|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Release|x64.ActiveCfg = Release|x64
+		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
