@@ -99,9 +99,6 @@
       <ModuleDefinitionFile>libwnbd.def</ModuleDefinitionFile>
       <ProgramDatabaseFile>$(OutDir)\pdb\libwnbd\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -124,9 +121,6 @@
       <ModuleDefinitionFile>libwnbd.def</ModuleDefinitionFile>
       <ProgramDatabaseFile>$(OutDir)\pdb\libwnbd\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <ClCompile>
@@ -149,9 +143,6 @@
       <ModuleDefinitionFile>libwnbd.def</ModuleDefinitionFile>
       <ProgramDatabaseFile>$(OutDir)\pdb\libwnbd\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-    <PreBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -file "$(SolutionDir)\generate_version_h.ps1"</Command>
-    </PreBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
