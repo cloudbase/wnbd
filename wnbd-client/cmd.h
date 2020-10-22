@@ -6,10 +6,6 @@
 
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <windows.h>
 #include <winioctl.h>
 #include <shlobj.h>
@@ -21,6 +17,8 @@ extern "C" {
 #include <string.h>
 #include <process.h>
 
+#include <string>
+
 /* WNBD Defines */
 #include "wnbd.h"
 
@@ -31,21 +29,21 @@ PrintSyntax();
 
 DWORD
 CmdUnmap(
-    PCSTR InstanceName,
+    std::string InstanceName,
     BOOLEAN HardRemove,
     BOOLEAN NoHardDisonnectFallback,
     DWORD SoftDisconnectTimeout,
     DWORD SoftDisconnectRetryInterval);
 
 DWORD
-CmdStats(PCSTR InstanceName);
+CmdStats(std::string InstanceName);
 
 DWORD
 CmdMap(
-    PCSTR InstanceName,
-    PCSTR HostName,
+    std::string InstanceName,
+    std::string HostName,
     DWORD PortNumber,
-    PCSTR ExportName,
+    std::string ExportName,
     UINT64 DiskSize,
     UINT32 BlockSize,
     BOOLEAN MustNegotiate,
@@ -55,23 +53,19 @@ DWORD
 CmdList();
 
 DWORD
-CmdShow(PCSTR InstanceName);
+CmdShow(std::string InstanceName);
 
 DWORD
 CmdVersion();
 
 DWORD
-CmdGetOpt(const char* Name, BOOLEAN Persistent);
+CmdGetOpt(std::string Name, BOOLEAN Persistent);
 
 DWORD
-CmdSetOpt(const char* Name, const char* Value, BOOLEAN Persistent);
+CmdSetOpt(std::string Name, std::string Value, BOOLEAN Persistent);
 
 DWORD
-CmdResetOpt(const char* Name, BOOLEAN Persistent);
+CmdResetOpt(std::string Name, BOOLEAN Persistent);
 
 DWORD
 CmdListOpt(BOOLEAN Persistent);
-
-#ifdef __cplusplus
-}
-#endif
