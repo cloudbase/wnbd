@@ -144,6 +144,9 @@
     <ClInclude Include="..\driver\util.h" />
     <ClInclude Include="..\driver\wnbd_dispatch.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\driver\wnbd.rc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -1,0 +1,58 @@
+/*-
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ * Copyright (C) 2019-2020 SUSE LLC
+ *
+ * This library is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * by the Free Software Foundation; version 2.1.
+ *
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License
+ * for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library; if not, write to the
+ *
+ *  Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor,
+ *  Boston, MA 02110-1301 USA
+ *
+ */
+
+#include <windows.h>
+#include <ntverp.h>
+#include "..\include\version.h"
+
+#define VER_INTERNALNAME_STR        "wnbd.sys"
+#define VER_ORIGINALFILENAME_STR    "wnbd.sys"
+
+#undef VER_PRODUCTVERSION
+#define VER_PRODUCTVERSION          WNBD_VERSION_MAJOR,WNBD_VERSION_MINOR,WNBD_VERSION_PATCH,WNBD_COMMIT_COUNT
+
+#undef VER_PRODUCTVERSION_STR
+#define VER_PRODUCTVERSION_STR      WNBD_VERSION_STR
+
+#define VER_FILEVERSION             WNBD_VERSION_MAJOR,WNBD_VERSION_MINOR,WNBD_VERSION_PATCH,WNBD_COMMIT_COUNT
+#define VER_FILEVERSION_STR         WNBD_VERSION_STR_MS
+
+#undef VER_COMPANYNAME_STR
+#define VER_COMPANYNAME_STR        "SUSE LLC"
+
+#undef VER_FILEDESCRIPTION_STR
+#undef VER_PRODUCTNAME_STR
+#define VER_FILEDESCRIPTION_STR     "Windows Network Block Device"
+#define VER_PRODUCTNAME_STR         "SUSE Enterprise Storage Driver for Windows"
+
+#define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
+
+#define VER_FILETYPE                VFT_DRV
+
+#define VER_LEGALCOPYRIGHT_STR      "Copyright \251 2019-2020 SUSE LLC All rights reserved.", "\0"
+
+/* Strings to be translated */
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#include "common.ver"
