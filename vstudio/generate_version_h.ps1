@@ -8,6 +8,8 @@ $versionHeaderPath = "$scriptLocation/../include/version.h"
 $gitShortDesc = git describe --tags
 $gitLongDesc = git describe --tags --long
 $gitTag = git describe --tags --abbrev=0
+$gitBranch = git branch --show-current
+$gitCommitCount = git rev-list --count "$gitTag..$gitBranch"
 
 $isDev = (($gitLongDesc) -split "-")[-2] -ne "0"
 
@@ -20,6 +22,7 @@ $versionMajor = $Matches.major
 $versionMinor = $Matches.minor
 $versionPatch = $Matches.patch
 $versionStr = "$gitShortDesc"
+$versionStrMS = "$versionMajor.$versionMinor.$versionPatch.$gitCommitCount"
 
 # We might add some more info to the version string.
 $versionStrMaxLen = 127
@@ -36,8 +39,10 @@ $versionHeader = @"
 #define WNBD_VERSION_MAJOR ${versionMajor}
 #define WNBD_VERSION_MINOR ${versionMinor}
 #define WNBD_VERSION_PATCH ${versionPatch}
+#define WNBD_COMMIT_COUNT ${gitCommitCount}
 
 #define WNBD_VERSION_STR "${versionStr}"
+#define WNBD_VERSION_STR_MS "${versionStrMS}"
 "@
 
 echo $versionHeader | out-file -encoding utf8 -filepath $versionHeaderPath
