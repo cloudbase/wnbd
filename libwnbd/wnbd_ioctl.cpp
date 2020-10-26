@@ -337,9 +337,11 @@ DWORD WnbdIoctlSendResponse(
 
     if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         LogWarning(
-            "Could not send response. Error: %d. "
-            "Connection id: %llu. Error message: %s",
-            Status, ConnectionId, win32_strerror(Status).c_str());
+            "Could not send response. "
+            "Connection id: %llu. Request id: %llu. "
+            "Error: %d. Error message: %s",
+            ConnectionId, Response->RequestHandle,
+            Status, win32_strerror(Status).c_str());
     }
 
     return Status;

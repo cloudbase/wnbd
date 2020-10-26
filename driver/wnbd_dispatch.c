@@ -281,7 +281,7 @@ NTSTATUS WnbdHandleResponse(
     }
     KeReleaseSpinLock(&Device->SubmittedReqListLock, Irql);
     if (!Element) {
-        WNBD_LOG_ERROR("Received reply with no matching request tag: 0x%llx",
+        WNBD_LOG_LOUD("Received reply with no matching request tag: 0x%llx",
             Response->RequestHandle);
         return STATUS_NOT_FOUND;
     }
