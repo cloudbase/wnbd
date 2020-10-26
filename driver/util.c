@@ -27,12 +27,12 @@ VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
     PKSPIN_LOCK ListLock;
 
     if (SubmittedRequests) {
-        ListHead = &Device->PendingReqListHead;
-        ListLock = &Device->PendingReqListLock;
-    }
-    else {
         ListHead = &Device->SubmittedReqListHead;
         ListLock = &Device->SubmittedReqListLock;
+    }
+    else {
+        ListHead = &Device->PendingReqListHead;
+        ListLock = &Device->PendingReqListLock;
     }
 
     while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
@@ -55,8 +55,6 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
     // We're marking submitted requests as aborted and notifying Storport. We only cleaning
     // them up when eventually receiving a reply from the storage backend (needed by NBD,
     // in which case the IO payload is otherwise unknown).
-    // TODO: consider cleaning up aborted requests when not using NBD. For NBD, we might
-    // have a limit of aborted requests that we keep around.
     WNBD_LOG_LOUD(": Enter");
 
     PLIST_ENTRY ListHead = &Device->SubmittedReqListHead;
@@ -73,7 +71,7 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
         Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
         if (!Element->Aborted) {
             Element->Aborted = 1;
-            InterlockedIncrement64(&Device->Stats.AbortedUnsubmittedIORequests);
+            InterlockedIncrement64(&Device->Stats.AbortedSubmittedIORequests);
         }
         CompleteRequest(Device, Element, FALSE);
     }
