@@ -24,6 +24,7 @@
 #include <windows.h>
 #include <ntverp.h>
 #include "..\include\version.h"
+#include "..\include\vendor.h"
 
 #define VER_INTERNALNAME_STR        "wnbd.sys"
 #define VER_ORIGINALFILENAME_STR    "wnbd.sys"
@@ -38,12 +39,12 @@
 #define VER_FILEVERSION_STR         WNBD_VERSION_STR_MS
 
 #undef VER_COMPANYNAME_STR
-#define VER_COMPANYNAME_STR        "SUSE LLC"
+#define VER_COMPANYNAME_STR         WNBD_COMPANY_STR
 
 #undef VER_FILEDESCRIPTION_STR
 #undef VER_PRODUCTNAME_STR
-#define VER_FILEDESCRIPTION_STR     "Windows Network Block Device"
-#define VER_PRODUCTNAME_STR         "SUSE Enterprise Storage Driver for Windows"
+#define VER_FILEDESCRIPTION_STR     WNBD_FILEDESCRIPTION_STR
+#define VER_PRODUCTNAME_STR         WNBD_PRODUCTNAME_STR
 
 #define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
 
