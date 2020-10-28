@@ -154,4 +154,7 @@
     <Import Project="$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets" Condition="Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" />
     <Import Project="$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets" Condition="Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" />
   </ImportGroup>
+  <PropertyGroup>
+    <CAExcludePath>$(SolutionDir)\deps;$(CAExcludePath)</CAExcludePath>
+  </PropertyGroup>
 </Project>
