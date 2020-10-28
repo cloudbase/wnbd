@@ -1,5 +1,13 @@
+/*
+ * Copyright (c) 2020 SUSE LLC
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
 #ifndef WNBD_IOCTL_H
 #define WNBD_IOCTL_H
+
+#include <assert.h>
 
 #define WNBD_REGISTRY_KEY "SYSTEM\\CurrentControlSet\\Services\\wnbd"
 
@@ -35,6 +43,9 @@ static const GUID WNBD_GUID = {
 // Only used for NBD connections, in which case the block size is optional.
 #define WNBD_DEFAULT_BLOCK_SIZE 512
 
+#define WNBD_ASSERT_SZ_EQ(Structure, Size) \
+    static_assert(sizeof(Structure) == Size, "Invalid structure size");
+
 typedef enum
 {
     WnbdReqTypeUnknown = 0,
@@ -60,6 +71,7 @@ typedef struct
     UINT32 ReservedFRU:8;
     UINT32 InformationValid:1;
 } WNBD_STATUS, *PWNBD_STATUS;
+WNBD_ASSERT_SZ_EQ(WNBD_STATUS, 32);
 
 typedef struct {
     // Skip NBD negotiation and jump directly to the transmission phase.
@@ -69,6 +81,7 @@ typedef struct {
     UINT32 SkipNegotiation:1;
     UINT32 Reserved:31;
 } NBD_CONNECTION_FLAGS, *PNBD_CONNECTION_FLAGS;
+WNBD_ASSERT_SZ_EQ(NBD_CONNECTION_FLAGS, 4);
 
 typedef struct
 {
@@ -76,8 +89,9 @@ typedef struct
     UINT32 PortNumber;
     CHAR ExportName[WNBD_MAX_NAME_LENGTH];
     NBD_CONNECTION_FLAGS Flags;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } NBD_CONNECTION_PROPERTIES, *PNBD_CONNECTION_PROPERTIES;
+WNBD_ASSERT_SZ_EQ(NBD_CONNECTION_PROPERTIES, 552);
 
 typedef struct
 {
@@ -93,6 +107,7 @@ typedef struct
     UINT32 UseNbd:1;
     UINT32 Reserved: 26;
 } WNBD_FLAGS, *PWNBD_FLAGS;
+WNBD_ASSERT_SZ_EQ(WNBD_FLAGS, 4);
 
 typedef struct
 {
@@ -115,14 +130,16 @@ typedef struct
     // NBD server details must be provided when the "UseNbd" flag
     // is set.
     NBD_CONNECTION_PROPERTIES NbdProperties;
-    UINT64 Reserved[32];
+    BYTE Reserved[256];
 } WNBD_PROPERTIES, *PWNBD_PROPERTIES;
+WNBD_ASSERT_SZ_EQ(WNBD_PROPERTIES, 1368);
 
 typedef struct
 {
     UINT32 Disconnecting:1;
     UINT32 Reserved:31;
 } WNBD_CONNECTION_INFO_FLAGS, PWNBD_CONNECTION_INFO_FLAGS;
+WNBD_ASSERT_SZ_EQ(WNBD_CONNECTION_INFO_FLAGS, 4);
 
 typedef struct
 {
@@ -132,8 +149,9 @@ typedef struct
     USHORT TargetId;
     USHORT Lun;
     WNBD_CONNECTION_ID ConnectionId;
-    UINT64 Reserved[16];
+    BYTE Reserved[128];
 } WNBD_CONNECTION_INFO, *PWNBD_CONNECTION_INFO;
+WNBD_ASSERT_SZ_EQ(WNBD_CONNECTION_INFO, 1520);
 
 typedef struct
 {
@@ -141,6 +159,7 @@ typedef struct
     UINT32 Count;
     WNBD_CONNECTION_INFO Connections[1];
 } WNBD_CONNECTION_LIST, *PWNBD_CONNECTION_LIST;
+WNBD_ASSERT_SZ_EQ(WNBD_CONNECTION_LIST, 1528);
 
 typedef struct
 {
@@ -158,6 +177,7 @@ typedef struct
     INT64 OutstandingIOCount;
     INT64 Reserved[15];
 } WNBD_DRV_STATS, *PWNBD_DRV_STATS;
+WNBD_ASSERT_SZ_EQ(WNBD_DRV_STATS, 192);
 
 typedef struct
 {
@@ -165,6 +185,7 @@ typedef struct
     UINT32 BlockCount;
     UINT32 Reserved;
 } WNBD_UNMAP_DESCRIPTOR, *PWNBD_UNMAP_DESCRIPTOR;
+WNBD_ASSERT_SZ_EQ(WNBD_UNMAP_DESCRIPTOR, 16);
 
 typedef struct
 {
@@ -199,16 +220,18 @@ typedef struct
             UINT32 Reserved:31;
         } Unmap;
     } Cmd;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IO_REQUEST, *PWNBD_IO_REQUEST;
+WNBD_ASSERT_SZ_EQ(WNBD_IO_REQUEST, 64);
 
 typedef struct
 {
     UINT64 RequestHandle;
     WnbdRequestType RequestType;
     WNBD_STATUS Status;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IO_RESPONSE, *PWNBD_IO_RESPONSE;
+WNBD_ASSERT_SZ_EQ(WNBD_IO_RESPONSE, 80);
 
 typedef enum
 {
@@ -230,6 +253,7 @@ typedef struct
     } Data;
     BYTE Reserved[64];
 } WNBD_OPTION_VALUE, *PWNBD_OPTION_VALUE;
+WNBD_ASSERT_SZ_EQ(WNBD_OPTION_VALUE, 584);
 
 typedef struct
 {
@@ -239,6 +263,7 @@ typedef struct
     WNBD_OPTION_VALUE Value;
     BYTE Reserved[64];
 } WNBD_OPTION, *PWNBD_OPTION;
+WNBD_ASSERT_SZ_EQ(WNBD_OPTION, 1368);
 
 typedef struct
 {
@@ -246,11 +271,13 @@ typedef struct
     UINT32 Count;
     WNBD_OPTION Options[1];
 } WNBD_OPTION_LIST, *PWNBD_OPTION_LIST;
+WNBD_ASSERT_SZ_EQ(WNBD_OPTION_LIST, 1376);
 
 typedef struct
 {
     ULONG IoControlCode;
 } WNBD_IOCTL_BASE_COMMAND, *PWNBD_IOCTL_BASE_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_BASE_COMMAND, 4);
 
 typedef WNBD_IOCTL_BASE_COMMAND WNBD_IOCTL_PING_COMMAND;
 typedef PWNBD_IOCTL_BASE_COMMAND PWNBD_IOCTL_PING_COMMAND;
@@ -268,13 +295,15 @@ typedef struct
 {
     ULONG IoControlCode;
     WNBD_PROPERTIES Properties;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_CREATE_COMMAND, *PWNBD_IOCTL_CREATE_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_CREATE_COMMAND, 1408);
 
 typedef struct
 {
     UINT32 Reserved:32;
 } WNBD_REMOVE_COMMAND_FLAGS, *PWNBD_REMOVE_COMMAND_FLAGS;
+WNBD_ASSERT_SZ_EQ(WNBD_REMOVE_COMMAND_FLAGS, 4);
 
 // Similar to the userspace WNBD_REMOVE_OPTIONS, currently unused.
 // The "Remove" API kept changing, so having a placeholder here
@@ -284,28 +313,32 @@ typedef struct
     WNBD_REMOVE_COMMAND_FLAGS Flags;
     BYTE Reserved[80];
 } WNBD_REMOVE_COMMAND_OPTIONS, *PWNBD_REMOVE_COMMAND_OPTIONS;
+WNBD_ASSERT_SZ_EQ(WNBD_REMOVE_COMMAND_OPTIONS, 84);
 
 typedef struct
 {
     ULONG IoControlCode;
     CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
     WNBD_REMOVE_COMMAND_OPTIONS Options;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_REMOVE_COMMAND, *PWNBD_IOCTL_REMOVE_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_REMOVE_COMMAND, 376);
 
 typedef struct
 {
     ULONG IoControlCode;
     CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_STATS_COMMAND, *PWNBD_IOCTL_STATS_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_STATS_COMMAND, 292);
 
 typedef struct
 {
     ULONG IoControlCode;
     CHAR InstanceName[WNBD_MAX_NAME_LENGTH];
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_SHOW_COMMAND, *PWNBD_IOCTL_SHOW_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_SHOW_COMMAND, 292);
 
 typedef struct
 {
@@ -314,8 +347,9 @@ typedef struct
     WNBD_CONNECTION_ID ConnectionId;
     PVOID DataBuffer;
     UINT32 DataBufferSize;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_FETCH_REQ_COMMAND, *PWNBD_IOCTL_FETCH_REQ_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_FETCH_REQ_COMMAND, 128);
 
 typedef struct
 {
@@ -324,8 +358,9 @@ typedef struct
     WNBD_CONNECTION_ID ConnectionId;
     PVOID DataBuffer;
     UINT32 DataBufferSize;
-    UINT64 Reserved[4];
+    BYTE Reserved[32];
 } WNBD_IOCTL_SEND_RSP_COMMAND, *PWNBD_IOCTL_SEND_RSP_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_SEND_RSP_COMMAND, 144);
 
 typedef struct
 {
@@ -334,6 +369,7 @@ typedef struct
     BOOLEAN Persistent;
     BYTE Reserved[32];
 } WNBD_IOCTL_GET_DRV_OPT_COMMAND, *PWNBD_IOCTL_GET_DRV_OPT_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_GET_DRV_OPT_COMMAND, 552);
 
 typedef struct
 {
@@ -343,6 +379,7 @@ typedef struct
     BOOLEAN Persistent;
     BYTE Reserved[32];
 } WNBD_IOCTL_SET_DRV_OPT_COMMAND, *PWNBD_IOCTL_SET_DRV_OPT_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_SET_DRV_OPT_COMMAND, 1144);
 
 typedef struct
 {
@@ -351,6 +388,7 @@ typedef struct
     BOOLEAN Persistent;
     BYTE Reserved[32];
 } WNBD_IOCTL_RESET_DRV_OPT_COMMAND, *PWNBD_IOCTL_RESET_DRV_OPT_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_RESET_DRV_OPT_COMMAND, 552);
 
 typedef struct
 {
@@ -358,6 +396,7 @@ typedef struct
     BOOLEAN Persistent;
     BYTE Reserved[32];
 } WNBD_IOCTL_LIST_DRV_OPT_COMMAND, *PWNBD_IOCTL_LIST_DRV_OPT_COMMAND;
+WNBD_ASSERT_SZ_EQ(WNBD_IOCTL_LIST_DRV_OPT_COMMAND, 40);
 
 static inline const CHAR* WnbdRequestTypeToStr(WnbdRequestType RequestType) {
     switch(RequestType)
@@ -384,5 +423,6 @@ typedef struct {
     CHAR Description[WNBD_MAX_VERSION_STR_LENGTH];
     BYTE Reserved[256];
 } WNBD_VERSION, *PWNBD_VERSION;
+WNBD_ASSERT_SZ_EQ(WNBD_VERSION, 396);
 
 #endif // WNBD_IOCTL_H

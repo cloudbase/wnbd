@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2020 SUSE LLC
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
 #ifndef WNBD_SHARED_H
 #define WNBD_SHARED_H
 
@@ -44,7 +50,9 @@ typedef struct _WNBD_USR_STATS
     UINT64 TotalRWRequests;
     UINT64 TotalReadBlocks;
     UINT64 TotalWrittenBlocks;
+    BYTE Reserved[144];
 } WNBD_USR_STATS, *PWNBD_USR_STATS;
+WNBD_ASSERT_SZ_EQ(WNBD_USR_STATS, 256);
 
 typedef struct
 {
@@ -53,6 +61,7 @@ typedef struct
     UINT32 HardRemoveFallback:1;
     UINT32 Reserved:30;
 } WNBD_REMOVE_FLAGS, *PWNBD_REMOVE_FLAGS;
+WNBD_ASSERT_SZ_EQ(WNBD_REMOVE_FLAGS, 4);
 
 typedef struct
 {
@@ -61,6 +70,7 @@ typedef struct
     DWORD SoftRemoveRetryIntervalMs;
     BYTE Reserved[64];
 } WNBD_REMOVE_OPTIONS, *PWNBD_REMOVE_OPTIONS;
+WNBD_ASSERT_SZ_EQ(WNBD_REMOVE_OPTIONS, 76);
 
 typedef struct _WNBD_INTERFACE WNBD_INTERFACE;
 // This should be handled as an opaque structure by library consumers.
@@ -121,6 +131,7 @@ typedef struct _WNBD_INTERFACE
     UnmapFunc Unmap;
     VOID* Reserved[15];
 } WNBD_INTERFACE, *PWNBD_INTERFACE;
+WNBD_ASSERT_SZ_EQ(WNBD_INTERFACE, 152);
 
 DWORD WnbdCreate(
     const PWNBD_PROPERTIES Properties,
