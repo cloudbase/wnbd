@@ -9,6 +9,9 @@
 #include "util.h"
 #include "wnbd_ioctl.h"
 
+#pragma warning(push)
+#pragma warning(disable:4204)
+
 extern UNICODE_STRING GlobalRegistryPath;
 
 #define WNBD_DEF_OPT(OptName, TypeSuffix, DefaultVal) \
@@ -303,3 +306,5 @@ WnbdListDrvOpt(
 
     return STATUS_SUCCESS;
 }
+
+#pragma warning(pop)
