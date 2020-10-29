@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2020 SUSE LLC
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
 #include <windows.h>
 #include <windef.h>
 #include <winioctl.h>

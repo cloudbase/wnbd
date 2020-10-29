@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2020 SUSE LLC
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
 #ifndef WNBD_DISPATCH_H
 #define WNBD_DISPATCH_H 1
 
