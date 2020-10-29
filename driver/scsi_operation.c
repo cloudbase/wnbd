@@ -658,9 +658,7 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     UINT32 BlockSize = Device->Properties.BlockSize;
     UINT64 BlockCount = Device->Properties.BlockCount;
 
-
     WNBD_LOG_LOUD("Processing %#02x command", Cdb->AsByte[0]);
-
     switch (Cdb->AsByte[0]) {
     case SCSIOP_READ6:
     case SCSIOP_READ:
@@ -679,12 +677,10 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     case SCSIOP_INQUIRY:
         Srb->SrbStatus = WnbdInquiry(Device, Srb, Cdb);
         break;
-
     case SCSIOP_MODE_SENSE:
     case SCSIOP_MODE_SENSE10:
         Srb->SrbStatus = WnbdModeSense(Device, Srb, Cdb);
         break;
-
     case SCSIOP_READ_CAPACITY:
         Srb->SrbStatus = WnbdReadCapacity(Device, Srb, Cdb, BlockSize, BlockCount);
         break;
@@ -696,12 +692,10 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         }
         break;
-
     case SCSIOP_VERIFY:
     case SCSIOP_TEST_UNIT_READY:
         Srb->SrbStatus = SRB_STATUS_SUCCESS;
         break;
-
     default:
         Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;

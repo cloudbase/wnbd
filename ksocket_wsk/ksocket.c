@@ -476,7 +476,6 @@ KsCreateDatagramSocket(
   return KsCreateSocket(Socket, AddressFamily, SocketType, Protocol, WSK_FLAG_DATAGRAM_SOCKET);
 }
 
-
 NTSTATUS
 NTAPI
 KsDisconnectSocket(

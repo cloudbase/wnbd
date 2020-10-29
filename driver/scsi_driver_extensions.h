@@ -98,7 +98,6 @@ WnbdHwFindAdapter(_In_ PVOID DeviceExtension,
 VOID
 WnbdHwFreeAdapterResources(_In_ PVOID DeviceExtension);
 
-
 BOOLEAN
 WnbdHwInitialize(_In_ PVOID DeviceExtension);
 

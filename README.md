@@ -6,7 +6,6 @@ Build Status:
 
 [![Build status](https://ci.appveyor.com/api/projects/status/2m73dxm2t7s7jlit/branch/master?svg=true)](https://ci.appveyor.com/project/aserdean/wnbd/branch/master)
 
-
 What is WNBD?
 -------------
 
@@ -197,7 +196,6 @@ exportname = /image/path.img
 port = 10809
 copyonwrite = true
 ```
-
 
 ### Mapping an NBD export
 

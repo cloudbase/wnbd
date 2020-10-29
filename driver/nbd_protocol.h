@@ -10,9 +10,6 @@
 #define NBD_REQUEST_MAGIC 0x25609513
 #define NBD_REPLY_MAGIC   0x67446698
 
-#define NBD_REQUEST_MAGIC 0x25609513
-#define NBD_REPLY_MAGIC   0x67446698
-
 /* values for flags field, these are server interaction specific. */
 #define NBD_FLAG_HAS_FLAGS  (1 << 0) /* nbd-server supports flags */
 #define NBD_FLAG_READ_ONLY  (1 << 1) /* device is read-only */
@@ -35,7 +32,6 @@
     CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_SEND_TRIM)
 #define CHECK_NBD_SEND_FLUSH(nbd_flags) \
     CHECK_NBD_FLAG(nbd_flags, NBD_FLAG_SEND_FLUSH)
-
 
 typedef enum {
     NBD_CMD_READ = 0,
@@ -96,10 +92,7 @@ __pragma(pack(pop))
 
 #define NBD_INFO_EXPORT		 0
 
-#define NBDC_DO_LIST 1
-
 #define NBD_MEMPOOL_TAG      'pDBN'
-#define BUF_SIZE              1024
 #define INIT_PASSWD           "NBDMAGIC"
 #define NbdMalloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, NBD_MEMPOOL_TAG)
 #define NbdFree(S) ExFreePool(S)

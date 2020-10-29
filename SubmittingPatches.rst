@@ -10,7 +10,6 @@ smoothly.
 .. contents::
    :depth: 3
 
-
 Sign your work
 --------------
 
@@ -65,7 +64,6 @@ following config options::
 Then just remember to use ``git commit -s``. Git will add the ``Signed-off-by``
 line automatically.
 
-
 Separate your changes
 ---------------------
 
@@ -83,7 +81,6 @@ On the other hand, if you make a single change that affects numerous
 files, group those changes into a single commit. Thus a single logical change is
 contained within a single patch. (If the change needs to be backported, that
 might change the calculus, because smaller commits are easier to backport.)
-
 
 Describe your changes
 ---------------------
@@ -156,7 +153,6 @@ If a commit fixes a regression introduced by a different commit, please also
 introduced the regression. For example::
 
      Fixes: 9dbe7a003989f8bb45fe14aaa587e9d60a392727
-
 
 PR best practices
 -----------------

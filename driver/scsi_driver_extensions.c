@@ -118,13 +118,11 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     /*
      * Initialize basic fields of the device global extension
      */
-
     InitializeListHead(&Ext->DeviceList);       
     KeInitializeSpinLock(&Ext->DeviceListLock);
     KeInitializeEvent(&Ext->GlobalDeviceRemovalEvent, SynchronizationEvent, FALSE);
     ExInitializeRundownProtection(&Ext->RundownProtection);
     GlobalExt = Ext;
-
 
     /*
      * Setup user-space communication device
@@ -376,8 +374,6 @@ WnbdProcessSrbIOCTL(PSCSI_REQUEST_BLOCK Srb)
 
     return Srb->SrbStatus;
 }
-
-
 
 /*
  * https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/storport/nc-storport-hw_startio
