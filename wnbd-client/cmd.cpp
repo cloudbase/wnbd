@@ -412,3 +412,29 @@ CmdListOpt(BOOLEAN Persistent)
     free(OptList);
     return 0;
 }
+
+DWORD
+CmdUninstall(BOOLEAN Force)
+{
+    BOOL RebootRequired = FALSE;
+    DWORD Status = WnbdUninstallDriver(&RebootRequired, Force);
+    if (RebootRequired) {
+        cerr << "Reboot required to complete the cleanup process"
+             << endl;
+    }
+
+    return Status;
+}
+
+DWORD
+CmdInstall(std::string FileName)
+{
+    BOOL RebootRequired = FALSE;
+    DWORD Status = WnbdInstallDriver(FileName.c_str(), &RebootRequired);
+    if (RebootRequired) {
+        cerr << "Reboot required to complete the installation"
+             << endl;
+    }
+
+    return Status;
+}

@@ -28,10 +28,12 @@ EXPORTS
     WnbdSetDrvOpt
     WnbdResetDrvOpt
     WnbdListDrvOpt
-
+    WnbdInstallDriver
+    WnbdUninstallDriver
     WnbdOpenAdapter
     WnbdOpenAdapterEx
     WnbdOpenAdapterCMDeviceInstance
+
     WnbdIoctlPing
     WnbdIoctlCreate
     WnbdIoctlRemove
