@@ -9,6 +9,7 @@
 
 #include <windows.h>
 #include <cfgmgr32.h>
+#include <SetupAPI.h>
 
 #include "wnbd_ioctl.h"
 
@@ -21,6 +22,9 @@ extern "C" {
 #define WNBD_LOG_MESSAGE_MAX_SIZE 4096
 #define WNBD_DEFAULT_RM_TIMEOUT_MS 30 * 1000
 #define WNBD_DEFAULT_RM_RETRY_INTERVAL_MS 2000
+
+#define WNBD_HARDWAREID "root\\wnbd"
+#define WNBD_HARDWAREID_LEN sizeof(WNBD_HARDWAREID)
 
 typedef enum
 {
@@ -272,6 +276,8 @@ DWORD WnbdOpenAdapter(PHANDLE Handle);
 DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance);
 DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance);
 DWORD WnbdIoctlPing(HANDLE Adapter, LPOVERLAPPED Overlapped);
+DWORD WnbdUninstallDriver(PBOOL RebootRequired);
+DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired);
 
 // The "Overlapped" parameter used by WnbdIoctl* functions allows
 // asynchronous calls. If NULL, a valid overlapped structure is
