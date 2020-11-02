@@ -69,3 +69,9 @@ CmdResetOpt(std::string Name, BOOLEAN Persistent);
 
 DWORD
 CmdListOpt(BOOLEAN Persistent);
+
+DWORD
+CmdUninstall();
+
+DWORD
+CmdInstall(std::string FileName);

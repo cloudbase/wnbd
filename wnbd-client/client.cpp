@@ -316,6 +316,26 @@ DWORD execute_reset_opt(const po::variables_map& vm)
         safe_get_param<bool>(vm, "persistent"));
 }
 
+DWORD execute_install(const po::variables_map& vm)
+{
+    return CmdInstall(
+        safe_get_param<string>(vm, "filename").c_str());
+}
+
+void get_install_args(
+    po::positional_options_description& positonal_opts,
+    po::options_description& named_opts)
+{
+    positonal_opts.add("filename", 1);
+    named_opts.add_options()
+        ("filename", po::value<string>()->required(), "The OEM driver information (wnbd.inf) path");
+}
+
+DWORD execute_clean_uninstall(const po::variables_map& vm)
+{
+    return CmdUninstall();
+}
+
 Client::Command commands[] = {
     Client::Command(
         "version", {"-v"}, "Get the client, library and driver version.",
@@ -352,4 +372,11 @@ Client::Command commands[] = {
     Client::Command(
         "reset-opt", {}, "Reset driver option.",
         execute_reset_opt, get_reset_opt_args),
+    Client::Command(
+        "install-driver", {}, "Install WNBD driver and create its adapter",
+        execute_install, get_install_args),
+    Client::Command(
+        "uninstall-driver", {}, "Hard remove all disk mappings and adapters"
+                                " and uninstall all WNBD driver instances",
+        execute_clean_uninstall),
 };

@@ -8,15 +8,20 @@
 #include <windef.h>
 #include <winioctl.h>
 #include <winioctl.h>
+#include <newdev.h>
 #include <ntddscsi.h>
+#include "Shlwapi.h"
 #include <setupapi.h>
 #include <string.h>
+#include <infstr.h>
 
 #include "wnbd.h"
 #include "wnbd_log.h"
 #include "utils.h"
 
 #pragma comment(lib, "Setupapi.lib")
+#pragma comment(lib, "Newdev.lib")
+#pragma comment(lib, "Shlwapi.lib")
 
 #define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
 
@@ -136,6 +141,358 @@ DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance)
     if (!Status) {
         CloseHandle(&Handle);
     }
+    return Status;
+}
+
+DWORD RemoveWnbdInf(_In_ LPCTSTR InfName)
+{
+    DWORD Status = 0;
+    UINT ErrorLine;
+
+    HINF HandleInf = SetupOpenInfFile(InfName, NULL, INF_STYLE_WIN4, &ErrorLine);
+    if (HandleInf == INVALID_HANDLE_VALUE) {
+        Status = GetLastError();
+        LogError("SetupOpenInfFile failed with "
+            "error: %d, at line. Error message: %s",
+            ErrorLine, Status, win32_strerror(Status).c_str());
+        goto failed;
+    }
+
+    INFCONTEXT Context;
+    if (!SetupFindFirstLine(HandleInf, INFSTR_SECT_VERSION, INFSTR_KEY_CATALOGFILE, &Context)) {
+        Status = GetLastError();
+        LogError("SetupFindFirstLine failed with "
+            "error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        goto failed;
+    }
+
+    TCHAR InfData[MAX_INF_STRING_LENGTH];
+    if (!SetupGetStringField(&Context, 1, InfData, ARRAYSIZE(InfData), NULL)) {
+        Status = GetLastError();
+        LogError("SetupGetStringField failed with "
+            "error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        goto failed;
+    }
+
+    /* Match the OEM inf file based on the catalog string wnbd.cat */
+    if (!wcscmp(InfData, L"wnbd.cat")) {
+        std::wstring SearchString(InfName);
+        if (!SetupUninstallOEMInf(
+            SearchString.substr(SearchString.find_last_of(L"\\") + 1).c_str(), SUOI_FORCEDELETE, 0)) {
+            Status = GetLastError();
+            LogError("SetupUninstallOEMInfA failed with "
+                "error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        }
+    }
+
+failed:
+    if (HandleInf != INVALID_HANDLE_VALUE) {
+        SetupCloseInfFile(HandleInf);
+    }
+
+    return Status;
+}
+
+/* Cycle through all OEM inf files and try a best effort mode to remove all
+ * files which include the string wnbd.cat */
+DWORD CleanDrivers()
+{
+    DWORD Status = 0;
+    TCHAR OemName[MAX_PATH];
+    HANDLE DirHandle = INVALID_HANDLE_VALUE;
+    WIN32_FIND_DATA OemFindData;
+
+    if (!GetWindowsDirectory(OemName, ARRAYSIZE(OemName))) {
+        Status = GetLastError();
+        LogError("GetWindowsDirectory failed with "
+            "error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+    if (wcscat_s(OemName, ARRAYSIZE(OemName), L"\\INF\\OEM*.INF")) {
+        LogError("Couldn't process path: %ls.", OemName);
+        return ERROR_BAD_PATHNAME;
+    }
+    DirHandle = FindFirstFile(OemName, &OemFindData);
+    if (DirHandle == INVALID_HANDLE_VALUE) {
+        /* No OEM files */
+        return Status;
+    }
+
+    do {
+        Status = RemoveWnbdInf(OemFindData.cFileName);
+        if (Status) {
+            LogError("Failed while trying to remove OEM file: %ls",
+                OemFindData.cFileName);
+            break;
+        }
+    } while (FindNextFile(DirHandle, &OemFindData));
+
+    FindClose(DirHandle);
+    return Status;
+}
+
+DWORD RemoveWnbdDevice(HDEVINFO AdapterDevHandle, PSP_DEVINFO_DATA DevInfoData, PBOOL RebootRequired)
+{
+    SP_DRVINFO_DETAIL_DATA_A DrvDetailData = { 0 };
+    DrvDetailData.cbSize = sizeof DrvDetailData;
+    DWORD Status = ERROR_SUCCESS;
+
+    /* Queue the device for removal before trying to remove the OEM information file */
+    if (!DiUninstallDevice(0, AdapterDevHandle, DevInfoData, 0, RebootRequired)) {
+        Status = GetLastError();
+        LogError(
+            "Could not remove driver. "
+            "Error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+    }
+
+    return Status;
+}
+
+static DWORD FindWnbdAdapterDevice(HDEVINFO* AdapterDevHandle, SP_DEVINFO_DATA* DevInfoData)
+{
+    CHAR TempBuf[2048];
+    memset(TempBuf, 0, sizeof(TempBuf));
+    BOOL Found = FALSE;
+    DWORD Status = ERROR_FILE_NOT_FOUND;
+
+    *AdapterDevHandle = SetupDiGetClassDevsA(&WNBD_GUID, 0, 0, DIGCF_ALLCLASSES | DIGCF_PRESENT);
+    if (INVALID_HANDLE_VALUE == *AdapterDevHandle) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiGetClassDevs failed. "
+            "Error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    for (DWORD I = 0; !Found && SetupDiEnumDeviceInfo(*AdapterDevHandle, I, DevInfoData); I++)
+    {
+        if (!SetupDiGetDeviceRegistryPropertyA(*AdapterDevHandle, DevInfoData, SPDRP_HARDWAREID, 0,
+            (PBYTE)TempBuf, sizeof(TempBuf) - 1, 0)) {
+            continue;
+        }
+
+        if (strstr(TempBuf, WNBD_HARDWAREID) != NULL) {
+            Found = TRUE;
+            break;
+        }
+    }
+
+    if (!Found) {
+        Status = GetLastError();
+        if (ERROR_NO_MORE_ITEMS != Status) {
+            LogError(
+                "Failed to locate device with hardware id: %s. Error: %d. Error message: %s",
+                WNBD_HARDWAREID, Status, win32_strerror(Status).c_str());
+        }
+        return Status;
+    }
+
+    return ERROR_SUCCESS;
+}
+
+DWORD RemoveAllDevices()
+{
+    DWORD BufferSize = 0;
+    DWORD Status = 0;
+    PWNBD_CONNECTION_LIST ConnList = NULL;
+
+    WNBD_OPTION_VALUE OptValue = { WnbdOptBool };
+    /* Disallow new mappings so we can remove all current mappings */
+    OptValue.Data.AsBool = FALSE;
+    Status = WnbdSetDrvOpt("NewMappingsAllowed", &OptValue, FALSE);
+    if (Status) {
+        goto exit;
+    }
+
+    Status = WnbdList(ConnList, &BufferSize);
+    if (!BufferSize) {
+        goto exit;
+    }
+    ConnList = (PWNBD_CONNECTION_LIST)calloc(1, BufferSize);
+    if (NULL == ConnList) {
+        Status = ERROR_NOT_ENOUGH_MEMORY;
+        LogError(
+            "Failed to allocate %d bytes.", BufferSize);
+        goto exit;
+    }
+    Status = WnbdList(ConnList, &BufferSize);
+    if (Status) {
+        goto exit;
+    }
+    CHAR* InstanceName;
+    for (ULONG index = 0; index < ConnList->Count; index++) {
+        InstanceName = ConnList->Connections[index].Properties.InstanceName;
+        WNBD_REMOVE_OPTIONS RemoveOptions = { 0 };
+        /* TODO add parallel and soft disconnect removal */
+        RemoveOptions.Flags.HardRemove = TRUE;
+        Status = WnbdRemoveEx(InstanceName, &RemoveOptions);
+        if (Status) {
+            goto exit;
+        }
+    }
+
+exit:
+    if (ConnList) {
+        free(ConnList);
+    }
+    return Status;
+}
+
+DWORD WnbdUninstallDriver(PBOOL RebootRequired)
+{
+    DWORD Status = ERROR_SUCCESS;
+    HDEVINFO AdapterDevHandle = INVALID_HANDLE_VALUE;
+    SP_DEVINFO_DATA DevInfoData;
+    DevInfoData.cbSize = sizeof DevInfoData;
+
+    PWNBD_CONNECTION_LIST ConnList = NULL;
+    Status = RemoveAllDevices();
+    if (Status) {
+        goto exit;
+    }
+
+    while (Status == ERROR_SUCCESS) {
+        Status = FindWnbdAdapterDevice(&AdapterDevHandle, &DevInfoData);
+        if (ERROR_SUCCESS != Status) {
+            goto exit;
+        }
+
+        Status = RemoveWnbdDevice(AdapterDevHandle, &DevInfoData, RebootRequired);
+
+        if (!SetupDiDestroyDeviceInfoList(AdapterDevHandle)) {
+            Status = GetLastError();
+            LogError("SetupDiDestroyDeviceInfoList failed with "
+                "error: %d. Error message: %s", Status, win32_strerror(Status).c_str());
+        }
+    }
+
+exit:
+    Status = CleanDrivers();
+    return Status;
+}
+
+DWORD CreateWnbdAdapter(CHAR* ClassName, SP_DEVINFO_DATA* DevInfoData, HDEVINFO* AdapterDevHandle)
+{
+    DWORD Status = 0;
+
+    if (INVALID_HANDLE_VALUE == (*AdapterDevHandle = SetupDiCreateDeviceInfoList(&WNBD_GUID, 0))) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiCreateDeviceInfoList failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    if (!SetupDiCreateDeviceInfoA(*AdapterDevHandle, ClassName, &WNBD_GUID, 0, 0, DICD_GENERATE_ID, DevInfoData)) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiCreateDeviceInfoA failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    if (!SetupDiSetDeviceRegistryPropertyA(*AdapterDevHandle, DevInfoData,
+        SPDRP_HARDWAREID, (PBYTE)WNBD_HARDWAREID, WNBD_HARDWAREID_LEN)) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiSetDeviceRegistryPropertyA failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    return Status;
+}
+
+DWORD InstallDriver(CHAR* FileNameBuf, HDEVINFO* AdapterDevHandle, PBOOL RebootRequired)
+{
+    GUID ClassGuid = { 0 };
+    CHAR ClassName[MAX_CLASS_NAME_LEN];
+    SP_DEVINFO_DATA DevInfoData;
+    DevInfoData.cbSize = sizeof(DevInfoData);
+    SP_DEVINSTALL_PARAMS_A InstallParams;
+    DWORD Status = 0;
+
+    if (!SetupDiGetINFClassA(FileNameBuf, &ClassGuid, ClassName, MAX_CLASS_NAME_LEN, 0)) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiGetINFClassA failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    if (CreateWnbdAdapter(ClassName, &DevInfoData, AdapterDevHandle)) {
+        return Status;
+    }
+
+    if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE, *AdapterDevHandle, &DevInfoData)) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiCallClassInstaller failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    InstallParams.cbSize = sizeof InstallParams;
+    if (!SetupDiGetDeviceInstallParamsA(*AdapterDevHandle, &DevInfoData, &InstallParams)) {
+        Status = GetLastError();
+        LogError(
+            "SetupDiGetDeviceInstallParamsA failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        return Status;
+    }
+
+    if (0 != (InstallParams.Flags & (DI_NEEDREBOOT | DI_NEEDRESTART))) {
+        *RebootRequired = TRUE;
+    }
+
+    return Status;
+}
+
+DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
+{
+    CHAR FullFileName[MAX_PATH];
+    DWORD Status = ERROR_SUCCESS;
+    HDEVINFO AdapterDevHandle = INVALID_HANDLE_VALUE;
+    SP_DEVINFO_DATA DevInfoData;
+    DevInfoData.cbSize = sizeof DevInfoData;
+
+    if (0 == GetFullPathNameA(FileName, MAX_PATH, FullFileName, 0)) {
+        Status = GetLastError();
+        LogError(
+            "Invalid file path: %s. Error: %d. Error message: %s",
+            FileName, Status, win32_strerror(Status).c_str());
+        goto exit;
+    }
+    if (FALSE == PathFileExistsA(FullFileName)) {
+        LogError("Could not find file: %s.", FullFileName);
+        Status = ERROR_FILE_NOT_FOUND;
+        goto exit;
+    }
+
+    // We assume that an installed driver has an WNBD device
+    if (ERROR_SUCCESS == FindWnbdAdapterDevice(&AdapterDevHandle, &DevInfoData)) {
+        LogError("Driver already installed");
+        Status = ERROR_DUPLICATE_FOUND;
+        goto exit;
+    }
+
+    Status = InstallDriver(FullFileName, &AdapterDevHandle, RebootRequired);
+    if (ERROR_SUCCESS != Status) {
+        LogError(
+            "Failed to install driver. Error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        goto exit;
+    }
+
+    if (!UpdateDriverForPlugAndPlayDevicesA(0, WNBD_HARDWAREID, FullFileName, 0, RebootRequired)) {
+        Status = GetLastError();
+        LogError(
+            "UpdateDriverForPlugAndPlayDevicesA failed with error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+        goto exit;
+    }
+
+exit:
     return Status;
 }
 
