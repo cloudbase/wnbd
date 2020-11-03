@@ -27,6 +27,12 @@ wstring to_wstring(string str)
     return strconverter.from_bytes(str);
 }
 
+string to_string(std::wstring wstr)
+{
+    wstring_convert<codecvt_utf8<wchar_t>, wchar_t> strconverter;
+    return strconverter.to_bytes(wstr);
+}
+
 wstring OptValToWString(PWNBD_OPTION_VALUE Value)
 {
     wostringstream stream;
@@ -206,6 +212,8 @@ DWORD CmdShow(string InstanceName)
          << setw(25) << "BlockSize" << " : " <<  ConnInfo.Properties.BlockSize << endl
          << setw(25) << "MaxUnmapDescCount" << " : " <<  ConnInfo.Properties.MaxUnmapDescCount << endl
          << setw(25) << "Pid" << " : " <<  ConnInfo.Properties.Pid << endl
+         << setw(25) << "DiskNumber" << " : " <<  ConnInfo.DiskNumber << endl
+         << setw(25) << "PNPDeviceID" << " : " <<  to_string(wstring(ConnInfo.PNPDeviceID)) << endl
          << endl;
 
     if (ConnInfo.Properties.Flags.UseNbd) {
@@ -279,19 +287,9 @@ DWORD CmdList()
          << "InstanceName" << endl;
 
     for (ULONG index = 0; index < ConnList->Count; index++) {
-        wstring SerialNumberW = to_wstring(
-            ConnList->Connections[index].Properties.SerialNumber);
-        DWORD DiskNumber = -1;
-        HRESULT hres = WnbdGetDiskNumberBySerialNumber(
-            SerialNumberW.c_str(), &DiskNumber);
-        if (FAILED(hres)) {
-            wcerr << "Warning: Could not retrieve disk number for serial '"
-                  << SerialNumberW << "'." << "HRESULT: " << hex << hres << endl;
-            Status = HRESULT_CODE(hres);
-        }
         cout << left
              << setw(10) << ConnList->Connections[index].Properties.Pid << "  "
-             << setw(10) << DiskNumber << "  "
+             << setw(10) << ConnList->Connections[index].DiskNumber << "  "
              << setw(5) << (ConnList->Connections[index].Properties.Flags.UseNbd
                             ? "true" : "false") << "  "
              << setw(15) << ConnList->Connections[index].Properties.Owner << "  "

@@ -39,6 +39,9 @@ typedef struct _WNBD_DISK_DEVICE
     USHORT                      Target;
     USHORT                      Lun;
 
+    INT                         DiskNumber;
+    WCHAR                       PNPDeviceID[WNBD_MAX_NAME_LENGTH];
+
     PINQUIRYDATA                InquiryData;
 
     INT                         NbdSocket;
