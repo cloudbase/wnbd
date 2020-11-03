@@ -163,9 +163,6 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="wnbd.rc" />
-  </ItemGroup>
-  <ItemGroup>
     <ResourceCompile Include="..\driver\wnbd.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

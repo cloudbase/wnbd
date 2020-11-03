@@ -26,6 +26,10 @@
 #include "..\include\version.h"
 #include "..\include\vendor.h"
 
+LANGUAGE 9, 1
+1 11 "events_MSG00001.bin"
+1 WEVT_TEMPLATE "eventsTEMP.BIN"
+
 #define VER_INTERNALNAME_STR        "wnbd.sys"
 #define VER_ORIGINALFILENAME_STR    "wnbd.sys"
 
