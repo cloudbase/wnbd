@@ -98,14 +98,15 @@ DWORD PnpRemoveDevice(
 
     BOOLEAN RemoveVetoed = FALSE;
     BOOLEAN TimeLeft = TRUE;
+    WCHAR VetoName[MAX_PATH];
     do {
         PNP_VETO_TYPE VetoType = PNP_VetoTypeUnknown;
-        char VetoName[MAX_PATH] = { 0 };
+        memset(VetoName, 0, sizeof(VetoName));
 
         // We're supposed to use CM_Query_And_Remove_SubTreeW when
         // SurpriseRemovalOK is not set, otherwise we'd have to go
         // with CM_Request_Device_EjectW.
-        DWORD CMStatus = CM_Query_And_Remove_SubTreeA(
+        DWORD CMStatus = CM_Query_And_Remove_SubTreeW(
             DiskDeviceInst, &VetoType, VetoName, MAX_PATH, CM_REMOVE_NO_RESTART);
 
         QueryPerformanceCounter(&CurrTime);
@@ -125,7 +126,7 @@ DWORD PnpRemoveDevice(
 
             LogDebug(
                "Could not remove device. CM status: %d, "
-               "veto type %d, veto name: %s\n. Time elapsed: %.2fs",
+               "veto type %d, veto name: %ls. Time elapsed: %.2fs",
                CMStatus, VetoType, VetoName,
                ElapsedMs.QuadPart / 1000.0);
         }
@@ -137,75 +138,20 @@ DWORD PnpRemoveDevice(
     return Status;
 }
 
-DWORD GetCMDeviceInstanceByID(
-    const wchar_t* DeviceID,
-    PDEVINST CMDeviceInstance)
-{
-    DEVINST ChildDevInst = 0;
-    BOOLEAN MoreSiblings = TRUE;
-    DEVINST AdapterDevInst = 0;
-
-    DWORD Status = WnbdOpenAdapterCMDeviceInstance(&AdapterDevInst);
-    if (Status) {
-        return Status;
-    }
-
-    DWORD CMStatus = CM_Get_Child(&ChildDevInst, AdapterDevInst, 0);
-    if (CMStatus) {
-        if (CMStatus == CR_NO_SUCH_DEVNODE) {
-            LogDebug("No WNBD disk found.");
-            return ERROR_FILE_NOT_FOUND;
-        }
-        else {
-            LogWarning("Could not open disk device. CM status: %d", CMStatus);
-            return ERROR_OPEN_FAILED;
-        }
-    }
-
-    do {
-        WCHAR CurrDeviceId[MAX_PATH];
-        CMStatus = CM_Get_Device_IDW(ChildDevInst, CurrDeviceId, MAX_PATH, 0);
-        if (CMStatus) {
-            LogError("Could not get disk id. CM status: %d", CMStatus);
-            return ERROR_CAN_NOT_COMPLETE;
-        }
-
-        if (!_wcsicmp(DeviceID, CurrDeviceId)) {
-            *CMDeviceInstance = ChildDevInst;
-            return 0;
-        }
-
-        CMStatus = CM_Get_Sibling(&ChildDevInst, ChildDevInst, 0);
-        if (CMStatus) {
-            MoreSiblings = FALSE;
-            if (CMStatus != CR_NO_SUCH_DEVNODE) {
-                LogError("Could not get disk sibling. CM status: %d",
-                         CMStatus);
-                Status = ERROR_OPEN_FAILED;
-            }
-        }
-    } while (MoreSiblings);
-
-    LogDebug("Could not find the specified disk.");
-    return ERROR_FILE_NOT_FOUND;
-}
-
 DWORD WnbdPnpRemoveDevice(
-    const char* SerialNumber,
+    PWSTR PNPDeviceID,
     DWORD TimeoutMs,
     DWORD RetryIntervalMs)
 {
-    DISK_INFO Disk;
-    HRESULT hres = GetDiskInfoBySerialNumber(
-        to_wstring(SerialNumber).c_str(), &Disk);
-    if (FAILED(hres)) {
-        return HRESULT_CODE(hres);
-    }
-
     DEVINST DiskDeviceInst = 0;
-    DWORD Status = GetCMDeviceInstanceByID(Disk.PNPDeviceID.c_str(), &DiskDeviceInst);
-    if (Status) {
-        return Status;
+    DWORD CMStatus = CM_Locate_DevNode_ExW(
+        &DiskDeviceInst, PNPDeviceID,
+        CM_LOCATE_DEVNODE_NORMAL,
+        NULL);
+    if (CMStatus) {
+        LogInfo("Could not open device: %ls. CM status: %d.",
+                PNPDeviceID, CMStatus);
+        return ERROR_OPEN_FAILED;
     }
 
     return PnpRemoveDevice(DiskDeviceInst, TimeoutMs, RetryIntervalMs);
@@ -258,7 +204,7 @@ DWORD WnbdRemoveEx(
         // PnP subscribers are notified that the device is about to be removed
         // and can block the remove until ready.
         Status = WnbdPnpRemoveDevice(
-            ConnectionInfo.Properties.SerialNumber,
+            ConnectionInfo.PNPDeviceID,
             RemoveOptions->SoftRemoveTimeoutMs,
             RemoveOptions->SoftRemoveRetryIntervalMs);
         if (Status && Status != ERROR_FILE_NOT_FOUND) {

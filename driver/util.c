@@ -6,6 +6,11 @@
 
 #include <berkeley.h>
 #include <ksocket.h>
+
+#include <initguid.h>
+#include <ntddstor.h>
+#include <devpkey.h>
+
 #include "common.h"
 #include "debug.h"
 #include "nbd_protocol.h"
@@ -447,8 +452,52 @@ NTSTATUS WnbdGetScsiAddress(
     if (!NT_SUCCESS(IoStatus.Status))
         return IoStatus.Status;
 
-    if (IoStatus.Information < sizeof(ScsiAddress))
+    if (IoStatus.Information < sizeof(SCSI_ADDRESS))
         return STATUS_OBJECT_NAME_NOT_FOUND;
 
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS WnbdGetDiskInstancePath(
+    PDEVICE_OBJECT DeviceObject,
+    PWSTR Buffer,
+    DWORD BufferSize,
+    PULONG RequiredBufferSize)
+{
+    DEVPROPKEY PropertyKey = DEVPKEY_Device_InstanceId;
+    DEVPROPTYPE ReturnedType;
+    NTSTATUS Status = IoGetDevicePropertyData(
+        DeviceObject,
+        &PropertyKey,
+        LOCALE_NEUTRAL,
+        0,
+        BufferSize,
+        Buffer,
+        RequiredBufferSize,
+        &ReturnedType);
+    return Status;
+}
+
+
+NTSTATUS WnbdGetDiskNumber(
+    PDEVICE_OBJECT DeviceObject,
+    PULONG DiskNumber)
+{
+    IO_STATUS_BLOCK IoStatus = { 0 };
+    STORAGE_DEVICE_NUMBER DeviceData = { 0 };
+
+    WnbdSendIoctl(
+        IOCTL_STORAGE_GET_DEVICE_NUMBER,
+        DeviceObject,
+        0, 0,
+        &DeviceData, sizeof(STORAGE_DEVICE_NUMBER),
+        &IoStatus);
+    if (!NT_SUCCESS(IoStatus.Status))
+        return IoStatus.Status;
+
+    if (IoStatus.Information < sizeof(DeviceData))
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+
+    *DiskNumber = DeviceData.DeviceNumber;
     return STATUS_SUCCESS;
 }

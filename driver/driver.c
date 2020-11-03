@@ -130,6 +130,52 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
         IoLocation->Parameters.DeviceCapabilities.Capabilities->Removable = 1;
         IoLocation->Parameters.DeviceCapabilities.Capabilities->EjectSupported = 1;
         break;
+    case IRP_MN_START_DEVICE:
+        {
+            if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
+                break;
+            }
+            Status = WnbdGetScsiAddress(DeviceObject, &ScsiAddress);
+            if (Status) {
+                WNBD_LOG_ERROR("Could not query SCSI address. Error: %d.", Status);
+                break;
+            }
+
+            WNBD_LOG_INFO("Starting device.");
+            PWNBD_DISK_DEVICE Device = WnbdFindDeviceByAddr(
+                GlobalExt, ScsiAddress.PathId,
+                ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
+            if (!Device) {
+                break;
+            }
+
+            PDEVICE_OBJECT AttachedDisk = IoGetAttachedDeviceReference(DeviceObject);
+            if (AttachedDisk != DeviceObject) {
+                Status = WnbdGetDiskNumber(
+                    AttachedDisk, (PULONG) &Device->DiskNumber);
+                if (Status) {
+                    WNBD_LOG_WARN("Could not get disk number. Error: %d.",
+                                  Status);
+                }
+            }
+            else {
+                WNBD_LOG_WARN("Couldn't not get disk number. "
+                              "Couldn't get attached PDO.");
+            }
+            ObDereferenceObject(AttachedDisk);
+
+            DWORD RequiredSize = 0;
+            Status = WnbdGetDiskInstancePath(
+                DeviceObject, Device->PNPDeviceID,
+                sizeof(Device->PNPDeviceID),
+                &RequiredSize);
+            if (Status) {
+                WNBD_LOG_WARN("Couldn't get PNP device id. Error: %d", Status);
+            }
+
+            WnbdReleaseDevice(Device);
+        }
+        break;
     // We won't remove the device upon receiving IRP_MN_QUERY_REMOVE_DEVICE.
     // The device removal might be vetoed by other parts of the storage stack,
     // so we'd affect soft removals. The only downside is that if the remove
