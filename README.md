@@ -121,31 +121,18 @@ Those steps are not required when using a certified driver.
 
 ### Install / Uninstall
 
-We require the [devcon.exe](https://cloudbase.it/downloads/devcon.exe) utility in order to
-install and uninstall the driver.
+You can use the `wnbd-client.exe` command line argument to install and remove the driver.
 
-To **install** the driver, issue the following from an elevated command prompt:
-
-```PowerShell
-.\devcon.exe install .\wnbd.inf root\wnbd
+To ***install*** the driver, issue the following from an elevated PowerShell prompt:
+```Powershell
+.\wnbd-client.exe install-driver .\wnbd.inf
 ```
 
-(The command above assumes that the utility `devcon.exe` and the driver files `wnbd.inf`, `wnbd.cat`, `wnbd.sys` are in the current directory)
-
-After installing the driver, copy ``libwnbd.dll`` and ``wnbd-client.exe``,
-also adding the destination folder to the environment PATH variable.
-
-To **uninstall** the driver, issue the following from an elevated PowerShell prompt:
-
-```PowerShell
-.\devcon.exe remove "root\wnbd"
-pnputil.exe /enum-drivers | sls -Context 5 wnbd | findstr Published | `
-    % {$_ -match "(oem\d+.inf)"; pnputil.exe /delete-driver $matches[0] /force }
+To ***uninstall*** the driver, issue the following from an elevated PowerShell prompt:
+```Powershell
+.\wnbd-client.exe uninstall-driver
 ```
-
-(The command above assumes that the utility `devcon.exe` is in the current directory)
-
-For convenience, we included [reinstall.ps1](vstudio/reinstall.ps1), which installs/reinstalls the driver.
+The `uninstall-driver` will soft disconnect any existing mappings, remove any registered device drivers and remove any prior installation of the driver.
 
 After installing the driver, you may want to copy ``wnbd-client.exe`` and ``libwnbd.dll``
 to a directory that's part of the ``PATH`` environment variable.
