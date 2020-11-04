@@ -5,6 +5,7 @@ $wnbdBin = "$scriptLocation\wnbd-client.exe"
 $wnbdInf = "$scriptLocation\wnbd.inf"
 $wnbdCat = "$scriptLocation\wnbd.cat"
 $wnbdSys = "$scriptLocation\wnbd.sys"
+$wnbdEvents = "$scriptLocation\wnbdevents.xml"
 
 $requiredFiles = @($wnbdBin, $wnbdInf, $wnbdCat, $wnbdSys)
 foreach ($path in $requiredFiles) {
@@ -13,6 +14,8 @@ foreach ($path in $requiredFiles) {
     }
 }
 
+wevtutil um $wnbdEvents
 & $wnbdBin uninstall-driver
 
+wevtutil im $wnbdEvents
 & $wnbdBin install-driver $wnbdInf

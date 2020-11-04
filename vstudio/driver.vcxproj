@@ -47,6 +47,18 @@
     <DriverType>WDM</DriverType>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemGroup Label="WrappedTaskItems">
+    <MessageCompile Include="wnbdevents.xml">
+      <GenerateKernelModeLoggingMacros>true</GenerateKernelModeLoggingMacros>
+      <HeaderFilePath>.\$(IntDir)</HeaderFilePath>
+      <GeneratedHeaderPath>true</GeneratedHeaderPath>
+      <WinmetaPath>"$(SDK_INC_PATH)\winmeta.xml"</WinmetaPath>
+      <RCFilePath>.\$(IntDir)</RCFilePath>
+      <GeneratedRCAndMessagesPath>true</GeneratedRCAndMessagesPath>
+      <GeneratedFilesBaseName>events</GeneratedFilesBaseName>
+      <UseBaseNameOfInput>true</UseBaseNameOfInput>
+    </MessageCompile>
+  </ItemGroup>
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
@@ -57,21 +69,21 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>wnbd</TargetName>
-    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath)</IncludePath>
+    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath);$(IntDir)</IncludePath>
     <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
     <IntDir>$(Platform)\$(ConfigurationName)\obj\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>wnbd</TargetName>
-    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath)</IncludePath>
+    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath);$(IntDir)</IncludePath>
     <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
     <IntDir>$(Platform)\$(ConfigurationName)\obj\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <TargetName>wnbd</TargetName>
-    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath)</IncludePath>
+    <IncludePath>$(CRT_IncludePath);$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath);$(IntDir)</IncludePath>
     <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
     <IntDir>$(Platform)\$(ConfigurationName)\obj\</IntDir>
     <RunCodeAnalysis>true</RunCodeAnalysis>
