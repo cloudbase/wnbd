@@ -67,7 +67,7 @@ ReadRegistryValue(
         RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
         GlobalRegistryPath.Buffer, Table, 0, 0);
 
-    WNBD_LOG_LOUD(": Exit: %d", Status);
+    WNBD_LOG_LOUD("Exit: 0x%x", Status);
     return Status;
 }
 
@@ -249,14 +249,14 @@ NTSTATUS WnbdReloadPersistentOptions()
         Status = WnbdGetPersistentOpt(Option->Name, &PersistentValue);
         if (Status) {
             if (Status != STATUS_OBJECT_NAME_NOT_FOUND) {
-                WNBD_LOG_WARN("Could not load option %ls. Error: %d",
+                WNBD_LOG_WARN("Could not load option %ls. Error: 0x%x",
                               Option->Name, Status);
             }
             continue;
         }
         Status = WnbdProcessOptionValue(Option, &PersistentValue);
         if (Status) {
-            WNBD_LOG_WARN("Could not process option %ls. Error: %d",
+            WNBD_LOG_WARN("Could not process option %ls. Error: 0x%x",
                           Option->Name, Status);
             continue;
         }

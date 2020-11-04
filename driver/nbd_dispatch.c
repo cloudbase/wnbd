@@ -40,7 +40,6 @@ WnbdRequestWrite(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ PSRB_QUEUE_ELEMENT Element,
                  _In_ DWORD NbdTransmissionFlags)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
     ASSERT(Element);
     ULONG StorResult;
@@ -49,7 +48,7 @@ WnbdRequestWrite(_In_ PWNBD_DISK_DEVICE Device,
 
     StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &Buffer);
     if (STOR_STATUS_SUCCESS != StorResult) {
-        WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
+        WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
                        Element->Srb, Element->Tag, StorResult);
         Status = SRB_STATUS_INTERNAL_ERROR;
     } else {
@@ -63,15 +62,12 @@ WnbdRequestWrite(_In_ PWNBD_DISK_DEVICE Device,
                      Element->Tag,
                      NbdTransmissionFlags);
     }
-
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
 VOID
 WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
 
     PLIST_ENTRY Request;
@@ -88,7 +84,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         Element->Srb->DataTransferLength = 0;
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
         WNBD_LOG_INFO("Processing request. Address: %p Tag: 0x%llx",
-                      Status, Element->Srb, Element->Tag);
+                      Element->Srb, Element->Tag);
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
 
         if(!ValidateScsiRequest(Device, Element)) {
@@ -139,7 +135,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         }
 
         if (Status) {
-            WNBD_LOG_INFO("FD failed with: %x. Address: %p Tag: 0x%llx",
+            WNBD_LOG_WARN("FD failed with: 0x%x. Address: %p Tag: 0x%llx",
                           Status, Element->Srb, Element->Tag);
             if (STATUS_CONNECTION_RESET == Status ||
                 STATUS_CONNECTION_DISCONNECTED == Status ||
@@ -148,14 +144,11 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
             }
         }
     }
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
 NbdDeviceRequestThread(_In_ PVOID Context)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Context);
     PAGED_CODE();
 
@@ -189,7 +182,6 @@ NbdDeviceRequestThread(_In_ PVOID Context)
 VOID
 NbdDeviceReplyThread(_In_ PVOID Context)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Context);
     PAGED_CODE();
 
@@ -206,7 +198,6 @@ NbdDeviceReplyThread(_In_ PVOID Context)
 VOID
 NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
 
     PSRB_QUEUE_ELEMENT Element = NULL;
@@ -251,8 +242,8 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         if(IsReadSrb(Element->Srb)) {
             StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
             if (STOR_STATUS_SUCCESS != StorResult) {
-                WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
-                               Element->Srb, Element->Tag, error);
+                WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: 0x%x.",
+                              Element->Srb, Element->Tag, error);
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
                 WnbdDisconnectAsync(Device);
                 goto Exit;
@@ -279,7 +270,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         }
 
         if (-1 == NbdReadExact(Device->NbdSocket, TempBuff, Element->DataLength, &error)) {
-            WNBD_LOG_ERROR("Failed receiving reply %p 0x%llx. Error: %d",
+            WNBD_LOG_WARN("Failed receiving reply %p 0x%llx. Error: %d",
                            Element->Srb, Element->Tag, error);
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;

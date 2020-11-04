@@ -20,7 +20,6 @@ WnbdReadCapacity(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ UINT BlockSize,
                  _In_ UINT64 BlockCount)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(Cdb);
     WNBD_LOG_INFO("Using BlockSize: %u, BlockCount: %llu", BlockSize, BlockCount);
@@ -95,13 +94,11 @@ WnbdReadCapacity(_In_ PWNBD_DISK_DEVICE Device,
         }
         break;
     default:
-        WNBD_LOG_ERROR("Unknown read capacity operation: %u", Cdb->CDB10.OperationCode);
+        WNBD_LOG_INFO("Unknown read capacity operation: %u", Cdb->CDB10.OperationCode);
         break;
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
-
     return SrbStatus;
 }
 
@@ -110,7 +107,6 @@ WnbdSetVpdSupportedPages(_In_ PVOID Data,
                          _In_ UCHAR NumberOfSupportedPages,
                          _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Data);
     ASSERT(Srb);
 
@@ -129,7 +125,6 @@ WnbdSetVpdSupportedPages(_In_ PVOID Data,
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages);
 
-    WNBD_LOG_LOUD(": Exit");
     return SRB_STATUS_SUCCESS;
 }
 
@@ -138,7 +133,6 @@ WnbdSetVpdSerialNumber(_In_ PVOID Data,
                        _In_ PCHAR DeviceSerial,
                        _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Data);
     ASSERT(Srb);
 
@@ -155,7 +149,6 @@ WnbdSetVpdSerialNumber(_In_ PVOID Data,
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_SERIAL_NUMBER_PAGE) + Size);
 
-    WNBD_LOG_LOUD(": Exit");
     return SRB_STATUS_SUCCESS;
 }
 
@@ -165,7 +158,6 @@ WnbdSetVpdBlockLimits(_In_ PVOID Data,
                       _In_ PSCSI_REQUEST_BLOCK Srb,
                       _In_ UINT32 MaximumTransferLength)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Data);
     ASSERT(Srb);
 
@@ -192,8 +184,6 @@ WnbdSetVpdBlockLimits(_In_ PVOID Data,
     }
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_BLOCK_LIMITS_PAGE));
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
@@ -202,8 +192,6 @@ WnbdSetVpdLogicalBlockProvisioning(
     _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     PVPD_LOGICAL_BLOCK_PROVISIONING_PAGE LogicalBlockProvisioning = Data;
     LogicalBlockProvisioning->DeviceType = DIRECT_ACCESS_DEVICE;
     LogicalBlockProvisioning->DeviceTypeQualifier = DEVICE_QUALIFIER_ACTIVE;
@@ -219,8 +207,6 @@ WnbdSetVpdLogicalBlockProvisioning(
     }
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_LOGICAL_BLOCK_PROVISIONING_PAGE));
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
@@ -229,8 +215,6 @@ WnbdSetVpdBlockDeviceCharacteristics(
     _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     PVPD_BLOCK_DEVICE_CHARACTERISTICS_PAGE CharacteristicsPage = Data;
 
     CharacteristicsPage->DeviceType = DIRECT_ACCESS_DEVICE;
@@ -243,8 +227,6 @@ WnbdSetVpdBlockDeviceCharacteristics(
     CharacteristicsPage->FUAB = !!Device->Properties.Flags.FUASupported;
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_BLOCK_DEVICE_CHARACTERISTICS_PAGE));
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 UCHAR
@@ -254,7 +236,6 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
                            _In_ PCDB Cdb,
                            _In_ PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Data);
     ASSERT(Srb);
     ASSERT(Cdb);
@@ -303,12 +284,11 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
         WnbdSetVpdBlockDeviceCharacteristics(Data, Device, Srb);
         break;
     default:
-        WNBD_LOG_ERROR("Unknown VPD Page: %u", Cdb->CDB6INQUIRY3.PageCode);
+        WNBD_LOG_INFO("Unknown VPD Page: %u", Cdb->CDB6INQUIRY3.PageCode);
         break;
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 
@@ -317,7 +297,6 @@ WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
             _In_ PSCSI_REQUEST_BLOCK Srb,
             _In_ PCDB Cdb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(Cdb);
 
@@ -334,7 +313,7 @@ WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
 
     switch (Cdb->CDB6INQUIRY3.EnableVitalProductData) {
     case 0:
-        WNBD_LOG_INFO("Normal Inquiry");
+        WNBD_LOG_LOUD("Normal Inquiry");
         if (0 != Cdb->CDB6INQUIRY3.PageCode) {
             SrbStatus = SRB_STATUS_INTERNAL_ERROR;
             goto Exit;
@@ -345,13 +324,12 @@ WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
         SrbStatus = SRB_STATUS_SUCCESS;
         break;
     default:
-        WNBD_LOG_INFO("Extended Inquiry");
+        WNBD_LOG_LOUD("Extended Inquiry");
         SrbStatus = WnbdProcessExtendedInquiry(DataBuffer, DataTransferLength, Srb, Cdb, Device);
         break;
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 
@@ -364,7 +342,6 @@ WnbdSetModeSense(_In_ PVOID Data,
                  _Out_ PVOID* Page,
                  _Out_ PULONG Length)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Cdb);
     ASSERT(Data);
 
@@ -382,7 +359,7 @@ WnbdSetModeSense(_In_ PVOID Data,
             goto Exit;
         }
         if(*Length > MaxLength) {
-            WNBD_LOG_ERROR("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
+            WNBD_LOG_WARN("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
             SrbStatus = SRB_STATUS_DATA_OVERRUN;
             goto Exit;
         }
@@ -408,7 +385,7 @@ WnbdSetModeSense(_In_ PVOID Data,
             goto Exit;
         }
         if(*Length > MaxLength) {
-            WNBD_LOG_ERROR("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
+            WNBD_LOG_WARN("MODE_SENSE overrun: %d > %d", *Length, MaxLength);
             SrbStatus = SRB_STATUS_DATA_OVERRUN;
             goto Exit;
         }
@@ -428,13 +405,13 @@ WnbdSetModeSense(_In_ PVOID Data,
         }
         break;
     default:
-        WNBD_LOG_ERROR("Unknown MODE_SENSE byte: %u", Cdb->AsByte[0]);
+        WNBD_LOG_INFO("Unknown MODE_SENSE byte: %u", Cdb->AsByte[0]);
         SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit: %#02x", SrbStatus);
+    WNBD_LOG_LOUD("Exit: %#02x", SrbStatus);
     return SrbStatus;
 }
 
@@ -443,7 +420,6 @@ WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
               _In_ PSCSI_REQUEST_BLOCK Srb,
               _In_ PCDB Cdb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(Cdb);
 
@@ -464,7 +440,7 @@ WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
         !!Device->Properties.Flags.FUASupported,
         &Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
-        WNBD_LOG_ERROR("Could not set mode sense.");
+        WNBD_LOG_INFO("Could not set mode sense.");
         goto Exit;
     }
 
@@ -478,7 +454,6 @@ WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
     SrbSetDataTransferLength(Srb, Length);
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 
@@ -490,7 +465,6 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
                 _In_ UINT64 DataLength,
                 _In_ BOOLEAN FUA)
 {
-    WNBD_LOG_LOUD(": Enter");
     NTSTATUS Status = STATUS_SUCCESS;
 
     InterlockedIncrement64(&Device->Stats.TotalReceivedIORequests);
@@ -516,7 +490,6 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
     Status = STATUS_PENDING;
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
@@ -525,7 +498,6 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
                   _In_ PWNBD_DISK_DEVICE Device,
                   _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(Device);
     ASSERT(Srb);
@@ -553,7 +525,7 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         DataLength = BlockCount * Device->Properties.BlockSize;
         if (DataLength < Srb->DataTransferLength &&
             (Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE || Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE16)) {
-            WNBD_LOG_ERROR("STATUS_BUFFER_TOO_SMALL");
+            WNBD_LOG_WARN("Requested length is less than the SRB data length");
             Srb->SrbStatus = SRB_STATUS_ABORTED;
             Status = STATUS_BUFFER_TOO_SMALL;
             break;
@@ -583,7 +555,7 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         // We don't support the anchored state at the moment.
         if (Cdb->UNMAP.Anchor)
         {
-            WNBD_LOG_ERROR("Unmap 'anchor' state not supported.");
+            WNBD_LOG_WARN("Unmap 'anchor' state not supported.");
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             Status = STATUS_INVALID_PARAMETER;
             break;
@@ -600,7 +572,7 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         UINT32 DescriptorCount = BlockDescLength / sizeof(UNMAP_BLOCK_DESCRIPTOR);
         if (DescriptorCount != 1) {
             // Storport should honor the VPD limits.
-            WNBD_LOG_ERROR("Cannot send multiple UNMAP descriptors at a time.");
+            WNBD_LOG_WARN("Cannot send multiple UNMAP descriptors at a time.");
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             Status = STATUS_INVALID_PARAMETER;
             break;
@@ -616,7 +588,7 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         if (LastBlockAddress < BlockAddress ||
             LastBlockAddress >= Device->Properties.BlockCount)
         {
-            WNBD_LOG_ERROR("Unmap overflow.");
+            WNBD_LOG_WARN("Unmap overflow.");
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             Status = STATUS_INVALID_PARAMETER;
             break;
@@ -629,13 +601,12 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         }
         break;
     default:
-        WNBD_LOG_ERROR("Unknown Pending SCSI Operation received");
+        WNBD_LOG_INFO("Unknown SCSI operation: %#x", Cdb->AsByte[0]);
         Status = STATUS_INSUFFICIENT_RESOURCES;
         Srb->SrbStatus = SRB_STATUS_ABORTED;
         break;
     }
 
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
@@ -645,7 +616,6 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
                        PWNBD_DISK_DEVICE Device,
                        PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(Device);
     ASSERT(Srb);
@@ -701,6 +671,5 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
         break;
     };
 
-    WNBD_LOG_LOUD(": Exit");
     return status;
 }
