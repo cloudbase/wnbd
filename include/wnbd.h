@@ -363,12 +363,6 @@ DWORD WnbdIoctlSendResponse(
     UINT32 DataBufferSize,
     LPOVERLAPPED Overlapped);
 
-HRESULT WnbdCoInitializeBasic();
-// Requires COM. For convenience, WnbdCoInitializeBasic may be used.
-HRESULT WnbdGetDiskNumberBySerialNumber(
-    LPCWSTR SerialNumber,
-    PDWORD DiskNumber);
-
 static inline const CHAR* WnbdLogLevelToStr(WnbdLogLevel LogLevel) {
     switch(LogLevel)
     {

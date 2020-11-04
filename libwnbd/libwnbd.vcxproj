@@ -19,14 +19,12 @@
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="wnbd_ioctl.cpp" />
     <ClCompile Include="wnbd_log.c" />
-    <ClCompile Include="wnbd_wmi.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\wnbd.h" />
     <ClInclude Include="..\include\wnbd_ioctl.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="wnbd_log.h" />
-    <ClInclude Include="wnbd_wmi.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
