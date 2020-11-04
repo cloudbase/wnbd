@@ -37,7 +37,6 @@ VOID WnbdInitScsiIds()
 VOID
 WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(InquiryData);
 
     RtlZeroMemory(InquiryData, sizeof(INQUIRYDATA));
@@ -64,14 +63,11 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
         min(sizeof(InquiryData->ProductId), strlen(WNBD_INQUIRY_PRODUCT_ID)));
     RtlCopyMemory((PUCHAR)&InquiryData->ProductRevisionLevel[0],
         ProductRevision, sizeof(ProductRevision));
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 NTSTATUS
 WnbdInitializeNbdClient(_In_ PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
     HANDLE request_thread_handle = NULL, reply_thread_handle = NULL;
     NTSTATUS Status = STATUS_SUCCESS;
@@ -138,7 +134,6 @@ Exit:
     Device->HardRemoveDevice = TRUE;
     KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
 
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
@@ -218,15 +213,12 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     // unloaded.
     ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
     KeLeaveCriticalRegion();
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 NTSTATUS
 WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
 {
     // Internal resource initialization.
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
     NTSTATUS Status = STATUS_SUCCESS;
 
@@ -264,7 +256,6 @@ WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
     }
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
@@ -274,7 +265,6 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
                      PWNBD_PROPERTIES Properties,
                      PWNBD_CONNECTION_INFO ConnectionInfo)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(Properties);
 
@@ -384,11 +374,11 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
 
     WNBD_LOG_INFO("Retrieved NBD flags: %d. Read-only: %d, TRIM enabled: %d, "
                   "FLUSH enabled: %d, FUA enabled: %d.",
-                   NbdFlags,
-                   Device->Properties.Flags.ReadOnly,
-                   Device->Properties.Flags.UnmapSupported,
-                   Device->Properties.Flags.FlushSupported,
-                   Device->Properties.Flags.FUASupported);
+                  NbdFlags,
+                  Device->Properties.Flags.ReadOnly,
+                  Device->Properties.Flags.UnmapSupported,
+                  Device->Properties.Flags.FlushSupported,
+                  Device->Properties.Flags.FUASupported);
 
     Status = WnbdInitializeDevice(Device, !!Properties->Flags.UseNbd);
     if (!NT_SUCCESS(Status)) {
@@ -413,8 +403,6 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->Connected = TRUE;
     Status = STATUS_SUCCESS;
 
-    WNBD_LOG_LOUD(": Exit");
-
     return Status;
 
 Exit:
@@ -427,12 +415,11 @@ Exit:
         ExFreePool(InquiryData);
     }
     if (-1 != Sock) {
-        WNBD_LOG_ERROR("Closing socket FD: %d", Sock);
+        WNBD_LOG_INFO("Closing socket FD: %d", Sock);
         Close(Sock);
         Sock = -1;
     }
 
-    WNBD_LOG_LOUD(": Exit");
     return Status;
 }
 
@@ -441,20 +428,18 @@ NTSTATUS
 WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
                      PCHAR InstanceName)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(InstanceName);
 
     PWNBD_DISK_DEVICE Device = WnbdFindDeviceByInstanceName(
         DeviceExtension, InstanceName, TRUE);
     if (!Device) {
-        WNBD_LOG_ERROR("Could not find connection to delete");
+        WNBD_LOG_INFO("Could not find connection to delete");
         return STATUS_OBJECT_NAME_NOT_FOUND;
     }
 
     WnbdDisconnectSync(Device);
 
-    WNBD_LOG_LOUD(": Exit");  
     return STATUS_SUCCESS;
 }
 
@@ -462,7 +447,6 @@ _Use_decl_annotations_
 NTSTATUS
 WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(Irp);
 
@@ -506,7 +490,7 @@ WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 
     Irp->IoStatus.Information = (OutList->Count * sizeof(WNBD_CONNECTION_INFO)) +
         RTL_SIZEOF_THROUGH_FIELD(WNBD_CONNECTION_LIST, Count);
-    WNBD_LOG_LOUD(": Exit: %d. Element count: %d, element size: %d. Total size: %d.",
+    WNBD_LOG_LOUD("Exit: %d. Element count: %d, element size: %d. Total size: %d.",
                   Status, OutList->Count, OutList->ElementSize,
                   Irp->IoStatus.Information);
 
@@ -518,7 +502,6 @@ NTSTATUS
 WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
                    PIRP Irp)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Irp);
     ASSERT(DeviceExtension);
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
@@ -555,7 +538,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_CREATE_COMMAND) ||
             CHECK_O_LOCATION(IoLocation, WNBD_CONNECTION_INFO))
         {
-            WNBD_LOG_ERROR("IOCTL_WNBD_CREATE: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_CREATE: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -567,7 +550,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         Props.NbdProperties.ExportName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
 
         if (!strlen((char*)&Props.InstanceName)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_CREATE: Invalid instance name.");
+            WNBD_LOG_WARN("IOCTL_WNBD_CREATE: Invalid instance name.");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -586,7 +569,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             if (!Props.BlockCount || !Props.BlockCount ||
                 Props.BlockCount > ULLONG_MAX / Props.BlockSize)
             {
-                WNBD_LOG_ERROR(
+                WNBD_LOG_WARN(
                     "IOCTL_WNBD_CREATE: Invalid block size or block count. "
                     "Block size: %d. Block count: %lld.",
                     Props.BlockSize, Props.BlockCount);
@@ -626,14 +609,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             PWNBD_IOCTL_REMOVE_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!RmCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_REMOVE_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_REMOVE: Bad input buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_REMOVE: Bad input buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
         RmCmd->InstanceName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
         if (!strlen((PCHAR)RmCmd->InstanceName)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_REMOVE: Invalid instance name");
+            WNBD_LOG_WARN("IOCTL_WNBD_REMOVE: Invalid instance name");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -650,7 +633,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         if (!Irp->AssociatedIrp.SystemBuffer ||
             CHECK_O_LOCATION_SZ(IoLocation, RequiredBuffSize))
         {
-            WNBD_LOG_ERROR("IOCTL_WNBD_LIST: Bad output buffer");
+            WNBD_LOG_LOUD("IOCTL_WNBD_LIST: Bad output buffer");
             Irp->IoStatus.Information = RequiredBuffSize;
             break;
         }
@@ -663,14 +646,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_SHOW_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!ShowCmd || CHECK_I_LOCATION(IoLocation, PWNBD_IOCTL_SHOW_COMMAND)) {
-            WNBD_LOG_ERROR("WNBD_SHOW: Bad input buffer");
+            WNBD_LOG_WARN("WNBD_SHOW: Bad input buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
         ShowCmd->InstanceName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
         if (!strlen((PSTR) &ShowCmd->InstanceName)) {
-            WNBD_LOG_ERROR("WNBD_SHOW: Invalid instance name");
+            WNBD_LOG_WARN("WNBD_SHOW: Invalid instance name");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -686,7 +669,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, ShowCmd->InstanceName, TRUE);
         if (!Device) {
             Status = STATUS_OBJECT_NAME_NOT_FOUND;
-            WNBD_LOG_ERROR("WNBD_SHOW: Connection does not exist");
+            WNBD_LOG_INFO("WNBD_SHOW: Connection does not exist");
             break;
         }
 
@@ -716,14 +699,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_STATS_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!StatsCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_STATS_COMMAND)) {
-            WNBD_LOG_ERROR("WNBD_STATS: Bad input buffer");
+            WNBD_LOG_WARN("WNBD_STATS: Bad input buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
 
         StatsCmd->InstanceName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
         if (!strlen((PSTR) &StatsCmd->InstanceName)) {
-            WNBD_LOG_ERROR("WNBD_STATS: Invalid instance name");
+            WNBD_LOG_WARN("WNBD_STATS: Invalid instance name");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -739,7 +722,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, StatsCmd->InstanceName, TRUE);
         if (!Device) {
             Status = STATUS_OBJECT_NAME_NOT_FOUND;
-            WNBD_LOG_ERROR("WNBD_STATS: Connection does not exist");
+            WNBD_LOG_INFO("WNBD_STATS: Connection does not exist");
             break;
         }
 
@@ -761,7 +744,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             CHECK_I_LOCATION(IoLocation, PWNBD_IOCTL_FETCH_REQ_COMMAND) ||
             CHECK_O_LOCATION(IoLocation, PWNBD_IOCTL_FETCH_REQ_COMMAND))
         {
-            WNBD_LOG_ERROR("IOCTL_WNBD_FETCH_REQ: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_FETCH_REQ: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -770,7 +753,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, ReqCmd->ConnectionId, TRUE);
         if (!Device) {
             Status = STATUS_INVALID_HANDLE;
-            WNBD_LOG_ERROR(
+            WNBD_LOG_WARN(
                 "IOCTL_WNBD_FETCH_REQ: Could not fetch request, invalid connection id: %d.",
                 ReqCmd->ConnectionId);
             break;
@@ -789,7 +772,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         PWNBD_IOCTL_SEND_RSP_COMMAND RspCmd =
             (PWNBD_IOCTL_SEND_RSP_COMMAND) Irp->AssociatedIrp.SystemBuffer;
         if (!RspCmd || CHECK_I_LOCATION(IoLocation, PWNBD_IOCTL_FETCH_REQ_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_SEND_RSP: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_SEND_RSP: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -797,14 +780,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         Device = WnbdFindDeviceByConnId(DeviceExtension, RspCmd->ConnectionId, TRUE);
         if (!Device) {
             Status = STATUS_INVALID_HANDLE;
-            WNBD_LOG_ERROR(
+            WNBD_LOG_WARN(
                 "IOCTL_WNBD_SEND_RSP: Could not fetch request, invalid connection id: %d.",
                 RspCmd->ConnectionId);
             break;
         }
 
         Status = WnbdHandleResponse(Irp, Device, RspCmd);
-        WNBD_LOG_LOUD("Reply handling status: %d.", Status);
+        WNBD_LOG_LOUD("Reply handling status: 0x%x.", Status);
 
         WnbdReleaseDevice(Device);
         break;
@@ -815,13 +798,13 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_VERSION_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!VersionCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_VERSION_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_VERSION: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_VERSION: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
         if (!Irp->AssociatedIrp.SystemBuffer ||
                 CHECK_O_LOCATION(IoLocation, WNBD_VERSION)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_VERSION: Bad output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_VERSION: Bad output buffer");
             Status = STATUS_BUFFER_OVERFLOW;
             break;
         }
@@ -844,7 +827,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_GET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!GetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_GET_DRV_OPT_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_GET_DRV_OPT: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_GET_DRV_OPT: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -868,7 +851,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_SET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!SetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_SET_DRV_OPT_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_SET_DRV_OPT: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_SET_DRV_OPT: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -893,7 +876,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_RESET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!ResetOptCmd || CHECK_I_LOCATION(IoLocation, WNBD_IOCTL_RESET_DRV_OPT_COMMAND)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
+            WNBD_LOG_WARN("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -908,7 +891,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             (PWNBD_IOCTL_LIST_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!ListOptCmd || CHECK_I_LOCATION(IoLocation, IOCTL_WNBD_LIST_DRV_OPT)) {
-            WNBD_LOG_ERROR("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
+            WNBD_LOG_LOUD("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -929,6 +912,6 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
     }
 
-    WNBD_LOG_LOUD("Exit: %d", Status);
+    WNBD_LOG_LOUD("Exit: 0x%x", Status);
     return Status;
 }

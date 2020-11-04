@@ -18,7 +18,6 @@ PWNBD_EXTENSION GlobalExt;
 VOID
 WnbdScsiAdapterSupportControlTypes(PSCSI_SUPPORTED_CONTROL_TYPE_LIST List)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(List);
 
     ULONG Iterator;
@@ -36,8 +35,6 @@ WnbdScsiAdapterSupportControlTypes(PSCSI_SUPPORTED_CONTROL_TYPE_LIST List)
             break;
         }
     }
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 /*
@@ -85,7 +82,6 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     UNREFERENCED_PARAMETER(ArgumentString);
     UNREFERENCED_PARAMETER(BusInformation);
     UNREFERENCED_PARAMETER(LowerDevice);
-    WNBD_LOG_LOUD(": Enter");
     PWNBD_EXTENSION Ext = (PWNBD_EXTENSION) DeviceExtension;
     NTSTATUS Status = STATUS_SUCCESS;
 
@@ -111,6 +107,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
 
     Status = ExInitializeResourceLite(&Ext->DeviceCreationLock);
     if (!NT_SUCCESS(Status)) {
+        WNBD_LOG_ERROR("Error initializing resource DeviceCreationLock. Failed with NTSTATUS: 0x%x.", Status);
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Clean;
     }
@@ -131,7 +128,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
         &WNBD_GUID, NULL, &Ext->DeviceInterface);
 
     if (!NT_SUCCESS(Status)) {
-        WNBD_LOG_ERROR(": Error calling IoRegisterDeviceInterface. Failed with NTSTATUS: %x.", Status);
+        WNBD_LOG_ERROR("Error calling IoRegisterDeviceInterface. Failed with NTSTATUS: 0x%x.", Status);
         goto CleanLock;
     }
 
@@ -141,15 +138,14 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
         goto Exit;
     }
 
-    WNBD_LOG_LOUD(": Exit SP_RETURN_FOUND");
+    WNBD_LOG_LOUD("Exit SP_RETURN_FOUND");
     return SP_RETURN_FOUND;
 Exit:
     RtlFreeUnicodeString(&Ext->DeviceInterface);
 CleanLock:
     ExDeleteResourceLite(&Ext->DeviceCreationLock);
 Clean:
-    WNBD_LOG_ERROR(": Failing with SP_RETURN_NOT_FOUND");
-    WNBD_LOG_LOUD(": Exit");
+    WNBD_LOG_LOUD("Exit SP_RETURN_NOT_FOUND");
     return SP_RETURN_NOT_FOUND;
 }
 
@@ -160,7 +156,6 @@ _Use_decl_annotations_
 VOID
 WnbdHwFreeAdapterResources(_In_ PVOID DeviceExtension)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(PASSIVE_LEVEL == KeGetCurrentIrql());
 
@@ -168,8 +163,6 @@ WnbdHwFreeAdapterResources(_In_ PVOID DeviceExtension)
 
     WnbdCleanupAllDevices(Ext);
     ExDeleteResourceLite(&Ext->DeviceCreationLock);
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 /*
@@ -179,17 +172,15 @@ _Use_decl_annotations_
 BOOLEAN
 WnbdHwInitialize(PVOID DeviceExtension)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     PWNBD_EXTENSION	Ext = (PWNBD_EXTENSION) DeviceExtension;
 
     NTSTATUS Status = IoSetDeviceInterfaceState(&Ext->DeviceInterface, TRUE);
     if (!NT_SUCCESS(Status)) {
-        WNBD_LOG_ERROR(": Error calling IoSetDeviceInterfaceState %x.", Status);
+        WNBD_LOG_ERROR("Error calling IoSetDeviceInterfaceState 0x%x.", Status);
         return FALSE;
     }
 
-    WNBD_LOG_LOUD(": Exit");
     return TRUE;
 }
 
@@ -201,7 +192,6 @@ VOID
 WnbdHwProcessServiceRequest(PVOID DeviceExtension,
                             PVOID Irp)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
     ASSERT(Irp);
 
@@ -220,7 +210,6 @@ WnbdHwProcessServiceRequest(PVOID DeviceExtension,
     } else {
         WNBD_LOG_LOUD("Pending HwProcessServiceRequest");
     }
-    WNBD_LOG_LOUD(": Exit");
 }
 
 /*
@@ -232,12 +221,9 @@ WnbdHwResetBus(PVOID DeviceExtension,
                ULONG PathId)
 {
     _IRQL_limited_to_(DISPATCH_LEVEL);
-    WNBD_LOG_LOUD(": Enter");
-
     StorPortCompleteRequest(DeviceExtension, (UCHAR)PathId,
                             SP_UNTAGGED, SP_UNTAGGED, SRB_STATUS_BUS_RESET);
 
-    WNBD_LOG_LOUD(": Exit");
     return TRUE;
 }
 
@@ -384,7 +370,6 @@ WnbdHwStartIo(PVOID DeviceExtension,
               PSCSI_REQUEST_BLOCK  Srb)
 {
     _IRQL_limited_to_(DISPATCH_LEVEL);
-    WNBD_LOG_LOUD(": Enter");
     UCHAR SrbStatus = SRB_STATUS_INVALID_REQUEST;
     BOOLEAN Complete = TRUE;
     ASSERT(DeviceExtension);
@@ -428,7 +413,7 @@ WnbdHwStartIo(PVOID DeviceExtension,
     case SRB_FUNCTION_WMI:
     case SRB_FUNCTION_RESET_BUS:
     default:
-        WNBD_LOG_ERROR("Unknown SRB Function = 0x%x(%s)",
+        WNBD_LOG_INFO("Unknown SRB Function = 0x%x(%s)",
                        Srb->Function, WnbdToStringSrbFunction(Srb->Function));
         SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;
@@ -446,8 +431,6 @@ WnbdHwStartIo(PVOID DeviceExtension,
         Srb->SrbStatus = SrbStatus;
         StorPortNotification(RequestComplete, DeviceExtension, Srb);
     }
-
-    WNBD_LOG_LOUD(": Exit");
 
     return TRUE;
 }

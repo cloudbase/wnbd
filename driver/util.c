@@ -19,8 +19,6 @@
 VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
                       _In_ BOOLEAN SubmittedRequests)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     PLIST_ENTRY Request;
     PSRB_QUEUE_ELEMENT Element;
     PLIST_ENTRY ListHead;
@@ -81,7 +79,6 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
 VOID
 WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
 {
-    WNBD_LOG_LOUD(": Enter");
     KeSetEvent(&DeviceExtension->GlobalDeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
 
     // The rundown protection is a device reference count. We're going to wait
@@ -90,8 +87,6 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
 
     KsInitialize();
     KsDestroy();
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 BOOLEAN
@@ -144,7 +139,6 @@ WnbdFindDeviceByAddr(
     _In_ UCHAR Lun,
     _In_ BOOLEAN Acquire)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
 
     KIRQL Irql = { 0 };
@@ -166,7 +160,6 @@ WnbdFindDeviceByAddr(
     }
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    WNBD_LOG_LOUD(": Exit");
     return Device;
 }
 
@@ -178,7 +171,6 @@ WnbdFindDeviceByConnId(
     _In_ UINT64 ConnectionId,
     _In_ BOOLEAN Acquire)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
 
     KIRQL Irql = { 0 };
@@ -197,7 +189,6 @@ WnbdFindDeviceByConnId(
     }
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    WNBD_LOG_LOUD(": Exit");
     return Device;
 }
 
@@ -209,7 +200,6 @@ WnbdFindDeviceByInstanceName(
     _In_ PCHAR InstanceName,
     _In_ BOOLEAN Acquire)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(DeviceExtension);
 
     KIRQL Irql = { 0 };
@@ -227,8 +217,7 @@ WnbdFindDeviceByInstanceName(
         Device = NULL;
     }
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
-
-    WNBD_LOG_LOUD(": Exit");
+    
     return Device;
 }
 
@@ -269,13 +258,10 @@ VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device) {
 VOID
 WnbdDisconnectAsync(PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Device);
 
     Device->HardRemoveDevice = TRUE;
     KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 // The specified device must be acquired. It will be released by
@@ -283,7 +269,6 @@ WnbdDisconnectAsync(PWNBD_DISK_DEVICE Device)
 VOID
 WnbdDisconnectSync(_In_ PWNBD_DISK_DEVICE Device)
 {
-    WNBD_LOG_LOUD(": Enter");
     // We're holding a device reference, preventing it from being
     // cleaned up while we're accessing it.
     PVOID DeviceMonitorThread = Device->DeviceMonitorThread;
@@ -296,7 +281,6 @@ WnbdDisconnectSync(_In_ PWNBD_DISK_DEVICE Device)
 
     KeWaitForSingleObject(DeviceMonitorThread, Executive, KernelMode, FALSE, NULL);
     ObDereferenceObject(DeviceMonitorThread);
-    WNBD_LOG_LOUD(": Exit");
 }
 
 BOOLEAN

@@ -21,7 +21,6 @@ NbdReadExact(_In_ INT Fd,
              _In_ size_t Length,
              _Inout_ PNTSTATUS error)
 {
-    WNBD_LOG_LOUD(": Enter");
     if (-1 == Fd) {
         *error = STATUS_CONNECTION_DISCONNECTED;
         return -1;
@@ -35,13 +34,12 @@ NbdReadExact(_In_ INT Fd,
             Length -= Result;
             Temp = Temp + Result;
         } else {
-            WNBD_LOG_ERROR("Failed with : %d", Result);
+            WNBD_LOG_WARN("Failed with : %d", Result);
             *error = STATUS_CONNECTION_DISCONNECTED;
             return -1;
         }
     }
     ASSERT(Length == 0);
-    WNBD_LOG_LOUD(": Exit");
     return 0;
 }
 
@@ -51,7 +49,6 @@ NbdWriteExact(_In_ INT Fd,
               _In_ size_t Length,
               _Inout_ PNTSTATUS error)
 {
-    WNBD_LOG_LOUD(": Enter");
     if (-1 == Fd) {
         *error = STATUS_CONNECTION_DISCONNECTED;
         return -1;
@@ -62,7 +59,7 @@ NbdWriteExact(_In_ INT Fd,
         WNBD_LOG_INFO("Size to send = %lu", Length);
         Result = Send(Fd, Temp, Length, 0, error);
         if (Result <= 0) {
-            WNBD_LOG_ERROR("Failed with : %d", Result);
+            WNBD_LOG_WARN("Failed with : %d", Result);
             *error = STATUS_CONNECTION_DISCONNECTED;
             return -1;
         }
@@ -70,7 +67,6 @@ NbdWriteExact(_In_ INT Fd,
         Temp += Result;
     }
     ASSERT(Length == 0);
-    WNBD_LOG_LOUD(": Exit");
     return 0;
 }
 
@@ -80,7 +76,6 @@ NbdSendRequest(_In_ INT Fd,
                _In_ size_t Datasize,
                _Maybenull_ PVOID Data)
 {
-    WNBD_LOG_LOUD(": Enter");
     NBD_HANDSHAKE_REQ Request;
     NTSTATUS error = STATUS_SUCCESS;
     Request.Magic = RtlUlonglongByteSwap(OPTION_MAGIC);
@@ -91,7 +86,6 @@ NbdSendRequest(_In_ INT Fd,
     if (NULL != Data) {
         NbdWriteExact(Fd, Data, Datasize, &error);
     }
-    WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
@@ -101,7 +95,6 @@ NbdSendInfoRequest(_In_ INT Fd,
                    _Maybenull_ PUINT16 Request,
                    _In_ PCHAR Name)
 {
-    WNBD_LOG_LOUD(": Enter");
     UINT16 rlen = RtlUshortByteSwap((USHORT)NumberOfRequests);
     UINT32 nlen = RtlUlongByteSwap((ULONG)strlen(Name));
     NTSTATUS error = STATUS_SUCCESS;
@@ -114,18 +107,17 @@ NbdSendInfoRequest(_In_ INT Fd,
     if (NumberOfRequests > 0 && NULL != Request) {
         NbdWriteExact(Fd, Request, NumberOfRequests * sizeof(UINT16), &error);
     }
-    WNBD_LOG_LOUD(": Exit");
 }
 
 PNBD_HANDSHAKE_RPL
 NbdReadHandshakeReply(_In_ INT Fd)
 {
-    WNBD_LOG_LOUD(": Enter");
     PNBD_HANDSHAKE_RPL Retval = NbdMalloc(
         sizeof(NBD_HANDSHAKE_RPL));
 
     if (!Retval) {
-        WNBD_LOG_ERROR("Insufficient resources to allocate memory");
+        WNBD_LOG_ERROR("Insufficient resources. Failed to allocate: %d bytes",
+            sizeof(NBD_HANDSHAKE_RPL));
         return NULL;
     }
 
@@ -148,7 +140,8 @@ NbdReadHandshakeReply(_In_ INT Fd)
         INT NewSize = sizeof(NBD_HANDSHAKE_RPL) + Retval->Datasize;
         PNBD_HANDSHAKE_RPL RetvalTemp = NbdMalloc(NewSize);
         if (!RetvalTemp) {
-            WNBD_LOG_ERROR("Insufficient resources to allocate memory");
+            WNBD_LOG_ERROR("Insufficient resources. Failed to allocate: %d bytes",
+                NewSize);
             return NULL;
         }
         RtlCopyMemory(RetvalTemp, Retval, sizeof(NBD_HANDSHAKE_RPL));
@@ -159,7 +152,6 @@ NbdReadHandshakeReply(_In_ INT Fd)
         NbdReadExact(Fd, &(RetvalTemp->Data), RetvalTemp->Datasize, &error);
         Retval = RetvalTemp;
     }
-    WNBD_LOG_LOUD(": Exit");
     return Retval;
 }
 
@@ -168,15 +160,11 @@ NbdParseSizes(_In_ PCHAR Data,
               _Inout_ PUINT64 Size,
               _Inout_ PUINT16 Flags)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     RtlCopyMemory(Size, Data, sizeof(*Size));
     *Size = RtlUlonglongByteSwap(*Size);
     Data += sizeof(*Size);
     RtlCopyMemory(Flags, Data, sizeof(*Flags));
     *Flags = RtlUshortByteSwap(*Flags);
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 VOID
@@ -187,16 +175,14 @@ NbdSendOptExportName(_In_ INT Fd,
                      _In_ PCHAR Name,
                      _In_ UINT16 GFlags)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     NTSTATUS error = STATUS_SUCCESS;
 
     NbdSendRequest(Fd, NBD_OPT_EXPORT_NAME, strlen(Name), Name);
     CHAR Buf[sizeof(*Flags) + sizeof(*Size)];
     RtlZeroMemory(Buf, sizeof(*Flags) + sizeof(*Size));
     if (NbdReadExact(Fd, Buf, sizeof(Buf), &error) < 0 && Go) {
-        WNBD_LOG_ERROR("Server does not support NBD_OPT_GO and"
-            "dropped connection after sending NBD_OPT_EXPORT_NAME.");
+        WNBD_LOG_WARN("Server does not support NBD_OPT_GO and"
+                      "dropped connection after sending NBD_OPT_EXPORT_NAME.");
         return;
     }
     NbdParseSizes(Buf, Size, Flags);
@@ -205,8 +191,6 @@ NbdSendOptExportName(_In_ INT Fd,
         RtlZeroMemory(Temp, 125);
         NbdReadExact(Fd, Temp, 124, &error);
     }
-
-    WNBD_LOG_LOUD(": Exit");
 }
 
 NTSTATUS
@@ -217,7 +201,6 @@ NbdNegotiate(_In_ INT* Pfd,
              _In_ UINT32 ClientFlags,
              _In_ BOOLEAN Go)
 {
-    WNBD_LOG_LOUD(": Enter");
     UINT64 Magic = 0;
     UINT16 Temp = 0;
     UINT16 GFlags;
@@ -228,14 +211,14 @@ NbdNegotiate(_In_ INT* Pfd,
     RtlZeroMemory(Buf, 8);
     NbdReadExact(Fd, Buf, 8, &status);
     if (strcmp(Buf, INIT_PASSWD)) {
-        WNBD_LOG_ERROR("INIT_PASSWD");
+        WNBD_LOG_INFO("Received NBD INIT_PASSWD");
     }
 
     NbdReadExact(Fd, &Magic, sizeof(Magic), &status);
     Magic = RtlUlonglongByteSwap(Magic);
     if (OPTION_MAGIC != Magic
         && CLIENT_MAGIC == Magic) {
-        WNBD_LOG_ERROR("Old-style server.");
+        WNBD_LOG_INFO("Old-style server.");
     }
 
     NbdReadExact(Fd, &Temp, sizeof(UINT16), &status);
@@ -247,7 +230,7 @@ NbdNegotiate(_In_ INT* Pfd,
 
     ClientFlags = RtlUlongByteSwap(ClientFlags);
     if (Send(Fd, (PCHAR)&ClientFlags, sizeof(ClientFlags), 0, &status) < 0) {
-        WNBD_LOG_ERROR("Failed while sending data on socket");
+        WNBD_LOG_INFO("Failed while sending data on socket");
         return STATUS_FAIL_CHECK;
     }
 
@@ -269,7 +252,7 @@ NbdNegotiate(_In_ INT* Pfd,
         if (Reply && (Reply->ReplyType & NBD_REP_FLAG_ERROR)) {
             switch (Reply->ReplyType) {
             case NBD_REP_ERR_UNSUP:
-                WNBD_LOG_ERROR("NBD_REP_ERR_UNSUP");
+                WNBD_LOG_INFO("NBD_REP_ERR_UNSUP");
                 NbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
                 NbdFree(Reply);
                 return STATUS_SUCCESS;
@@ -278,9 +261,9 @@ NbdNegotiate(_In_ INT* Pfd,
                 if (Reply->Datasize > 0) {
                     // Ugly hack to make the log message null terminated
                     Reply->Data[Reply->Datasize -1] = '\0';
-                    WNBD_LOG_ERROR("Connection not allowed by server policy. Server said: %s", Reply->Data);
+                    WNBD_LOG_INFO("Connection not allowed by server policy. Server said: %s", Reply->Data);
                 } else {
-                    WNBD_LOG_ERROR("Connection not allowed by server policy.");
+                    WNBD_LOG_INFO("Connection not allowed by server policy.");
                 }
                 NbdFree(Reply);
                 return STATUS_FAIL_CHECK;
@@ -292,7 +275,7 @@ NbdNegotiate(_In_ INT* Pfd,
                     WNBD_LOG_INFO("Unknown error returned by server. Server said: %s", Reply->Data);
                 }
                 else {
-                    WNBD_LOG_ERROR("Unknown error returned by server.");
+                    WNBD_LOG_WARN("Unknown error returned by server.");
                 }
                 NbdFree(Reply);
                 return STATUS_FAIL_CHECK;
@@ -325,7 +308,6 @@ NbdNegotiate(_In_ INT* Pfd,
         NbdFree(Reply);
     }
 
-    WNBD_LOG_LOUD(": Exit");
     return STATUS_SUCCESS;
 }
 
@@ -334,7 +316,6 @@ INT
 NbdOpenAndConnect(PCHAR HostName,
                   DWORD PortNumber)
 {
-    WNBD_LOG_LOUD(": Enter");
     INT Fd = -1;
     struct addrinfo Hints;
     struct addrinfo* Ai = NULL;
@@ -348,7 +329,7 @@ NbdOpenAndConnect(PCHAR HostName,
 
     DWORD Status = KsInitialize();
     if (!NT_SUCCESS(Status)) {
-        WNBD_LOG_ERROR("Could not initialize WSK framework. Status: %d.", Status);
+        WNBD_LOG_ERROR("Could not initialize WSK framework. Status: 0x%x.", Status);
         return -1;
     }
 
@@ -361,7 +342,7 @@ NbdOpenAndConnect(PCHAR HostName,
         if (Ai) {
             FreeAddrInfo(Ai);
         }
-        WNBD_LOG_ERROR("GetAddrInfo failed with error: %d", Error);
+        WNBD_LOG_WARN("GetAddrInfo failed with error: %d", Error);
         return -1;
     }
 
@@ -382,7 +363,7 @@ NbdOpenAndConnect(PCHAR HostName,
     }
 
     if (NULL == Rp) {
-        WNBD_LOG_ERROR("Socket failed");
+        WNBD_LOG_WARN("Socket failure");
         Fd = -1;
         goto err;
     }
@@ -392,7 +373,6 @@ err:
     if (Ai) {
         FreeAddrInfo(Ai);
     }
-    WNBD_LOG_LOUD(": Exit");
     return Fd;
 }
 
@@ -406,7 +386,6 @@ NbdRequest(
     UINT64 Handle,
     NbdRequestType RequestType)
 {
-    WNBD_LOG_LOUD(": Enter");
     NTSTATUS Status = STATUS_SUCCESS;
 
     if (-1 == Fd) {
@@ -433,7 +412,6 @@ NbdRequest(
     }
 Exit:
     *IoStatus = Status;
-    WNBD_LOG_LOUD(": Exit");
 }
 
 _Use_decl_annotations_
@@ -448,8 +426,6 @@ NbdWriteStat(INT Fd,
              UINT64 Handle,
              UINT32 NbdTransmissionFlags)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     NTSTATUS Status = STATUS_SUCCESS;
     if (SystemBuffer == NULL) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -471,7 +447,7 @@ NbdWriteStat(INT Fd,
         PCHAR Buf = NULL;
         Buf = NbdMalloc(Needed);
         if (NULL == Buf) {
-            WNBD_LOG_ERROR("Insufficient resources");
+            WNBD_LOG_ERROR("Insufficient resources. Failed to allocate: %ud bytes", Needed);
             Status = STATUS_INSUFFICIENT_RESOURCES;
             goto Exit;
         }
@@ -498,14 +474,13 @@ NbdWriteStat(INT Fd,
 
 Exit:
     *IoStatus = Status;
-    WNBD_LOG_LOUD(": Exit");
 }
 
 _Use_decl_annotations_
 NTSTATUS
 NbdReadReply(INT Fd,
-             PNBD_REPLY Reply) {
-    WNBD_LOG_LOUD(": Enter");
+             PNBD_REPLY Reply)
+{
     PAGED_CODE();
 
     NTSTATUS error = STATUS_SUCCESS;
@@ -519,7 +494,6 @@ NbdReadReply(INT Fd,
         return STATUS_UNSUCCESSFUL;
     }
 
-    WNBD_LOG_LOUD(": Exit");
     return STATUS_SUCCESS;
 }
 

@@ -59,7 +59,7 @@ NTSTATUS LockUsermodeBuffer(
     {
         Status = GetExceptionCode();
         WNBD_LOG_ERROR("Encountered exception while retrieving user buffer. "
-                       "Exception: %d, buffer: %p, size: %d.",
+                       "Exception: 0x%x, buffer: %p, size: %d.",
                        Status, Buffer, BufferSize);
     }
 
@@ -182,8 +182,8 @@ NTSTATUS WnbdDispatchRequest(
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
                 CompleteRequest(Device, Element, TRUE);
                 InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
-                WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
-                               Element->Srb, Element->Tag, StorResult);
+                WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
+                              Element->Srb, Element->Tag, StorResult);
                 continue;
             }
 
@@ -297,16 +297,16 @@ NTSTATUS WnbdHandleResponse(
         if (IsReadSrb(Element->Srb)) {
             StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
             if (STOR_STATUS_SUCCESS != StorResult) {
-                WNBD_LOG_ERROR("Could not get SRB %p 0x%llx data buffer. Error: %d.",
-                               Element->Srb, Element->Tag, StorResult);
+                WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
+                              Element->Srb, Element->Tag, StorResult);
                 Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
                 Status = STATUS_INTERNAL_ERROR;
                 goto Exit;
             }
         }
     } else {
-        WNBD_LOG_WARN("Received reply header for aborted request: %p 0x%llx.",
-                      Element->Srb, Element->Tag);
+        WNBD_LOG_TRACE("Received reply header for aborted request: %p 0x%llx.",
+                       Element->Srb, Element->Tag);
     }
 
     if (!Response->Status.ScsiStatus && IsReadSrb(Element->Srb)) {

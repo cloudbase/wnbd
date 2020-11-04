@@ -29,8 +29,6 @@ NTSTATUS
 DriverEntry(PDRIVER_OBJECT DriverObject,
             PUNICODE_STRING RegistryPath)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     /*
      * Register Virtual Storport Miniport data
      */
@@ -103,8 +101,6 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
     DriverObject->MajorFunction[IRP_MJ_PNP] = 0 != StorPortDispatchPnp ? WnbdDispatchPnp : 0;
     GlobalExt = NULL;
 
-    WNBD_LOG_LOUD(": Exit");
-
     /*
      * Report status in upper layers
      */
@@ -116,7 +112,6 @@ NTSTATUS
 WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 PIRP Irp)
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Irp);
     NTSTATUS Status = STATUS_INVALID_DEVICE_REQUEST;
     PIO_STACK_LOCATION IoLocation = IoGetCurrentIrpStackLocation(Irp);
@@ -146,7 +141,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
             }
             Status = WnbdGetScsiAddress(DeviceObject, &ScsiAddress);
             if (Status) {
-                WNBD_LOG_ERROR("Could not query SCSI address. Error: %d.", Status);
+                WNBD_LOG_WARN("Could not query SCSI address. Error: 0x%x.", Status);
                 break;
             }
 
@@ -166,7 +161,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
 
     Status = StorPortDispatchPnp(DeviceObject, Irp);
 
-    WNBD_LOG_LOUD(": Exit: %d", Status);
+    WNBD_LOG_LOUD("Exit: 0x%x", Status);
     return Status;
 }
 
@@ -174,11 +169,8 @@ _Use_decl_annotations_
 VOID
 WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
 {
-    WNBD_LOG_LOUD(": Enter");
 
     if (0 != StorPortDriverUnload) {
         StorPortDriverUnload(DriverObject);
     }
-
-    WNBD_LOG_LOUD(": Exit");
 }

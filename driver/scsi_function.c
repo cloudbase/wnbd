@@ -18,7 +18,6 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
                         PSCSI_REQUEST_BLOCK Srb)
 
 {
-    WNBD_LOG_LOUD(": Enter");
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
@@ -28,7 +27,7 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
-        WNBD_LOG_INFO(": Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+        WNBD_LOG_INFO("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
             CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
 
@@ -54,7 +53,6 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     SrbStatus = SRB_STATUS_SUCCESS;
 
 Exit:
-    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 
@@ -63,14 +61,10 @@ UCHAR
 WnbdAbortFunction(_In_ PVOID DeviceExtension,
                   _In_ PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
     UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
-
-    WNBD_LOG_LOUD(": Exit");
 
     return SrbStatus;
 }
@@ -80,14 +74,10 @@ UCHAR
 WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
                              PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
     UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
-
-    WNBD_LOG_LOUD(": Exit");
 
     return SrbStatus;
 }
@@ -97,8 +87,6 @@ UCHAR
 WnbdResetDeviceFunction(PVOID DeviceExtension,
                         PSCSI_REQUEST_BLOCK  Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
@@ -107,8 +95,6 @@ WnbdResetDeviceFunction(PVOID DeviceExtension,
                             Srb->TargetId,
                             SP_UNTAGGED,
                             SRB_STATUS_TIMEOUT);
-
-    WNBD_LOG_LOUD(": Exit");
 
     return SRB_STATUS_SUCCESS;
 }
@@ -119,8 +105,6 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
                         PSCSI_REQUEST_BLOCK Srb,
                         PBOOLEAN Complete)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     ASSERT(DeviceExtension);
     ASSERT(Srb);
     ASSERT(Complete);
@@ -133,7 +117,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
-        WNBD_LOG_INFO(": Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+        WNBD_LOG_LOUD("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
             CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
 
@@ -165,7 +149,6 @@ Exit:
     if (Device)
         WnbdReleaseDevice(Device);
 
-    WNBD_LOG_LOUD(": Exit");
     return SrbStatus;
 }
 
@@ -173,8 +156,6 @@ _Use_decl_annotations_
 UCHAR
 WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
 {
-    WNBD_LOG_LOUD(": Enter");
-
     ASSERT(Srb);
     PSCSI_PNP_REQUEST_BLOCK PNP = (PSCSI_PNP_REQUEST_BLOCK) Srb;
     UCHAR SrbStatus = SRB_STATUS_INVALID_REQUEST;
@@ -208,7 +189,7 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
         break;
     }
 
-    WNBD_LOG_LOUD(": Exit with SrbStatus: %s",
+    WNBD_LOG_LOUD("Exit with SrbStatus: %s",
                   WnbdToStringSrbStatus(SrbStatus));
 
     return SrbStatus;
