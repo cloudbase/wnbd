@@ -12,7 +12,6 @@
 #include <scsi.h>
 
 #include "wnbd.h"
-#include "wnbd_wmi.h"
 #include "wnbd_log.h"
 #include "utils.h"
 #include "version.h"
@@ -841,16 +840,4 @@ DWORD WnbdWaitDispatcher(PWNBD_DISK Disk)
 
     LogDebug("The dispatcher stopped.");
     return 0;
-}
-
-HRESULT WnbdGetDiskNumberBySerialNumber(
-    LPCWSTR SerialNumber,
-    PDWORD DiskNumber)
-{
-    return GetDiskNumberBySerialNumber(SerialNumber, DiskNumber);
-}
-
-HRESULT WnbdCoInitializeBasic() {
-    LogDebug("Initializing COM.");
-    return CoInitializeBasic();
 }

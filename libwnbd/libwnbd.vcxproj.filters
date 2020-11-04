@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="wnbd_wmi.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="libwnbd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -33,9 +30,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\wnbd.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="wnbd_wmi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\wnbd_ioctl.h">

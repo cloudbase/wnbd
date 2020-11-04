@@ -19,8 +19,6 @@ EXPORTS
     WnbdWaitDispatcher
     WnbdSendResponse
     WnbdSendResponseEx
-    WnbdCoInitializeBasic
-    WnbdGetDiskNumberBySerialNumber
     WnbdGetConnectionInfo
     WnbdGetDriverVersion
     WnbdGetLibVersion
