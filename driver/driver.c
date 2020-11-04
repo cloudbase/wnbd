@@ -119,8 +119,8 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
     ASSERT(IoLocation);
     UCHAR MinorFunction = IoLocation->MinorFunction;
 
-    WNBD_LOG_LOUD("Received PnP request: %s (%d).",
-                  WnbdToStringPnpMinorFunction(MinorFunction), MinorFunction);
+    WNBD_LOG_DEBUG("Received PnP request: %s (%d).",
+                   WnbdToStringPnpMinorFunction(MinorFunction), MinorFunction);
     switch (MinorFunction) {
     case IRP_MN_QUERY_CAPABILITIES:
         IoLocation->Parameters.DeviceCapabilities.Capabilities->SilentInstall = 1;
@@ -161,7 +161,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
 
     Status = StorPortDispatchPnp(DeviceObject, Irp);
 
-    WNBD_LOG_LOUD("Exit: 0x%x", Status);
+    WNBD_LOG_DEBUG("Exit: 0x%x", Status);
     return Status;
 }
 

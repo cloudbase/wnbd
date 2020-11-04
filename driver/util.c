@@ -53,8 +53,6 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
     // We're marking submitted requests as aborted and notifying Storport. We only cleaning
     // them up when eventually receiving a reply from the storage backend (needed by NBD,
     // in which case the IO payload is otherwise unknown).
-    WNBD_LOG_LOUD(": Enter");
-
     PLIST_ENTRY ListHead = &Device->SubmittedReqListHead;
     PKSPIN_LOCK ListLock = &Device->SubmittedReqListLock;
 
@@ -317,23 +315,23 @@ ValidateScsiRequest(
     case WnbdReqTypeWrite:
     case WnbdReqTypeFlush:
         if (DevProps->Flags.ReadOnly) {
-            WNBD_LOG_LOUD(
+            WNBD_LOG_DEBUG(
                 "Write, flush or trim requested on a read-only disk.");
             return FALSE;
         }
     case WnbdReqTypeRead:
         break;
     default:
-        WNBD_LOG_LOUD("Unsupported SCSI operation: %d.", ScsiOp);
+        WNBD_LOG_DEBUG("Unsupported SCSI operation: %d.", ScsiOp);
         return FALSE;
     }
 
     if (NbdReqType == WnbdReqTypeUnmap && !DevProps->Flags.UnmapSupported) {
-        WNBD_LOG_LOUD("The NBD server doesn't accept TRIM/UNMAP.");
+        WNBD_LOG_DEBUG("The NBD server doesn't accept TRIM/UNMAP.");
         return FALSE;
     }
     if (NbdReqType == WnbdReqTypeFlush && !DevProps->Flags.FlushSupported) {
-        WNBD_LOG_LOUD("The NBD server doesn't accept flush requests");
+        WNBD_LOG_DEBUG("The NBD server doesn't accept flush requests");
         return FALSE;
     }
 
@@ -378,7 +376,7 @@ VOID CompleteRequest(
     // We must be very careful not to complete the same SRB twice in order
     // to avoid crashes.
     if (!InterlockedExchange8((CHAR*)&Element->Completed, TRUE)) {
-        WNBD_LOG_LOUD(
+        WNBD_LOG_DEBUG(
             "Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
             Element->Srb, Element->Tag, Element->Srb->SrbStatus,
             WnbdToStringSrbStatus(Element->Srb->SrbStatus));

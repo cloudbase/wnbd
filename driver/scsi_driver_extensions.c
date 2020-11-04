@@ -138,14 +138,14 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
         goto Exit;
     }
 
-    WNBD_LOG_LOUD("Exit SP_RETURN_FOUND");
+    WNBD_LOG_DEBUG("Exit SP_RETURN_FOUND");
     return SP_RETURN_FOUND;
 Exit:
     RtlFreeUnicodeString(&Ext->DeviceInterface);
 CleanLock:
     ExDeleteResourceLite(&Ext->DeviceCreationLock);
 Clean:
-    WNBD_LOG_LOUD("Exit SP_RETURN_NOT_FOUND");
+    WNBD_LOG_DEBUG("Exit SP_RETURN_NOT_FOUND");
     return SP_RETURN_NOT_FOUND;
 }
 
@@ -205,10 +205,10 @@ WnbdHwProcessServiceRequest(PVOID DeviceExtension,
 
     if (STATUS_PENDING != Status) {
         ((PIRP)Irp)->IoStatus.Status = Status;
-        WNBD_LOG_LOUD("Calling StorPortCompleteServiceIrp");
+        WNBD_LOG_DEBUG("Calling StorPortCompleteServiceIrp");
         StorPortCompleteServiceIrp(DeviceExtension, Irp);
     } else {
-        WNBD_LOG_LOUD("Pending HwProcessServiceRequest");
+        WNBD_LOG_DEBUG("Pending HwProcessServiceRequest");
     }
 }
 
@@ -424,10 +424,10 @@ WnbdHwStartIo(PVOID DeviceExtension,
      * If the operation is not pending notify the Storport of completion
      */
     if (Complete) {
-        WNBD_LOG_LOUD("RequestComplete of %s status: 0x%x(%s)",
-                      WnbdToStringSrbFunction(Srb->Function),
-                      SrbStatus,
-                      WnbdToStringSrbStatus(SrbStatus));
+        WNBD_LOG_DEBUG("RequestComplete of %s status: 0x%x(%s)",
+                       WnbdToStringSrbFunction(Srb->Function),
+                       SrbStatus,
+                       WnbdToStringSrbStatus(SrbStatus));
         Srb->SrbStatus = SrbStatus;
         StorPortNotification(RequestComplete, DeviceExtension, Srb);
     }

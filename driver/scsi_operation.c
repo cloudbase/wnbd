@@ -313,7 +313,7 @@ WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
 
     switch (Cdb->CDB6INQUIRY3.EnableVitalProductData) {
     case 0:
-        WNBD_LOG_LOUD("Normal Inquiry");
+        WNBD_LOG_DEBUG("Normal Inquiry");
         if (0 != Cdb->CDB6INQUIRY3.PageCode) {
             SrbStatus = SRB_STATUS_INTERNAL_ERROR;
             goto Exit;
@@ -324,7 +324,7 @@ WnbdInquiry(_In_ PWNBD_DISK_DEVICE Device,
         SrbStatus = SRB_STATUS_SUCCESS;
         break;
     default:
-        WNBD_LOG_LOUD("Extended Inquiry");
+        WNBD_LOG_DEBUG("Extended Inquiry");
         SrbStatus = WnbdProcessExtendedInquiry(DataBuffer, DataTransferLength, Srb, Cdb, Device);
         break;
     }
@@ -411,7 +411,7 @@ WnbdSetModeSense(_In_ PVOID Data,
     }
 
 Exit:
-    WNBD_LOG_LOUD("Exit: %#02x", SrbStatus);
+    WNBD_LOG_DEBUG("Exit: %#02x", SrbStatus);
     return SrbStatus;
 }
 
@@ -628,7 +628,7 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     UINT32 BlockSize = Device->Properties.BlockSize;
     UINT64 BlockCount = Device->Properties.BlockCount;
 
-    WNBD_LOG_LOUD("Processing %#02x command", Cdb->AsByte[0]);
+    WNBD_LOG_DEBUG("Processing %#02x command", Cdb->AsByte[0]);
     switch (Cdb->AsByte[0]) {
     case SCSIOP_READ6:
     case SCSIOP_READ:

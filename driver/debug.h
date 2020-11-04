@@ -12,9 +12,8 @@
 
 #define WNBD_LVL_ERROR    DPFLTR_ERROR_LEVEL
 #define WNBD_LVL_WARN     DPFLTR_WARNING_LEVEL
-#define WNBD_LVL_TRACE    DPFLTR_TRACE_LEVEL
 #define WNBD_LVL_INFO     DPFLTR_INFO_LEVEL
-#define WNBD_LVL_LOUD     (DPFLTR_INFO_LEVEL + 1)
+#define WNBD_LVL_DEBUG     (DPFLTR_INFO_LEVEL + 1)
 
 VOID
 WnbdLog(_In_ UINT32 Level,
@@ -22,14 +21,11 @@ WnbdLog(_In_ UINT32 Level,
         _In_ UINT32 Line,
         _In_ PCHAR Format, ...);
 
-#define WNBD_LOG_LOUD(_format, ...) \
-   WnbdLog(WNBD_LVL_LOUD, __FUNCTION__, __LINE__, _format,  __VA_ARGS__)
+#define WNBD_LOG_DEBUG(_format, ...) \
+   WnbdLog(WNBD_LVL_DEBUG, __FUNCTION__, __LINE__, _format,  __VA_ARGS__)
 
 #define WNBD_LOG_INFO(_format, ...) \
    WnbdLog(WNBD_LVL_INFO, __FUNCTION__, __LINE__, _format, __VA_ARGS__)
-
-#define WNBD_LOG_TRACE(_format, ...) \
-   WnbdLog(WNBD_LVL_TRACE, __FUNCTION__, __LINE__, _format, __VA_ARGS__)
 
 #define WNBD_LOG_ERROR(_format, ...) \
    WnbdLog(WNBD_LVL_ERROR, __FUNCTION__, __LINE__, _format, __VA_ARGS__)
