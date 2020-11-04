@@ -12,6 +12,7 @@
 #include "userspace.h"
 #include "util.h"
 #include "options.h"
+#include "events.h"
 
 DRIVER_INITIALIZE DriverEntry;
 DRIVER_UNLOAD WnbdDriverUnload;
@@ -29,6 +30,11 @@ NTSTATUS
 DriverEntry(PDRIVER_OBJECT DriverObject,
             PUNICODE_STRING RegistryPath)
 {
+    /*
+     * Register with ETW
+     */
+    EventRegisterWNBD();
+
     /*
      * Register Virtual Storport Miniport data
      */
@@ -173,4 +179,9 @@ WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
     if (0 != StorPortDriverUnload) {
         StorPortDriverUnload(DriverObject);
     }
+
+    /*
+     *  Unregister from ETW
+     */
+    EventUnregisterWNBD();
 }
