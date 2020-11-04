@@ -67,7 +67,7 @@ ReadRegistryValue(
         RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
         GlobalRegistryPath.Buffer, Table, 0, 0);
 
-    WNBD_LOG_LOUD("Exit: 0x%x", Status);
+    WNBD_LOG_DEBUG("Exit: 0x%x", Status);
     return Status;
 }
 

@@ -490,9 +490,9 @@ WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 
     Irp->IoStatus.Information = (OutList->Count * sizeof(WNBD_CONNECTION_INFO)) +
         RTL_SIZEOF_THROUGH_FIELD(WNBD_CONNECTION_LIST, Count);
-    WNBD_LOG_LOUD("Exit: %d. Element count: %d, element size: %d. Total size: %d.",
-                  Status, OutList->Count, OutList->ElementSize,
-                  Irp->IoStatus.Information);
+    WNBD_LOG_DEBUG("Exit: %d. Element count: %d, element size: %d. Total size: %d.",
+                   Status, OutList->Count, OutList->ElementSize,
+                   Irp->IoStatus.Information);
 
     return Status;
 }
@@ -510,7 +510,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
     PWNBD_DISK_DEVICE Device = NULL;
     DWORD Ioctl = IoLocation->Parameters.DeviceIoControl.IoControlCode;
     DWORD OutBuffLength = IoLocation->Parameters.DeviceIoControl.OutputBufferLength;
-    WNBD_LOG_LOUD("DeviceIoControl = 0x%x.", Ioctl);
+    WNBD_LOG_DEBUG("DeviceIoControl = 0x%x.", Ioctl);
 
     if (IOCTL_MINIPORT_PROCESS_SERVICE_IRP != Ioctl) {
         WNBD_LOG_ERROR("Unsupported IOCTL (%x)", Ioctl);
@@ -526,12 +526,12 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
     switch (Cmd->IoControlCode) {
     case IOCTL_WNBD_PING:
-        WNBD_LOG_LOUD("IOCTL_WNBD_PING");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_PING");
         Status = STATUS_SUCCESS;
         break;
 
     case IOCTL_WNBD_CREATE:
-        WNBD_LOG_LOUD("IOCTL_WNBD_CREATE");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_CREATE");
         PWNBD_IOCTL_CREATE_COMMAND Command = (
             PWNBD_IOCTL_CREATE_COMMAND) Irp->AssociatedIrp.SystemBuffer;
         if (!Command ||
@@ -594,8 +594,8 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             RtlCopyMemory(OutInfo, &ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
             Irp->IoStatus.Information = sizeof(WNBD_CONNECTION_INFO);
 
-            WNBD_LOG_LOUD("Mapped disk. Name: %s, connection id: %llu",
-                          Props.InstanceName, ConnectionInfo.ConnectionId);
+            WNBD_LOG_DEBUG("Mapped disk. Name: %s, connection id: %llu",
+                           Props.InstanceName, ConnectionInfo.ConnectionId);
         }
 
         KeEnterCriticalRegion();
@@ -604,7 +604,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_REMOVE:
-        WNBD_LOG_LOUD("IOCTL_WNBD_REMOVE");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_REMOVE");
         PWNBD_IOCTL_REMOVE_COMMAND RmCmd = (
             PWNBD_IOCTL_REMOVE_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -625,7 +625,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
      case IOCTL_WNBD_LIST:
-        WNBD_LOG_LOUD("IOCTL_WNBD_LIST");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_LIST");
         DWORD RequiredBuffSize = (
             DeviceExtension->DeviceCount * sizeof(WNBD_CONNECTION_INFO))
             + sizeof(WNBD_CONNECTION_LIST);
@@ -633,7 +633,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         if (!Irp->AssociatedIrp.SystemBuffer ||
             CHECK_O_LOCATION_SZ(IoLocation, RequiredBuffSize))
         {
-            WNBD_LOG_LOUD("IOCTL_WNBD_LIST: Bad output buffer");
+            WNBD_LOG_DEBUG("IOCTL_WNBD_LIST: Bad output buffer");
             Irp->IoStatus.Information = RequiredBuffSize;
             break;
         }
@@ -641,7 +641,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_SHOW:
-        WNBD_LOG_LOUD("WNBD_SHOW");
+        WNBD_LOG_DEBUG("WNBD_SHOW");
         PWNBD_IOCTL_SHOW_COMMAND ShowCmd =
             (PWNBD_IOCTL_SHOW_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -689,12 +689,12 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_RELOAD_CONFIG:
-        WNBD_LOG_LOUD("IOCTL_WNBD_RELOAD_CONFIG");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_RELOAD_CONFIG");
         WnbdReloadPersistentOptions();
         break;
 
     case IOCTL_WNBD_STATS:
-        WNBD_LOG_LOUD("WNBD_STATS");
+        WNBD_LOG_DEBUG("WNBD_STATS");
         PWNBD_IOCTL_STATS_COMMAND StatsCmd =
             (PWNBD_IOCTL_STATS_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -737,7 +737,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
     case IOCTL_WNBD_FETCH_REQ:
         // TODO: consider moving out individual command handling.
-        WNBD_LOG_LOUD("IOCTL_WNBD_FETCH_REQ");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_FETCH_REQ");
         PWNBD_IOCTL_FETCH_REQ_COMMAND ReqCmd =
             (PWNBD_IOCTL_FETCH_REQ_COMMAND) Irp->AssociatedIrp.SystemBuffer;
         if (!ReqCmd ||
@@ -761,14 +761,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
         Status = WnbdDispatchRequest(Irp, Device, ReqCmd);
         Irp->IoStatus.Information = sizeof(WNBD_IOCTL_FETCH_REQ_COMMAND);
-        WNBD_LOG_LOUD("Request dispatch status: %d. Request type: %d Request handle: %llx",
-                      Status, ReqCmd->Request.RequestType, ReqCmd->Request.RequestHandle);
+        WNBD_LOG_DEBUG("Request dispatch status: %d. Request type: %d Request handle: %llx",
+                       Status, ReqCmd->Request.RequestType, ReqCmd->Request.RequestHandle);
 
         WnbdReleaseDevice(Device);
         break;
 
     case IOCTL_WNBD_SEND_RSP:
-        WNBD_LOG_LOUD("IOCTL_WNBD_SEND_RSP");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_SEND_RSP");
         PWNBD_IOCTL_SEND_RSP_COMMAND RspCmd =
             (PWNBD_IOCTL_SEND_RSP_COMMAND) Irp->AssociatedIrp.SystemBuffer;
         if (!RspCmd || CHECK_I_LOCATION(IoLocation, PWNBD_IOCTL_FETCH_REQ_COMMAND)) {
@@ -787,13 +787,13 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         }
 
         Status = WnbdHandleResponse(Irp, Device, RspCmd);
-        WNBD_LOG_LOUD("Reply handling status: 0x%x.", Status);
+        WNBD_LOG_DEBUG("Reply handling status: 0x%x.", Status);
 
         WnbdReleaseDevice(Device);
         break;
 
     case IOCTL_WNBD_VERSION:
-        WNBD_LOG_LOUD("IOCTL_WNBD_VERSION");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_VERSION");
         PWNBD_IOCTL_VERSION_COMMAND VersionCmd =
             (PWNBD_IOCTL_VERSION_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -822,7 +822,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_GET_DRV_OPT:
-        WNBD_LOG_LOUD("IOCTL_WNBD_GET_DRV_OPT");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_GET_DRV_OPT");
         PWNBD_IOCTL_GET_DRV_OPT_COMMAND GetOptCmd =
             (PWNBD_IOCTL_GET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -846,7 +846,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_SET_DRV_OPT:
-        WNBD_LOG_LOUD("IOCTL_WNBD_SET_DRV_OPT");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_SET_DRV_OPT");
         PWNBD_IOCTL_SET_DRV_OPT_COMMAND SetOptCmd =
             (PWNBD_IOCTL_SET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -871,7 +871,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_RESET_DRV_OPT:
-        WNBD_LOG_LOUD("IOCTL_WNBD_RESET_DRV_OPT");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_RESET_DRV_OPT");
         PWNBD_IOCTL_RESET_DRV_OPT_COMMAND ResetOptCmd =
             (PWNBD_IOCTL_RESET_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
@@ -886,12 +886,12 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
 
     case IOCTL_WNBD_LIST_DRV_OPT:
-        WNBD_LOG_LOUD("IOCTL_WNBD_LIST_DRV_OPT");
+        WNBD_LOG_DEBUG("IOCTL_WNBD_LIST_DRV_OPT");
         PWNBD_IOCTL_LIST_DRV_OPT_COMMAND ListOptCmd =
             (PWNBD_IOCTL_LIST_DRV_OPT_COMMAND) Irp->AssociatedIrp.SystemBuffer;
 
         if (!ListOptCmd || CHECK_I_LOCATION(IoLocation, IOCTL_WNBD_LIST_DRV_OPT)) {
-            WNBD_LOG_LOUD("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
+            WNBD_LOG_DEBUG("IOCTL_WNBD_RESET_DRV_OPT: Bad input or output buffer");
             Status = STATUS_INVALID_PARAMETER;
             break;
         }
@@ -912,6 +912,6 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         break;
     }
 
-    WNBD_LOG_LOUD("Exit: 0x%x", Status);
+    WNBD_LOG_DEBUG("Exit: 0x%x", Status);
     return Status;
 }

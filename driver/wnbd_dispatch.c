@@ -78,12 +78,12 @@ NTSTATUS WnbdDispatchRequest(
     BOOLEAN BufferLocked = FALSE;
 
     if ((ULONG)Device->Properties.Pid != IoGetRequestorProcessId(Irp)) {
-        WNBD_LOG_LOUD("Invalid pid: %d != %u.",
+        WNBD_LOG_DEBUG("Invalid pid: %d != %u.",
             Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
     if ((ULONG)Device->Properties.Flags.UseNbd) {
-        WNBD_LOG_LOUD("Direct IO is not allowed using NBD devices.");
+        WNBD_LOG_DEBUG("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }
 
@@ -133,8 +133,8 @@ NTSTATUS WnbdDispatchRequest(
 
         RtlZeroMemory(Request, sizeof(WNBD_IO_REQUEST));
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
-        WNBD_LOG_LOUD("Processing request. Address: %p Tag: 0x%llx Type: %d",
-                      Element->Srb, Element->Tag, RequestType);
+        WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx Type: %d",
+                       Element->Srb, Element->Tag, RequestType);
 
         if (!ValidateScsiRequest(Device, Element)) {
             Element->Srb->DataTransferLength = 0;
@@ -259,12 +259,12 @@ NTSTATUS WnbdHandleResponse(
     PWNBD_IO_RESPONSE Response = &Command->Response;
 
     if ((ULONG)Device->Properties.Pid != IoGetRequestorProcessId(Irp)) {
-        WNBD_LOG_LOUD("Invalid pid: %d != %u.",
+        WNBD_LOG_DEBUG("Invalid pid: %d != %u.",
             Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
     if ((ULONG)Device->Properties.Flags.UseNbd) {
-        WNBD_LOG_LOUD("Direct IO is not allowed using NBD devices.");
+        WNBD_LOG_DEBUG("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }
 
@@ -281,7 +281,7 @@ NTSTATUS WnbdHandleResponse(
     }
     KeReleaseSpinLock(&Device->SubmittedReqListLock, Irql);
     if (!Element) {
-        WNBD_LOG_LOUD("Received reply with no matching request tag: 0x%llx",
+        WNBD_LOG_DEBUG("Received reply with no matching request tag: 0x%llx",
             Response->RequestHandle);
         return STATUS_NOT_FOUND;
     }
@@ -291,8 +291,8 @@ NTSTATUS WnbdHandleResponse(
         // We need to avoid accessing aborted or already completed SRBs.
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
-        WNBD_LOG_LOUD("Received reply header for %d %p 0x%llx.",
-                      RequestType, Element->Srb, Element->Tag);
+        WNBD_LOG_DEBUG("Received reply header for %d %p 0x%llx.",
+                       RequestType, Element->Srb, Element->Tag);
 
         if (IsReadSrb(Element->Srb)) {
             StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
@@ -305,7 +305,7 @@ NTSTATUS WnbdHandleResponse(
             }
         }
     } else {
-        WNBD_LOG_TRACE("Received reply header for aborted request: %p 0x%llx.",
+        WNBD_LOG_DEBUG("Received reply header for aborted request: %p 0x%llx.",
                        Element->Srb, Element->Tag);
     }
 

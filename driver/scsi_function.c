@@ -117,7 +117,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     if (SrbGetCdb(Srb)) {
         BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
 
-        WNBD_LOG_LOUD("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
+        WNBD_LOG_DEBUG("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
             CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
     }
 
@@ -189,8 +189,8 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
         break;
     }
 
-    WNBD_LOG_LOUD("Exit with SrbStatus: %s",
-                  WnbdToStringSrbStatus(SrbStatus));
+    WNBD_LOG_DEBUG("Exit with SrbStatus: %s",
+                   WnbdToStringSrbStatus(SrbStatus));
 
     return SrbStatus;
 }

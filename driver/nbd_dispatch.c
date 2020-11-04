@@ -111,9 +111,9 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
             ExInterlockedInsertTailList(
                 &Device->SubmittedReqListHead,
                 &Element->Link, &Device->SubmittedReqListLock);
-            WNBD_LOG_LOUD("Sending %s request. Address: %p Tag: 0x%llx. FUA: %d",
-                          NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag,
-                          Element->FUA);
+            WNBD_LOG_DEBUG("Sending %s request. Address: %p Tag: 0x%llx. FUA: %d",
+                           NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag,
+                           Element->FUA);
 
             if(NbdReqType == NBD_CMD_WRITE){
                 Status = WnbdRequestWrite(Device, Element,
@@ -236,8 +236,8 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         // We need to avoid accessing aborted or already completed SRBs.
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
-        WNBD_LOG_LOUD("Received reply header for %s %p 0x%llx.",
-                      NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag);
+        WNBD_LOG_DEBUG("Received reply header for %s %p 0x%llx.",
+                       NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag);
 
         if(IsReadSrb(Element->Srb)) {
             StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
@@ -304,8 +304,8 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         InterlockedIncrement64(&Device->Stats.CompletedAbortedIORequests);
     }
     else {
-        WNBD_LOG_LOUD("Successfully completed request %p 0x%llx.",
-                      Element->Srb, Element->Tag);
+        WNBD_LOG_DEBUG("Successfully completed request %p 0x%llx.",
+                       Element->Srb, Element->Tag);
     }
 
 Exit:
