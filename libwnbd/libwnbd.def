@@ -29,8 +29,6 @@ EXPORTS
     WnbdInstallDriver
     WnbdUninstallDriver
     WnbdOpenAdapter
-    WnbdOpenAdapterEx
-    WnbdOpenAdapterCMDeviceInstance
 
     WnbdIoctlPing
     WnbdIoctlCreate

@@ -48,52 +48,45 @@ DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance)
     DevInterfaceData.cbSize = sizeof(SP_DEVICE_INTERFACE_DATA);
     DevIndex = 0;
 
-    while (SetupDiEnumDeviceInterfaces(DevInfo, NULL, &WNBD_GUID,
-                                       DevIndex++, &DevInterfaceData)) {
-        if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &DevInterfaceData, NULL,
-                                             0, &RequiredSize, NULL)) {
-            ErrorCode = GetLastError();
-            if (ERROR_INSUFFICIENT_BUFFER != ErrorCode) {
-                goto Exit;
-            }
-        }
+    if (!SetupDiEnumDeviceInterfaces(DevInfo, NULL, &WNBD_GUID,
+                                     DevIndex++, &DevInterfaceData)) {
+        ErrorCode = GetLastError();
+        goto Exit;
+    }
 
-        DevInterfaceDetailData =
-            (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(RequiredSize);
-        if (!DevInterfaceDetailData) {
-            ErrorCode = ERROR_BUFFER_OVERFLOW;
+    if (!SetupDiGetDeviceInterfaceDetail(DevInfo, &DevInterfaceData, NULL,
+                                         0, &RequiredSize, NULL)) {
+        ErrorCode = GetLastError();
+        if (ErrorCode && ERROR_INSUFFICIENT_BUFFER != ErrorCode) {
             goto Exit;
         }
-        DevInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
-
-        if (!SetupDiGetDeviceInterfaceDetail(
-              DevInfo, &DevInterfaceData, DevInterfaceDetailData,
-              RequiredSize, &RequiredSize, &DevInfoData)) {
-            ErrorCode = GetLastError();
-            goto Exit;
-        }
-
-        WnbdDriverHandle = CreateFile(
-            DevInterfaceDetailData->DevicePath,
-            GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
-            FILE_FLAG_OVERLAPPED, 0);
-        if (INVALID_HANDLE_VALUE == WnbdDriverHandle) {
-            ErrorCode = GetLastError();
-            goto Exit;
-        }
-
-        ErrorCode = WnbdIoctlPing(WnbdDriverHandle, NULL);
-        if (ErrorCode) {
-            CloseHandle(WnbdDriverHandle);
-            WnbdDriverHandle = INVALID_HANDLE_VALUE;
-            continue;
-        } else {
-            goto Exit;
+        else {
+            ErrorCode = 0;
         }
     }
 
-    ErrorCode = GetLastError();
-    if (ErrorCode != ERROR_NO_MORE_ITEMS) {
+    DevInterfaceDetailData =
+        (PSP_DEVICE_INTERFACE_DETAIL_DATA)malloc(RequiredSize);
+    if (!DevInterfaceDetailData) {
+        ErrorCode = ERROR_BUFFER_OVERFLOW;
+        goto Exit;
+    }
+    DevInterfaceDetailData->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
+
+    if (!SetupDiGetDeviceInterfaceDetail(
+            DevInfo, &DevInterfaceData, DevInterfaceDetailData,
+            RequiredSize, &RequiredSize, &DevInfoData))
+    {
+        ErrorCode = GetLastError();
+        goto Exit;
+    }
+
+    WnbdDriverHandle = CreateFile(
+        DevInterfaceDetailData->DevicePath,
+        GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING,
+        FILE_FLAG_OVERLAPPED, 0);
+    if (INVALID_HANDLE_VALUE == WnbdDriverHandle) {
+        ErrorCode = GetLastError();
         goto Exit;
     }
 
@@ -130,18 +123,6 @@ DWORD WnbdOpenAdapter(PHANDLE Handle)
 {
     DEVINST DevInst = { 0 };
     return WnbdOpenAdapterEx(Handle, &DevInst);
-}
-
-// Open the WNBD SCSI adapter device.
-DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance)
-{
-    HANDLE Handle;
-    DWORD Status = WnbdOpenAdapterEx(&Handle, DeviceInstance);
-
-    if (!Status) {
-        CloseHandle(&Handle);
-    }
-    return Status;
 }
 
 DWORD RemoveWnbdInf(_In_ LPCTSTR InfName)
