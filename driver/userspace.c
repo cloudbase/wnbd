@@ -762,7 +762,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, ReqCmd->ConnectionId, TRUE);
         if (!Device) {
             Status = STATUS_INVALID_HANDLE;
-            WNBD_LOG_WARN(
+            WNBD_LOG_DEBUG(
                 "IOCTL_WNBD_FETCH_REQ: Could not fetch request, invalid connection id: %d.",
                 ReqCmd->ConnectionId);
             break;
@@ -789,7 +789,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         Device = WnbdFindDeviceByConnId(DeviceExtension, RspCmd->ConnectionId, TRUE);
         if (!Device) {
             Status = STATUS_INVALID_HANDLE;
-            WNBD_LOG_WARN(
+            WNBD_LOG_DEBUG(
                 "IOCTL_WNBD_SEND_RSP: Could not fetch request, invalid connection id: %d.",
                 RspCmd->ConnectionId);
             break;
