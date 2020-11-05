@@ -30,6 +30,9 @@ extern UNICODE_STRING GlobalRegistryPath;
 WNBD_OPTION WnbdDriverOptions[] = {
     WNBD_DEF_OPT(L"LogLevel", Int64, WNBD_LVL_WARN),
     WNBD_DEF_OPT(L"NewMappingsAllowed", Bool, TRUE),
+    WNBD_DEF_OPT(L"EtwLoggingEnabled", Bool, TRUE),
+    WNBD_DEF_OPT(L"WppLoggingEnabled", Bool, FALSE),
+    WNBD_DEF_OPT(L"DbgPrintEnabled", Bool, TRUE),
 };
 DWORD WnbdOptionsCount = sizeof(WnbdDriverOptions) / sizeof(WNBD_OPTION);
 

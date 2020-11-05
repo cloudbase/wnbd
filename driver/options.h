@@ -36,6 +36,9 @@ static inline DWORD WnbdOptRegSize(WnbdOptValType Type) {
 typedef enum {
     OptLogLevel,
     OptNewMappingsAllowed,
+    OptEtwLoggingEnabled,
+    OptWppLoggingEnabled,
+    OptDbgPrintEnabled
 } WNBD_OPT_KEY;
 
 extern WNBD_OPTION WnbdDriverOptions[];
