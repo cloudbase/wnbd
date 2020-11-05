@@ -34,6 +34,7 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
      * Register with ETW
      */
     EventRegisterWNBD();
+    WPP_INIT_TRACING(DriverObject, RegistryPath);
 
     /*
      * Register Virtual Storport Miniport data
@@ -230,4 +231,5 @@ WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
      *  Unregister from ETW
      */
     EventUnregisterWNBD();
+    WPP_CLEANUP(DriverObject);
 }
