@@ -4,23 +4,25 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
-#include <codecvt>
 #include <locale>
 #include <string>
 #include <sstream>
 
 #include <windows.h>
 
-std::wstring to_wstring(const char* str)
+#include <boost/locale/encoding_utf.hpp>
+
+using boost::locale::conv::utf_to_utf;
+
+
+std::wstring to_wstring(const std::string& str)
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> strconverter;
-    return strconverter.from_bytes(str);
+  return utf_to_utf<wchar_t>(str.c_str(), str.c_str() + str.size());
 }
 
-std::string to_string(std::wstring wstr)
+std::string to_string(const std::wstring& str)
 {
-    std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> strconverter;
-    return strconverter.to_bytes(wstr);
+  return utf_to_utf<char>(str.c_str(), str.c_str() + str.size());
 }
 
 std::string win32_strerror(int err)

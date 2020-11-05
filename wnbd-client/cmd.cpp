@@ -10,27 +10,27 @@
 #include "version.h"
 
 #include <string>
-#include <codecvt>
 #include <locale>
 #include <sstream>
 #include <iostream>
 #include <iomanip>
 
+#include <boost/locale/encoding_utf.hpp>
+
 #pragma comment(lib, "Setupapi.lib")
 #pragma comment(lib, "CfgMgr32.lib")
 
+using boost::locale::conv::utf_to_utf;
 using namespace std;
 
-wstring to_wstring(string str)
+std::wstring to_wstring(const std::string& str)
 {
-    wstring_convert<codecvt_utf8<wchar_t>, wchar_t> strconverter;
-    return strconverter.from_bytes(str);
+  return utf_to_utf<wchar_t>(str.c_str(), str.c_str() + str.size());
 }
 
-string to_string(std::wstring wstr)
+std::string to_string(const std::wstring& str)
 {
-    wstring_convert<codecvt_utf8<wchar_t>, wchar_t> strconverter;
-    return strconverter.to_bytes(wstr);
+  return utf_to_utf<char>(str.c_str(), str.c_str() + str.size());
 }
 
 wstring OptValToWString(PWNBD_OPTION_VALUE Value)
