@@ -17,5 +17,5 @@ foreach ($path in $requiredFiles) {
 wevtutil um $wnbdEvents
 & $wnbdBin uninstall-driver
 
-wevtutil im $wnbdEvents
 & $wnbdBin install-driver $wnbdInf
+wevtutil im $wnbdEvents
