@@ -121,7 +121,7 @@ Those steps are not required when using a certified driver.
 
 ### Install / Uninstall
 
-You can use the `wnbd-client.exe` command line argument to install and remove the driver.
+You can use the `wnbd-client.exe` command line tool to install and remove the driver.
 
 To ***install*** the driver, issue the following from an elevated PowerShell prompt:
 ```Powershell
@@ -132,7 +132,8 @@ To ***uninstall*** the driver, issue the following from an elevated PowerShell p
 ```Powershell
 .\wnbd-client.exe uninstall-driver
 ```
-The `uninstall-driver` will soft disconnect any existing mappings, remove any registered device drivers and remove any prior installation of the driver.
+The `uninstall-driver` command will hard disconnect any existing disk mappings and WNBD
+storage adapters and then remove any previous installations of the driver.
 
 After installing the driver, you may want to copy ``wnbd-client.exe`` and ``libwnbd.dll``
 to a directory that's part of the ``PATH`` environment variable.

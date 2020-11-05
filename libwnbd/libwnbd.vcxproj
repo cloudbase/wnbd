@@ -149,6 +149,7 @@
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets" Condition="Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" />
     <Import Project="$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets" Condition="Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" />
+    <Import Project="$(SolutionDir)\deps\boost_filesystem-src.1.72.0.0\build\boost_filesystem-src.targets" Condition="Exists('$(SolutionDir)\deps\boost_filesystem-src.1.72.0.0\build\boost_filesystem-src.targets')" />
   </ImportGroup>
   <PropertyGroup>
     <CAExcludePath>$(SolutionDir)\deps;$(CAExcludePath)</CAExcludePath>
