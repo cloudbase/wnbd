@@ -56,4 +56,8 @@
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
 
+/* The following are used to generate ETW events inside the binaries */
+1 11 "events_MSG00001.bin"
+1 WEVT_TEMPLATE "eventsTEMP.BIN"
+
 #include "common.ver"
