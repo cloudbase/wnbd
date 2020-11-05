@@ -14,6 +14,28 @@
 
 #define WNBD_LOG_BUFFER_SIZE 512
 
+VOID EtwPrint(UINT32 Level,
+              PCHAR FuncName,
+              UINT32 Line,
+              PCHAR Buf)
+{
+    BOOLEAN Enabled = WnbdDriverOptions[OptEtwLoggingEnabled].Value.Data.AsBool;
+    if (!Enabled) {
+        return;
+    }
+    switch (Level) {
+    case WNBD_LVL_ERROR:
+        EventWriteErrorEvent(NULL, FuncName, Line, Buf);
+        break;
+    case WNBD_LVL_WARN:
+        EventWriteWarningEvent(NULL, FuncName, Line, Buf);
+        break;
+    default:
+        EventWriteInformationalEvent(NULL, FuncName, Line, Buf);
+        break;
+    }
+}
+
 _Use_decl_annotations_
 VOID
 WnbdLog(UINT32 Level,
@@ -41,19 +63,15 @@ WnbdLog(UINT32 Level,
     va_end(Args);
 
     /* Log via ETW */
-    switch (Level) {
-        case WNBD_LVL_ERROR:
-            EventWriteErrorEvent(NULL, FuncName, Line, Buf);
-        break;
-        case WNBD_LVL_WARN:
-            EventWriteWarningEvent(NULL, FuncName, Line, Buf);
-        break;
-        default:
-            EventWriteInformationalEvent(NULL, FuncName, Line, Buf);
-        break;
+    EtwPrint(Level, FuncName, Line, Buf);
+
+    /* DbgPrint logging */
+    if (WnbdDriverOptions[OptDbgPrintEnabled].Value.Data.AsBool) {
+        DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
     }
 
-    /* Default logging */
-    DbgPrintEx(DPFLTR_SCSIMINIPORT_ID, Level, "%s:%lu %s\n", FuncName, Line, Buf);
-    WnbdWppTrace(Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    /* Log via WPP */
+    if (WnbdDriverOptions[OptWppLoggingEnabled].Value.Data.AsBool) {
+        WnbdWppTrace(Level, "%s:%lu %s\n", FuncName, Line, Buf);
+    }
 }
