@@ -273,8 +273,6 @@ DWORD WnbdListDrvOpt(
 
 // Open the WNBD SCSI adapter device.
 DWORD WnbdOpenAdapter(PHANDLE Handle);
-DWORD WnbdOpenAdapterEx(PHANDLE Handle, PDEVINST CMDeviceInstance);
-DWORD WnbdOpenAdapterCMDeviceInstance(PDEVINST DeviceInstance);
 DWORD WnbdIoctlPing(HANDLE Adapter, LPOVERLAPPED Overlapped);
 DWORD WnbdUninstallDriver(PBOOL RebootRequired);
 DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired);
