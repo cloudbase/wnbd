@@ -234,3 +234,56 @@ Number Friendly Name             Serial Number    HealthStatus         Operation
 ------ -------------             -------------    ------------         -----------------      ---------- ----------
 0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
 ```
+WNBD driver logging
+-------------------
+
+To help develop and debug the driver we use the following facilities
+provided by the operating system:
+
+- [DbgPrint](https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdm/nf-wdm-dbgprintex)
+
+- [WPP](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/wpp-software-tracing)
+
+- [ETW](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/event-tracing-for-windows--etw-)
+
+### DbgPrint
+
+To view and collect the log messages via `DbgPrint` you can use either a (debugger) [https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/]
+or, if you do not want to go through the process of attaching the debugger, you
+can simply use:
+
+(DebugView) [https://docs.microsoft.com/en-us/sysinternals/downloads/debugview]
+
+### WPP
+
+To collect messages using the `WPP` provider you can use the following snippet from an elevated command prompt:
+```CMD
+logman create trace "WNBD_tracing_session" -p {E35EAF83-0F07-418A-907C-141CD200F252} 0xffffffff 0xff -o c:\TraceFile.etl -rt
+logman start "WNBD_tracing_session"
+```
+When you want to stop collecting you can issue:
+```CMD
+logman stop "WNBD_tracing_session"
+```
+To decode the generated ETL file you will need to have access to the debug symbols (`wnbd.pdb`) and use traceview
+utility from the WDK binary folder.
+
+### ETW
+
+For the `ETW` provider you will need the utilities `tracelog` and `tracerpt` from the WDK binary
+folder.
+
+To start a trace session one can use:
+```CMD
+tracelog -start WNBDEventdrv -guid #FFACC4E7-C115-4FE2-9D3C-80FAE73BAB91 -f WNBDEventdrv.etl
+```
+
+To stop:
+```CMD
+tracelog -stop WNBDEventdrv
+```
+
+To display the trace use:
+```CMD
+tracerpt WNBDEventdrv.etl
+```
