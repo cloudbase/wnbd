@@ -328,10 +328,11 @@ void get_install_args(
 {
     positonal_opts.add("filename", 1);
     named_opts.add_options()
-        ("filename", po::value<string>()->required(), "The OEM driver information (wnbd.inf) path");
+        ("filename", po::value<string>()->required(),
+         "The OEM driver information (wnbd.inf) path.");
 }
 
-DWORD execute_clean_uninstall(const po::variables_map& vm)
+DWORD execute_uninstall(const po::variables_map& vm)
 {
     return CmdUninstall();
 }
@@ -345,7 +346,7 @@ Client::Command commands[] = {
         "List all commands or get more details about a specific command.",
         execute_help, get_help_args),
     Client::Command(
-        "list", {"ls"}, "List WNBD disks",
+        "list", {"ls"}, "List WNBD disks.",
         execute_list),
     Client::Command(
         "show", {}, "Show detailed disk information.",
@@ -373,10 +374,10 @@ Client::Command commands[] = {
         "reset-opt", {}, "Reset driver option.",
         execute_reset_opt, get_reset_opt_args),
     Client::Command(
-        "install-driver", {}, "Install WNBD driver and create its adapter",
+        "install-driver", {}, "Install WNBD driver and create its adapter.",
         execute_install, get_install_args),
     Client::Command(
         "uninstall-driver", {}, "Hard remove all disk mappings and adapters"
-                                " and uninstall all WNBD driver instances",
-        execute_clean_uninstall),
+                                " and uninstall all WNBD driver instances.",
+        execute_uninstall),
 };
