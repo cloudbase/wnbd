@@ -9,7 +9,7 @@
 
 #include <windows.h>
 #include <cfgmgr32.h>
-#include <SetupAPI.h>
+#include <setupapi.h>
 
 #include "wnbd_ioctl.h"
 
