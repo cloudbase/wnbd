@@ -24,8 +24,8 @@ communication. It provides the following features:
 * Processing IO requests (when not using NBD)
 
 WNBD provides a low level API (the ``*Ioctl*`` functions), as well as a high level API that
-includes the IO dispatching boilerplate. Please check the [include](include\).
-public headers for more details.
+includes the IO dispatching boilerplate. Please check the [public headers](include/) for
+more details.
 
 Submitting patches
 ------------------
@@ -56,8 +56,9 @@ How to build
 
 ### Prerequisites
 
-Visual Studio 2019 build tools or GUI ([Community version]
-(https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16) or above)
+Visual Studio 2019 build tools or GUI
+([Community version](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16)
+or above)
 
 [Windows Driver Kit 1909](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
 
@@ -249,11 +250,10 @@ provided by the operating system:
 
 ### DbgPrint
 
-To view and collect the log messages via `DbgPrint` you can use either a (debugger) [https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/]
+To view and collect the log messages via `DbgPrint` you can use either a
+[debugger](https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/)
 or, if you do not want to go through the process of attaching the debugger, you
-can simply use:
-
-(DebugView) [https://docs.microsoft.com/en-us/sysinternals/downloads/debugview]
+can simply use [DebugView](https://docs.microsoft.com/en-us/sysinternals/downloads/debugview).
 
 ### WPP
 
