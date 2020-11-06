@@ -43,4 +43,7 @@
     <Error Condition="!Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" Text="$([System.String]::Format('$(MissingDepsError)', '$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets'))" />
     <Error Condition="!Exists('$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets')" Text="$([System.String]::Format('$(MissingDepsError)', '$(SolutionDir)\deps\boost_program_options-src.1.72.0.0\build\boost_program_options-src.targets'))" />
   </Target>
+  <Target Name="Clean">
+    <Exec Command="powershell.exe rm -recurse -force &quot;$(SolutionDir)\deps&quot;" />
+  </Target>
 </Project>
