@@ -22,7 +22,8 @@ WnbdReadCapacity(_In_ PWNBD_DISK_DEVICE Device,
 {
     ASSERT(Srb);
     ASSERT(Cdb);
-    WNBD_LOG_INFO("Using BlockSize: %u, BlockCount: %llu", BlockSize, BlockCount);
+    WNBD_LOG_DEBUG("BlockSize: %u, BlockCount: %llu",
+                   BlockSize, BlockCount);
 
     PVOID DataBuffer = SrbGetDataBuffer(Srb);
     ULONG DataTransferLength = SrbGetDataTransferLength(Srb);

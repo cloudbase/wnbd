@@ -71,8 +71,8 @@ DWORD WnbdCreate(
         goto Exit;
     }
 
-    LogDebug("Mapped device. Connection id: %llu.",
-             Disk->ConnectionInfo.ConnectionId);
+    LogInfo("Mapped device. Connection id: %llu.",
+            Disk->ConnectionInfo.ConnectionId);
 
     *PDisk = Disk;
 

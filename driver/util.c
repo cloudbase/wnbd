@@ -155,8 +155,11 @@ WnbdFindDeviceByAddr(
             && Device->Target == TargetId
             && Device->Lun == Lun)
         {
-            if (Acquire && !WnbdAcquireDevice(Device))
+            if (Acquire && !WnbdAcquireDevice(Device)) {
+                WNBD_LOG_DEBUG("Found device but couldn't acquire reference. "
+                               "It's probably being removed.");
                 Device = NULL;
+            }
             break;
         }
         Device = NULL;

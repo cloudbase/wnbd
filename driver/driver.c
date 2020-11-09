@@ -198,16 +198,19 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 break;
             }
 
-            WNBD_LOG_INFO("Removing device.");
+            WNBD_LOG_DEBUG("Removing disk device.");
             PWNBD_DISK_DEVICE Device = WnbdFindDeviceByAddr(
                 GlobalExt, ScsiAddress.PathId,
                 ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
             if (!Device) {
-                WNBD_LOG_INFO("Device already removed.");
+                WNBD_LOG_DEBUG("Device already removed.");
                 break;
             }
+            WNBD_LOG_INFO("Disconnecting disk: %s.",
+                          Device->Properties.InstanceName);
             WnbdDisconnectSync(Device);
-            WNBD_LOG_INFO("Successfully removed device.");
+            WNBD_LOG_INFO("Successfully disconnected disk: %s",
+                          Device->Properties.InstanceName);
         }
         break;
     }

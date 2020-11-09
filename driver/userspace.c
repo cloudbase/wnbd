@@ -152,6 +152,9 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
         2, WaitObjects, WaitAny, Executive, KernelMode,
         FALSE, NULL, NULL);
 
+    WNBD_LOG_INFO("Cleaning up device connection: %s.",
+                  Device->Properties.InstanceName);
+
     // Soft termination is currently handled by the userspace,
     // which notifies the PnP stack.
     Device->HardRemoveDevice = TRUE;
@@ -163,7 +166,11 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     DisconnectSocket(Device);
 
     // Ensure that the device isn't currently being accessed.
+    WNBD_LOG_INFO("Waiting for pending device requests: %s.",
+                  Device->Properties.InstanceName);
     ExWaitForRundownProtectionRelease(&Device->RundownProtection);
+    WNBD_LOG_INFO("Finished waiting for pending device requests: %s.",
+                  Device->Properties.InstanceName);
 
     if (Device->Properties.Flags.UseNbd) {
         KeWaitForSingleObject(Device->DeviceRequestThread, Executive, KernelMode, FALSE, NULL);
@@ -325,8 +332,11 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->DiskNumber = -1;
     Device->ConnectionId =  WNBD_CONNECTION_ID_FROM_ADDR(
         Device->Bus, Device->Target, Device->Lun);
-    WNBD_LOG_INFO("New device address: Bus: %d, target: %d, lun: %d, connection id: %llu.",
-                  Device->Bus, Device->Target, Device->Lun, ConnectionInfo->ConnectionId);
+    WNBD_LOG_INFO("New device address: bus: %d, target: %d, lun: %d, "
+                  "connection id: %llu, instance name: %s.",
+                  Device->Bus, Device->Target, Device->Lun,
+                  ConnectionInfo->ConnectionId,
+                  Device->Properties.InstanceName);
 
     // TODO: consider moving NBD initialization to a separate function.
     UINT16 NbdFlags = 0;
@@ -630,6 +640,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             break;
         }
 
+        WNBD_LOG_INFO("Disconnecting disk: %s.", RmCmd->InstanceName);
         Status = WnbdDeleteConnection(DeviceExtension, RmCmd->InstanceName);
         break;
 
