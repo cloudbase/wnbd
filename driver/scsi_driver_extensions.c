@@ -48,7 +48,7 @@ WnbdHwAdapterControl(PVOID DeviceExtension,
 {
     UNREFERENCED_PARAMETER(DeviceExtension);
 
-    WNBD_LOG_INFO(
+    WNBD_LOG_DEBUG(
         "Received control type: %s (%d)",
         WnbdToStringScsiAdapterCtrlType(ControlType),
         ControlType);
@@ -375,8 +375,8 @@ WnbdHwStartIo(PVOID DeviceExtension,
     ASSERT(DeviceExtension);
     PWNBD_EXTENSION Ext = (PWNBD_EXTENSION)DeviceExtension;
 
-    WNBD_LOG_INFO("WnbdHwStartIo Processing SRB Function = 0x%x(%s)",
-                  Srb->Function, WnbdToStringSrbFunction(Srb->Function));
+    WNBD_LOG_DEBUG("WnbdHwStartIo Processing SRB Function = 0x%x(%s)",
+                   Srb->Function, WnbdToStringSrbFunction(Srb->Function));
 
     switch (Srb->Function) {
     case SRB_FUNCTION_EXECUTE_SCSI:

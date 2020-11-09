@@ -83,8 +83,8 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         Element->Tag = RequestTag;
         Element->Srb->DataTransferLength = 0;
         PCDB Cdb = (PCDB)&Element->Srb->Cdb;
-        WNBD_LOG_INFO("Processing request. Address: %p Tag: 0x%llx",
-                      Element->Srb, Element->Tag);
+        WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx",
+                       Element->Srb, Element->Tag);
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
 
         if(!ValidateScsiRequest(Device, Element)) {
@@ -135,7 +135,7 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         }
 
         if (Status) {
-            WNBD_LOG_WARN("FD failed with: 0x%x. Address: %p Tag: 0x%llx",
+            WNBD_LOG_WARN("Request failed with: 0x%x. Address: %p Tag: 0x%llx",
                           Status, Element->Srb, Element->Tag);
             if (STATUS_CONNECTION_RESET == Status ||
                 STATUS_CONNECTION_DISCONNECTED == Status ||

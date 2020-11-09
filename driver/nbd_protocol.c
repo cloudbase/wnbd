@@ -28,7 +28,6 @@ NbdReadExact(_In_ INT Fd,
     INT Result = 0;
     PUCHAR Temp = Data;
     while (0 < Length) {
-        WNBD_LOG_INFO("Size to read = %lu", Length);
         Result = Recv(Fd, Temp, Length, WSK_FLAG_WAITALL, error);
         if (Result > 0) {
             Length -= Result;
@@ -56,7 +55,6 @@ NbdWriteExact(_In_ INT Fd,
     INT Result = 0;
     PUCHAR Temp = Data;
     while (Length > 0) {
-        WNBD_LOG_INFO("Size to send = %lu", Length);
         Result = Send(Fd, Temp, Length, 0, error);
         if (Result <= 0) {
             WNBD_LOG_WARN("Failed with : %d", Result);
@@ -218,7 +216,7 @@ NbdNegotiate(_In_ INT* Pfd,
     Magic = RtlUlonglongByteSwap(Magic);
     if (OPTION_MAGIC != Magic
         && CLIENT_MAGIC == Magic) {
-        WNBD_LOG_INFO("Old-style server.");
+        WNBD_LOG_INFO("Old-style NBD server.");
     }
 
     NbdReadExact(Fd, &Temp, sizeof(UINT16), &status);
@@ -229,8 +227,10 @@ NbdNegotiate(_In_ INT* Pfd,
     }
 
     ClientFlags = RtlUlongByteSwap(ClientFlags);
-    if (Send(Fd, (PCHAR)&ClientFlags, sizeof(ClientFlags), 0, &status) < 0) {
-        WNBD_LOG_INFO("Failed while sending data on socket");
+    INT Result = Send(Fd, (PCHAR)&ClientFlags, sizeof(ClientFlags), 0, &status);
+    if (Result < 0) {
+        WNBD_LOG_ERROR("Could not send NBD handshake request. "
+                       "Error: %d", Result);
         return STATUS_FAIL_CHECK;
     }
 
@@ -252,7 +252,7 @@ NbdNegotiate(_In_ INT* Pfd,
         if (Reply && (Reply->ReplyType & NBD_REP_FLAG_ERROR)) {
             switch (Reply->ReplyType) {
             case NBD_REP_ERR_UNSUP:
-                WNBD_LOG_INFO("NBD_REP_ERR_UNSUP");
+                WNBD_LOG_ERROR("Received NBD_REP_ERR_UNSUP reply.");
                 NbdSendOptExportName(Fd, Size, Flags, Go, Name, GFlags);
                 NbdFree(Reply);
                 return STATUS_SUCCESS;
@@ -261,9 +261,9 @@ NbdNegotiate(_In_ INT* Pfd,
                 if (Reply->Datasize > 0) {
                     // Ugly hack to make the log message null terminated
                     Reply->Data[Reply->Datasize -1] = '\0';
-                    WNBD_LOG_INFO("Connection not allowed by server policy. Server said: %s", Reply->Data);
+                    WNBD_LOG_ERROR("Connection not allowed by server policy. Server said: %s", Reply->Data);
                 } else {
-                    WNBD_LOG_INFO("Connection not allowed by server policy.");
+                    WNBD_LOG_ERROR("Connection not allowed by server policy.");
                 }
                 NbdFree(Reply);
                 return STATUS_FAIL_CHECK;
@@ -272,7 +272,7 @@ NbdNegotiate(_In_ INT* Pfd,
                 if (Reply->Datasize > 0) {
                     // Ugly hack to make the log message null terminated
                     Reply->Data[Reply->Datasize - 1] = '\0';
-                    WNBD_LOG_INFO("Unknown error returned by server. Server said: %s", Reply->Data);
+                    WNBD_LOG_ERROR("Unknown error returned by server. Server said: %s", Reply->Data);
                 }
                 else {
                     WNBD_LOG_WARN("Unknown error returned by server.");
@@ -292,15 +292,17 @@ NbdNegotiate(_In_ INT* Pfd,
                 NbdParseSizes(Reply->Data + 2, Size, Flags);
                 break;
             default:
-                WNBD_LOG_INFO("Ignoring other reply information");
+                WNBD_LOG_WARN("Ignoring unsupported NBD reply info type: %u",
+                              (unsigned int) Type);
                 break;
             }
             break;
         case NBD_REP_ACK:
-            WNBD_LOG_INFO("NBD_REP_ACK NOOP");
+            WNBD_LOG_DEBUG("Received NBD_REP_ACK.");
             break;
         default:
-            WNBD_LOG_INFO("Unknown reply to NBD_OPT_GO received, ignoring");
+            WNBD_LOG_WARN("Ignoring unknown reply to NBD_OPT_GO: %u.",
+                          (unsigned int) Reply->ReplyType);
         }
     } while (Reply->ReplyType != NBD_REP_ACK);
 
@@ -342,7 +344,7 @@ NbdOpenAndConnect(PCHAR HostName,
         if (Ai) {
             FreeAddrInfo(Ai);
         }
-        WNBD_LOG_WARN("GetAddrInfo failed with error: %d", Error);
+        WNBD_LOG_ERROR("GetAddrInfo failed with error: %d", Error);
         return -1;
     }
 
@@ -363,7 +365,7 @@ NbdOpenAndConnect(PCHAR HostName,
     }
 
     if (NULL == Rp) {
-        WNBD_LOG_WARN("Socket failure");
+        WNBD_LOG_ERROR("Socket failure");
         Fd = -1;
         goto err;
     }
@@ -405,8 +407,8 @@ NbdRequest(
     Request.Handle = Handle;
 
     if (-1 == NbdWriteExact(Fd, &Request, sizeof(NBD_REQUEST), &error)) {
-        WNBD_LOG_INFO("Could not send request for %s.",
-                      NbdRequestTypeStr(RequestType));
+        WNBD_LOG_ERROR("Could not send request for %s.",
+                       NbdRequestTypeStr(RequestType));
         Status = error;
         goto Exit;
     }
@@ -485,12 +487,13 @@ NbdReadReply(INT Fd,
 
     NTSTATUS error = STATUS_SUCCESS;
     if (-1 == NbdReadExact(Fd, Reply, sizeof(NBD_REPLY), &error)) {
-        WNBD_LOG_INFO("Could not read command reply.");
+        WNBD_LOG_ERROR("Could not read command reply.");
         return error;
     }
 
     if (NBD_REPLY_MAGIC != RtlUlongByteSwap(Reply->Magic)) {
-        WNBD_LOG_INFO("Invalid NBD_REPLY_MAGIC.");
+        WNBD_LOG_ERROR("Invalid NBD_REPLY_MAGIC: %#x",
+                       RtlUlongByteSwap(Reply->Magic));
         return STATUS_UNSUCCESSFUL;
     }
 

@@ -124,13 +124,13 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
     Device = WnbdFindDeviceByAddr(
         (PWNBD_EXTENSION)DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun, TRUE);
     if (NULL == Device) {
-        WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
-                      Srb->PathId, Srb->TargetId, Srb->Lun);
+        WNBD_LOG_DEBUG("Could not find device PathId: %d TargetId: %d LUN: %d",
+                       Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
     if (Device->HardRemoveDevice) {
-        WNBD_LOG_WARN("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
-                      Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+        WNBD_LOG_DEBUG("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
+                       Device, Srb->PathId, Srb->TargetId, Srb->Lun);
         goto Exit;
     }
 
@@ -184,7 +184,7 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
         break;
 
     default:
-        WNBD_LOG_WARN("Untreated SCSI request. PnP action: %x, "
+        WNBD_LOG_INFO("Untreated SCSI request. PnP action: %x, "
                       "PnP flag: %x", PNP->PnPAction, PNP->SrbPnPFlags);
         break;
     }

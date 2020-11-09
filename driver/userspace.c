@@ -325,7 +325,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->DiskNumber = -1;
     Device->ConnectionId =  WNBD_CONNECTION_ID_FROM_ADDR(
         Device->Bus, Device->Target, Device->Lun);
-    WNBD_LOG_INFO("Bus: %d, target: %d, lun: %d, connection id: %llu.",
+    WNBD_LOG_INFO("New device address: Bus: %d, target: %d, lun: %d, connection id: %llu.",
                   Device->Bus, Device->Target, Device->Lun, ConnectionInfo->ConnectionId);
 
     // TODO: consider moving NBD initialization to a separate function.
@@ -333,6 +333,10 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->SocketToClose = -1;
     Device->NbdSocket = -1;
     if (Properties->Flags.UseNbd) {
+        WNBD_LOG_INFO("Connecting to NBD server: %s:%p. "
+                      "Export name: %s.",
+                      Properties->NbdProperties.Hostname,
+                      Properties->NbdProperties.PortNumber);
         Sock = NbdOpenAndConnect(
             Properties->NbdProperties.Hostname,
             Properties->NbdProperties.PortNumber);
@@ -343,7 +347,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         Device->NbdSocket = Sock;
 
         if (!Properties->NbdProperties.Flags.SkipNegotiation) {
-            WNBD_LOG_INFO("Trying to negotiate handshake with NBD Server");
+            WNBD_LOG_INFO("Performing NBD handshake.");
             UINT64 DiskSize = 0;
             Status = NbdNegotiate(&Sock, &DiskSize, &NbdFlags,
                                   Properties->NbdProperties.ExportName, 1, 1);
@@ -599,8 +603,8 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             RtlCopyMemory(OutInfo, &ConnectionInfo, sizeof(WNBD_CONNECTION_INFO));
             Irp->IoStatus.Information = sizeof(WNBD_CONNECTION_INFO);
 
-            WNBD_LOG_DEBUG("Mapped disk. Name: %s, connection id: %llu",
-                           Props.InstanceName, ConnectionInfo.ConnectionId);
+            WNBD_LOG_INFO("Mapped disk. Name: %s, connection id: %llu",
+                          Props.InstanceName, ConnectionInfo.ConnectionId);
         }
 
         KeEnterCriticalRegion();
@@ -674,7 +678,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, ShowCmd->InstanceName, TRUE);
         if (!Device) {
             Status = STATUS_OBJECT_NAME_NOT_FOUND;
-            WNBD_LOG_INFO("WNBD_SHOW: Connection does not exist");
+            WNBD_LOG_DEBUG("WNBD_SHOW: Connection does not exist");
             break;
         }
 
@@ -731,7 +735,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             DeviceExtension, StatsCmd->InstanceName, TRUE);
         if (!Device) {
             Status = STATUS_OBJECT_NAME_NOT_FOUND;
-            WNBD_LOG_INFO("WNBD_STATS: Connection does not exist");
+            WNBD_LOG_DEBUG("WNBD_STATS: Connection does not exist");
             break;
         }
 

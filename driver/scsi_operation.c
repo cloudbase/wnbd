@@ -138,7 +138,7 @@ WnbdSetVpdSerialNumber(_In_ PVOID Data,
 
     PVPD_SERIAL_NUMBER_PAGE VpdSerial;
     UCHAR Size = (UCHAR)strlen(DeviceSerial) + 1;
-    WNBD_LOG_INFO("DeviceSerial: %s, size: %d", DeviceSerial, Size);
+    WNBD_LOG_DEBUG("Setting device serial: %s, size: %d", DeviceSerial, Size);
 
     VpdSerial = Data;
     VpdSerial->DeviceType = DIRECT_ACCESS_DEVICE;
@@ -440,7 +440,7 @@ WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
         !!Device->Properties.Flags.FUASupported,
         &Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
-        WNBD_LOG_INFO("Could not set mode sense.");
+        WNBD_LOG_INFO("Could not set mode sense. Status: %d", SrbStatus);
         goto Exit;
     }
 
@@ -476,7 +476,7 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
         Srb->SrbStatus = SRB_STATUS_ABORTED;
         goto Exit;
     }
-    WNBD_LOG_INFO("Queuing Element, SRB= %p", Srb);
+    WNBD_LOG_DEBUG("Queuing Element, SRB=%p", Srb);
 
     Element->DeviceExtension = DeviceExtension;
     Element->Srb = Srb;
