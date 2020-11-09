@@ -84,7 +84,6 @@ void print_option_details(
     std::string optional_args_title = "Optional arguments")
 {
     map<string, string> pos_opt_desc;
-    ostringstream pos_stream;
 
     // Right column margin.
     size_t option_indent = 2;
@@ -103,7 +102,6 @@ void print_option_details(
         lcol_width = max(lcol_width, opt_name.length() + 3 + option_indent);
     }
 
-    ostringstream ops_stream;
     size_t optional_arg_count = 0;
     for (auto named_opt : named_opts.options())
     {
