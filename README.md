@@ -279,8 +279,10 @@ utility from the WDK binary folder.
 
 ### ETW
 
-For the `ETW` provider you will need the utilities `tracelog` and `tracerpt` from the WDK binary
-folder.
+Error, warning and info ETW events will end up in the ``System`` section of the Windows Event Log.
+
+Debug messages can be retrieved using tracing sessions, leveraging the `tracelog` and `tracerpt`
+tools from the WDK binary folder.
 
 To start a trace session one can use:
 ```CMD
@@ -341,3 +343,70 @@ wnbd-client.exe reset-opt LogLevel
 ```
 
 Passing the ``--persistent`` flag will remove the persistent setting as well.
+
+Troubleshooting
+===============
+
+### Privileges
+
+Most ``wnbd-client`` commands require privileged rights. Make sure to use an elevated
+PowerShell or CMD command prompt. That also applies when using other clients that leverage
+the ``libwnbd`` library, such as Ceph clients.
+
+### Crash dumps
+
+Windows stores kernel crash dumps at ``%SystemRoot%\Memory.dmp``, which is tipically
+``C:\Windows\Memory.dmp``.
+
+Userspace crash dumps can be placed at a configurable location and enabled for all
+applications or just predefined ones, as outlined
+[here](https://docs.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps).
+
+Whenever a Windows application crashes, an event will be submitted to the ``Application``
+Windows Event Log, having Event ID 1000. The entry will also include the process id,
+the faulting module name and path as well as the exception code.
+
+Please note that in order to analyze crash dumps, the debug symbols (``.pdb`` files)
+are required.
+
+### Logging
+
+Please see the [logging](#WNBD-driver-logging) and [driver options](#driver-options)
+sections.
+
+You can start by checking the ``System`` Windows Event Log for ``wnbd`` driver errors.
+If needed, increase the ``wnbd`` log level and start a tracing session.
+
+### IO counters
+
+The following command can be used to retrieve per-disk IO counters that are gathered
+at the driver level:
+
+```PowerShell
+wnbd-client.exe stats $mapping
+```
+```
+Disk stats
+TotalReceivedIORequests        : 70
+TotalSubmittedIORequests       : 0
+TotalReceivedIOReplies         : 70
+UnsubmittedIORequests          : 0
+PendingSubmittedIORequests     : 0
+AbortedSubmittedIORequests     : 0
+AbortedUnsubmittedIORequests   : 0
+CompletedAbortedIORequests     : 0
+OutstandingIOCount             : 0
+```
+
+The ``received`` requests are the ones coming from Storport, the driver upper layer.
+The ``submitted`` requests are IO requests that have been forwarded to the storage backend
+(e.g. NBD server). The ``replies`` counter shows replies coming from the storage backend.
+Aborted requests are usually requests that have timed out, typically after 10 up to 30
+seconds.
+
+Those counters are very useful when debugging stuck IO, helping us understand the state of
+the requests. The userspace ``libwnbd`` library also gathers IO counters, which can be
+retrieved by the library consumers.
+
+Worth mentioning that by default, Storport limits the number of pending IO requests to
+1000 per adapter and 255 per LUN.
