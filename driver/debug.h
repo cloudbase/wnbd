@@ -10,10 +10,10 @@
 #include <ntdef.h>
 #include <wdm.h>
 
-#define WNBD_LVL_ERROR    DPFLTR_ERROR_LEVEL
-#define WNBD_LVL_WARN     DPFLTR_WARNING_LEVEL
-#define WNBD_LVL_INFO     DPFLTR_INFO_LEVEL
-#define WNBD_LVL_DEBUG     (DPFLTR_INFO_LEVEL + 1)
+#define WNBD_LVL_ERROR    DPFLTR_ERROR_LEVEL        // 0
+#define WNBD_LVL_WARN     DPFLTR_WARNING_LEVEL      // 1
+#define WNBD_LVL_INFO     DPFLTR_INFO_LEVEL         // 3
+#define WNBD_LVL_DEBUG     (DPFLTR_INFO_LEVEL + 1)  // 4
 
 #ifdef WPPFILE
 #define WPPNAME                WnbdTraceGuid

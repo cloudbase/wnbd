@@ -236,6 +236,7 @@ Number Friendly Name             Serial Number    HealthStatus         Operation
 ------ -------------             -------------    ------------         -----------------      ---------- ----------
 0      Msft Virtual Disk                          Healthy              Online                     127 GB GPT
 ```
+
 WNBD driver logging
 -------------------
 
@@ -247,6 +248,13 @@ provided by the operating system:
 - [WPP](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/wpp-software-tracing)
 
 - [ETW](https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/event-tracing-for-windows--etw-)
+
+Note that the log level as well as the logging facilities are configurable. Please check the
+[driver options](#driver-options) section for more details.
+
+``libwnbd`` can use a logger provided by the library consumer application, defaulting to stderr logging.
+So for example, if you're using ``libwnbd`` with Ceph, the according messages will go to the Ceph log.
+Driver logs will still be separate, using one or more of the logging facilities described in this section.
 
 ### DbgPrint
 
@@ -288,3 +296,48 @@ To display the trace use:
 ```CMD
 tracerpt WNBDEventdrv.etl
 ```
+
+Driver options
+--------------
+
+Use the following command to retrieve the list of WNBD driver options:
+
+```PowerShell
+wnbd-client.exe list-opt
+```
+```
+LogLevel           : 1 (Default: 1)
+NewMappingsAllowed : true (Default: true)
+EtwLoggingEnabled  : true (Default: true)
+WppLoggingEnabled  : false (Default: false)
+DbgPrintEnabled    : true (Default: true)
+```
+
+Use the following command to configure an option. If the setting should persist
+across reboots, pass the optional ``--persistent`` argument.
+
+The log level matches the DebugPrint filter levels:
+
+* ``WNBD_LVL_ERROR`` (0)
+* ``WNBD_LVL_WARN``  (1)
+* ``WNBD_LVL_INFO``  (3)
+* ``WNBD_LVL_DEBUG`` (4)
+
+```PowerShell
+wnbd-client.exe set-opt LogLevel 4 --persistent
+```
+
+To list only the persistent options, pass the ``--persistent`` parameter:
+```PowerShell
+wnbd-client.exe list-opt --persistent
+```
+```
+LogLevel           : 4 (Default: 1)
+```
+
+To clear a custom setting and reapply the default value, use the following command:
+```PowerShell
+wnbd-client.exe reset-opt LogLevel
+```
+
+Passing the ``--persistent`` flag will remove the persistent setting as well.
