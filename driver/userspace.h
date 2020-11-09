@@ -16,11 +16,6 @@
 #define WNBD_MAX_IN_FLIGHT_REQUESTS 1024
 #define WNBD_PREALLOC_BUFF_SZ (WNBD_DEFAULT_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
 
-// The connection id provided to the user is meant to be opaque. We're currently
-// using the disk address, but that might change.
-#define WNBD_CONNECTION_ID_FROM_ADDR(PathId, TargetId, Lun) \
-    ((1 << 24 | (PathId) << 16) | ((TargetId) << 8) | (Lun))
-
 NTSTATUS
 WnbdParseUserIOCTL(_In_ PWNBD_EXTENSION DeviceExtension,
                    _In_ PIRP Irp);
