@@ -326,12 +326,13 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         goto Exit;
     }
 
+    static UINT64 ConnectionId = 1;
+
     Device->Bus = (USHORT)(bitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
     Device->Target = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
     Device->Lun = 0;
     Device->DiskNumber = -1;
-    Device->ConnectionId =  WNBD_CONNECTION_ID_FROM_ADDR(
-        Device->Bus, Device->Target, Device->Lun);
+    Device->ConnectionId = (UINT64)InterlockedIncrement64(&(LONG64)ConnectionId);
     WNBD_LOG_INFO("New device address: bus: %d, target: %d, lun: %d, "
                   "connection id: %llu, instance name: %s.",
                   Device->Bus, Device->Target, Device->Lun,
