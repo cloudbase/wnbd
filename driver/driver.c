@@ -155,6 +155,7 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
             if (!Device) {
                 break;
             }
+            Device->PDO = DeviceObject;
 
             PDEVICE_OBJECT AttachedDisk = IoGetAttachedDeviceReference(DeviceObject);
             if (AttachedDisk != DeviceObject) {
@@ -204,6 +205,13 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
             if (!Device) {
                 WNBD_LOG_DEBUG("Device already removed.");
+                break;
+            }
+            if (Device->PDO != DeviceObject) {
+                WNBD_LOG_INFO(
+                    "Different device found at the specified address. "
+                    "The requested device might've been removed already.");
+                WnbdReleaseDevice(Device);
                 break;
             }
             WNBD_LOG_INFO("Disconnecting disk: %s.",
