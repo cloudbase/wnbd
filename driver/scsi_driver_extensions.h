@@ -41,6 +41,7 @@ typedef struct _WNBD_DISK_DEVICE
 
     INT                         DiskNumber;
     WCHAR                       PNPDeviceID[WNBD_MAX_NAME_LENGTH];
+    PDEVICE_OBJECT              PDO;
 
     PINQUIRYDATA                InquiryData;
 
