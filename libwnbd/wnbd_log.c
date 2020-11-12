@@ -41,8 +41,10 @@ VOID LogMessage(WnbdLogLevel LogLevel,
     // TODO: consider enforcing WNBD_LOG_MESSAGE_MAX_SIZE and using a fixed
     // size buffer for performance reasons.
     char* Buff = (char*) malloc(BufferLength);
-    if (!Buff)
+    if (!Buff) {
+        va_end(Args);
         return;
+    }
 
     vsnprintf_s(Buff, BufferLength, BufferLength - 1, Format, Args);
     va_end(Args);
