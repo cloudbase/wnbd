@@ -868,7 +868,7 @@ DWORD WnbdIoctlSendResponse(
         NULL, 0, &BytesReturned, Overlapped);
 
     if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
-        LogWarning(
+        LogDebug(
             "Could not send response. "
             "Connection id: %llu. Request id: %llu. "
             "Error: %d. Error message: %s",
