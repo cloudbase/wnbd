@@ -4,10 +4,11 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
+#include <wnbd.h>
+
 #include "client.h"
 #include "cmd.h"
 #include "usage.h"
-#include "wnbd.h"
 #include "version.h"
 
 #include <boost/exception/diagnostic_information.hpp>

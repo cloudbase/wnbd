@@ -7,6 +7,12 @@
 #ifndef WNBD_IOCTL_H
 #define WNBD_IOCTL_H
 
+#ifdef _MSC_VER
+#pragma warning(push)
+// Disable "enum class" warnings, libwnbd must be C compatible.
+#pragma warning(disable:26812)
+#endif
+
 #include <assert.h>
 
 #define WNBD_REGISTRY_KEY "SYSTEM\\CurrentControlSet\\Services\\wnbd"
@@ -426,5 +432,9 @@ typedef struct {
     BYTE Reserved[256];
 } WNBD_VERSION, *PWNBD_VERSION;
 WNBD_ASSERT_SZ_EQ(WNBD_VERSION, 396);
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #endif // WNBD_IOCTL_H

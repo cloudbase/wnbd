@@ -7,6 +7,12 @@
 #ifndef WNBD_SHARED_H
 #define WNBD_SHARED_H
 
+#ifdef _MSC_VER
+#pragma warning(push)
+// Disable "enum class" warnings, libwnbd must be C compatible.
+#pragma warning(disable:26812)
+#endif
+
 #include <windows.h>
 #include <cfgmgr32.h>
 #include <setupapi.h>
@@ -382,6 +388,10 @@ static inline const CHAR* WnbdLogLevelToStr(WnbdLogLevel LogLevel) {
 
 #ifdef __cplusplus
 }
+#endif
+
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 
 #endif /* WNBD_SHARED_H */

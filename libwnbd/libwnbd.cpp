@@ -535,14 +535,18 @@ DWORD WnbdSendResponseEx(
 
     if (Response->Status.ScsiStatus) {
         switch(Response->RequestType) {
-            case WnbdReqTypeRead:
-                InterlockedIncrement64((PLONG64)&Disk->Stats.ReadErrors);
-            case WnbdReqTypeWrite:
-                InterlockedIncrement64((PLONG64)&Disk->Stats.WriteErrors);
-            case WnbdReqTypeFlush:
-                InterlockedIncrement64((PLONG64)&Disk->Stats.FlushErrors);
-            case WnbdReqTypeUnmap:
-                InterlockedIncrement64((PLONG64)&Disk->Stats.UnmapErrors);
+        case WnbdReqTypeRead:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.ReadErrors);
+            break;
+        case WnbdReqTypeWrite:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.WriteErrors);
+            break;
+        case WnbdReqTypeFlush:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.FlushErrors);
+            break;
+        case WnbdReqTypeUnmap:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.UnmapErrors);
+            break;
         }
     }
 

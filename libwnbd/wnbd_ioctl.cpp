@@ -348,7 +348,7 @@ DWORD RemoveWnbdAdapterDevice(
     PSP_DEVINFO_DATA DevInfoData,
     PBOOL RebootRequired)
 {
-    if (!DeviceInfoList) {
+    if (!DeviceInfoList || !DevInfoData) {
         LogError("Missing adapter device list.");
         return ERROR_INVALID_HANDLE;
     }
@@ -368,7 +368,11 @@ DWORD RemoveWnbdAdapterDevice(
     // Queue the device for removal before trying to remove the
     // OEM information file
     BOOL DeviceRemovalRequiresReboot = FALSE;
-    if (!DiUninstallDevice(0, DeviceInfoList, DevInfoData, 0,
+    #pragma warning(push)
+    #pragma warning(disable:6387)
+    // The first "DiUninstallDevice" parameter is missing the
+    // "_In_opt_" annotation, although it's optional and can be NULL.
+    if (!DiUninstallDevice(NULL, DeviceInfoList, DevInfoData, 0,
                            &DeviceRemovalRequiresReboot)) {
         Status = GetLastError();
         LogError(
@@ -376,6 +380,7 @@ DWORD RemoveWnbdAdapterDevice(
             "Error: %d. Error message: %s",
             Status, win32_strerror(Status).c_str());
     }
+    #pragma warning(pop)
     // Avoid changing the input "RebootRequired" value if this specific
     // device removal didn't require a reboot.
     if (DeviceRemovalRequiresReboot) {
