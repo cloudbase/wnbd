@@ -366,7 +366,7 @@ int GetAddrInfo(const char* node, const char* service, const struct addrinfo* hi
   //
 
   ANSI_STRING NodeNameAnsi;
-  UNICODE_STRING NodeNameUnicode;
+  UNICODE_STRING NodeNameUnicode = { 0 };
   PUNICODE_STRING NodeName = NULL;
   RtlInitAnsiString(&NodeNameAnsi, "");
   RtlAnsiStringToUnicodeString(&NodeNameUnicode, &NodeNameAnsi, TRUE);
@@ -391,7 +391,7 @@ int GetAddrInfo(const char* node, const char* service, const struct addrinfo* hi
 
   ANSI_STRING ServiceNameAnsi;
   RtlInitAnsiString(&ServiceNameAnsi, "");
-  UNICODE_STRING ServiceNameUnicode;
+  UNICODE_STRING ServiceNameUnicode = { 0 };
   RtlAnsiStringToUnicodeString(&ServiceNameUnicode, &ServiceNameAnsi, TRUE);
   PUNICODE_STRING ServiceName = NULL;
 

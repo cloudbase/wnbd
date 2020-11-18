@@ -4,8 +4,9 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
+#include <wnbd.h>
+
 #include "cmd.h"
-#include "wnbd.h"
 #include "nbd_protocol.h"
 #include "version.h"
 

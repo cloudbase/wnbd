@@ -19,8 +19,7 @@
 
 #include <string>
 
-/* WNBD Defines */
-#include "wnbd.h"
+#include <wnbd.h>
 
 #define WNBD_CLI_OWNER_NAME "wnbd-client"
 

@@ -6,10 +6,6 @@
 
 #include "client.h"
 
-#include <string>
-
-#include <wnbd.h>
-
 int main(int argc, const char** argv)
 {
     return Client().execute(argc, argv);

@@ -23,8 +23,8 @@ KsDestroy(
 NTSTATUS
 NTAPI
 KsGetAddrInfo(
-  _In_ PUNICODE_STRING NodeName,
-  _In_ PUNICODE_STRING ServiceName,
+  _In_opt_ PUNICODE_STRING NodeName,
+  _In_opt_ PUNICODE_STRING ServiceName,
   _In_ PADDRINFOEXW Hints,
   _Out_ PADDRINFOEXW* Result
   );
