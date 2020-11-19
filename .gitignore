@@ -26,6 +26,7 @@
 .*.cmd
 .*.swp
 *.vcxproj.user
+*.vcxproj.filters
 Module.symvers
 TAGS
 cscope.*
