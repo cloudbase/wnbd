@@ -139,7 +139,9 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
         break;
     case IRP_MN_START_DEVICE:
         {
-            if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
+            if (!GlobalExt) {
+                WNBD_LOG_DEBUG("IRP_MN_START_DEVICE received but the extension "
+                               "hasn't been initialized.");
                 break;
             }
             Status = WnbdGetScsiAddress(DeviceObject, &ScsiAddress);
