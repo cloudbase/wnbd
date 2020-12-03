@@ -6,6 +6,9 @@ $scriptLocation = [System.IO.Path]::GetDirectoryName(
     $myInvocation.MyCommand.Definition)
 $ErrorActionPreference = "Stop"
 
+# Enforce Tls1.2, as most modern websites require it
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $nugetUrl = "https://dist.nuget.org/win-x86-commandline/v4.5.1/nuget.exe"
 
 $depsDir = "$scriptLocation\vstudio\deps"
