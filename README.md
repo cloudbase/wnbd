@@ -93,6 +93,8 @@ You can also download the latest prebuilt packages from Appveyor via the links:
 
 [This project](https://github.com/cloudbase/ceph-windows-installer) allows building
 an MSI installer that bundles WNBD and the Ceph Windows clients.
+[Here's](https://cloudbase.it/downloads/ceph_v16_0_0_beta.msi) a nightly build of
+the Ceph Pacific MSI installer.
 
 How to install
 --------------
