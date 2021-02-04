@@ -15,8 +15,7 @@ init:
 build_script:
 - '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"'
 - msbuild C:\wnbd\vstudio\wnbd.sln /property:Configuration=%CONFIGURATION%
-- copy C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\* .
-- 7z a wnbd-%CONFIGURATION%.zip C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.cat C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.inf C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.sys C:\wnbd\vstudio\x64\%CONFIGURATION%\wnbd-client.exe
+- 7z a wnbd-%CONFIGURATION%.zip C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.cat C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.inf C:\wnbd\vstudio\x64\%CONFIGURATION%\driver\wnbd.sys C:\wnbd\vstudio\x64\%CONFIGURATION%\wnbd-client.exe C:\wnbd\vstudio\x64\%CONFIGURATION%\libwnbd.dll C:\wnbd\vstudio\reinstall.ps1 C:\wnbd\vstudio\wnbdevents.xml
 
 artifacts:
   - path: wnbd-%CONFIGURATION%.zip
