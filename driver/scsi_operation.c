@@ -584,12 +584,16 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         UINT32 BlockCount;
         REVERSE_BYTES_8(&BlockAddress, &Src->StartingLba);
         REVERSE_BYTES_4(&BlockCount, &Src->LbaCount);
-        UINT64 LastBlockAddress = BlockAddress + BlockCount;
 
-        if (LastBlockAddress < BlockAddress ||
-            LastBlockAddress >= Device->Properties.BlockCount)
+        if (BlockAddress + BlockCount < BlockAddress ||
+            BlockAddress + BlockCount > Device->Properties.BlockCount)
         {
-            WNBD_LOG_WARN("Unmap overflow.");
+            WNBD_LOG_WARN("Unmap overflow. "
+                          "Unmap block address: %llu. "
+                          "Unmap block count: %u. "
+                          "Total disk block count: %llu.",
+                          BlockAddress, BlockCount,
+                          Device->Properties.BlockCount);
             Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
             Status = STATUS_INVALID_PARAMETER;
             break;
