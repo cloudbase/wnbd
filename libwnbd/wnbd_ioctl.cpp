@@ -7,13 +7,15 @@
 #include <windows.h>
 #include <windef.h>
 #include <winioctl.h>
-#include <winioctl.h>
 #include <newdev.h>
 #include <ntddscsi.h>
 #include "Shlwapi.h"
 #include <setupapi.h>
 #include <string.h>
 #include <infstr.h>
+#include <devguid.h>
+
+#include <set>
 
 #include "wnbd.h"
 #include "wnbd_log.h"
@@ -30,33 +32,72 @@ using namespace std;
 
 #define STRING_OVERFLOWS(Str, MaxLen) (strlen(Str + 1) > MaxLen)
 
-DWORD GetDeviceHardwareId(
+DWORD GetDeviceHardwareIds(
     HDEVINFO DeviceInfoList,
     PSP_DEVINFO_DATA DevInfoData,
-    string& HardwareId)
+    set<wstring>& HardwareIds)
 {
     DWORD Status = 0;
-    CHAR Buff[2048] = { 0 };
+    PBYTE Buff = NULL;
+    PWSTR HardwareId = NULL;
+    ULONG BuffSz = 0;
 
-    if (!SetupDiGetDeviceRegistryPropertyA(
+    HardwareIds.clear();
+
+    if (!SetupDiGetDeviceRegistryPropertyW(
             DeviceInfoList, DevInfoData, SPDRP_HARDWAREID, 0,
-            (PBYTE)Buff, sizeof(Buff) - 1, 0)) {
+            NULL, BuffSz, &BuffSz)) {
+        Status = GetLastError();
+        if (Status == ERROR_INVALID_DATA) {
+            // No hardware id available.
+            return 0;
+        }
+        if (Status != ERROR_INSUFFICIENT_BUFFER) {
+            LogError("Couldn't retrieve device hardware id. "
+                     "Error: %d. Error message: %s",
+                     Status, win32_strerror(Status).c_str());
+            return Status;
+        }
+        Status = 0;
+    }
+
+    Buff = (PBYTE) calloc(BuffSz, sizeof(WCHAR));
+    if (!Buff) {
+        LogError("Failed to allocate %d bytes.", BuffSz * sizeof(WCHAR));
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+
+    if (!SetupDiGetDeviceRegistryPropertyW(
+            DeviceInfoList, DevInfoData, SPDRP_HARDWAREID, 0,
+            Buff, BuffSz, 0)) {
         Status = GetLastError();
         LogError("Couldn't retrieve device hardware id. "
                  "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
-        return Status;
+        goto Exit;
     }
 
-    HardwareId.assign(Buff);
+    HardwareId = (PWSTR) Buff;
+    while (HardwareId[0]) {
+        HardwareIds.insert(HardwareId);
+        HardwareId += wcslen(HardwareId) + 1;
+    }
+
+Exit:
+    if (Buff)
+        free(Buff);
+
     return Status;
 }
 
-DWORD InitializeWnbdAdapterList(HDEVINFO* DeviceInfoList)
+DWORD InitializeWnbdAdapterList(
+    HDEVINFO* DeviceInfoList,
+    const GUID *ClassGuid = &WNBD_GUID,
+    DWORD Flags = DIGCF_PRESENT | DIGCF_DEVICEINTERFACE)
 {
     DWORD Status = 0;
     *DeviceInfoList = SetupDiGetClassDevs(
-        &WNBD_GUID, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
+        ClassGuid, NULL, NULL, Flags);
     if (&DeviceInfoList == INVALID_HANDLE_VALUE) {
         Status = GetLastError();
         LogError(
@@ -124,15 +165,16 @@ DWORD WnbdOpenAdapterEx(
     // Double check the GUID. Opening the wrong device can have catastrophic
     // consequences, especially when removing devices.
     if (DevInterfaceData.InterfaceClassGuid != WNBD_GUID) {
-        string HardwareId;
-        GetDeviceHardwareId(DeviceInfoList, DeviceInfoData, HardwareId);
+        set<wstring> HardwareIds;
+        GetDeviceHardwareIds(DeviceInfoList, DeviceInfoData, HardwareIds);
+        wstring HardwareId = HardwareIds.empty() ? L"" : *HardwareIds.begin();
         LogError("The adapter GUID %s does not match the WNBD GUID %s. "
-                 "Device hardware id: %s. "
+                 "Device hardware id: %ls. "
                  "This indicates a critical libwnbd bug.",
                  guid_to_string(
                      DevInterfaceData.InterfaceClassGuid).c_str(),
                  guid_to_string(WNBD_GUID).c_str(),
-                 HardwareId);
+                 HardwareId.c_str());
         Status = ERROR_INVALID_HANDLE;
         goto Exit;
     }
@@ -353,15 +395,15 @@ DWORD RemoveWnbdAdapterDevice(
         return ERROR_INVALID_HANDLE;
     }
 
-    string HardwareId;
-    DWORD Status = GetDeviceHardwareId(DeviceInfoList, DevInfoData, HardwareId);
+    set<wstring> HardwareIds;
+    DWORD Status = GetDeviceHardwareIds(DeviceInfoList, DevInfoData, HardwareIds);
     if (Status) {
         return Status;
     }
-
+    wstring HardwareId = HardwareIds.empty() ? L"" : *HardwareIds.begin();
     LogInfo("Removing WNBD adapter device. "
-            "Hardware id: %s. Class GUID: %s",
-            HardwareId, guid_to_string(DevInfoData->ClassGuid).c_str());
+            "Hardware id: %ls. Class GUID: %s",
+            HardwareId.c_str(), guid_to_string(DevInfoData->ClassGuid).c_str());
 
     SP_DRVINFO_DETAIL_DATA_A DrvDetailData = { 0 };
     DrvDetailData.cbSize = sizeof DrvDetailData;
@@ -376,7 +418,7 @@ DWORD RemoveWnbdAdapterDevice(
                            &DeviceRemovalRequiresReboot)) {
         Status = GetLastError();
         LogError(
-            "Could not remove driver. "
+            "Could not remove WNBD adapter. "
             "Error: %d. Error message: %s",
             Status, win32_strerror(Status).c_str());
     }
@@ -388,6 +430,61 @@ DWORD RemoveWnbdAdapterDevice(
         LogInfo("WNBD adapter removal requires a reboot. "
                 "Hardware id: %s.", HardwareId);
     }
+
+    return Status;
+}
+
+// Failed installs can leak WNBD adapter devices that don't have an associated
+// class or driver.
+DWORD RemoveStaleWnbdAdapters(
+    PBOOL RebootRequired,
+    PBOOL Found)
+{
+    HDEVINFO DeviceInfoList = INVALID_HANDLE_VALUE;
+    DWORD Status = InitializeWnbdAdapterList(
+        &DeviceInfoList, NULL, DIGCF_ALLCLASSES);
+    if (Status) {
+        return Status;
+    }
+
+    DWORD DevIndex = 0;
+    while (!Status) {
+        SP_DEVINFO_DATA DevInfoData = { 0 };
+        DevInfoData.cbSize = sizeof DevInfoData;
+
+        if (!SetupDiEnumDeviceInfo(DeviceInfoList, DevIndex, &DevInfoData)) {
+            Status = GetLastError();
+            if (Status == ERROR_NO_MORE_ITEMS) {
+                Status = 0;
+            } else {
+                LogError("Enumerating adapter devices failed.");
+            }
+            goto Exit;
+        }
+
+        *Found = TRUE;
+
+        // It's crucial to ensure that we're removing the right device.
+        set<wstring> HardwareIds;
+        Status = GetDeviceHardwareIds(DeviceInfoList, &DevInfoData, HardwareIds);
+        if (Status) {
+            goto Exit;
+        }
+        if (HardwareIds.count(to_wstring(WNBD_HARDWAREID)) &&
+                (DevInfoData.ClassGuid == GUID_NULL ||
+                 DevInfoData.ClassGuid == GUID_DEVCLASS_SCSIADAPTER)) {
+            Status = RemoveWnbdAdapterDevice(
+                DeviceInfoList, &DevInfoData, RebootRequired);
+            if (Status) {
+                goto Exit;
+            }
+        }
+
+        DevIndex++;
+    }
+
+Exit:
+    SetupDiDestroyDeviceInfoList(DeviceInfoList);
 
     return Status;
 }
@@ -503,6 +600,16 @@ DWORD RemoveAllWnbdDevices(PBOOL RebootRequired) {
             RebootRequired);
         Status = TempStatus ? TempStatus : Status;
     }
+
+    // Remove WNBD adapters that don't have a class guid, usually
+    // resulting from failed installs.
+    LogDebug("Removing stale wnbd adapters.");
+    TempStatus = RemoveStaleWnbdAdapters(RebootRequired, &Found);
+    if (TempStatus) {
+        LogError("Couldn't remove stale adapters. Error: %d.", TempStatus);
+    }
+    Status = TempStatus ? TempStatus : Status;
+
     if (!Found && !Status) {
         LogInfo("No WNBD adapters found.");
     }
