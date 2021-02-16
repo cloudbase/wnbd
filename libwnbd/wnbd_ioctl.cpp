@@ -727,7 +727,8 @@ DWORD InstallDriver(
 DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
 {
     CHAR FullFileName[MAX_PATH];
-    DWORD Status = ERROR_SUCCESS;
+    DWORD Status = 0, TempStatus = 0;
+    BOOL InstallAttempted = FALSE;
 
     if (0 == GetFullPathNameA(FileName, MAX_PATH, FullFileName, 0)) {
         Status = GetLastError();
@@ -756,13 +757,14 @@ DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
         return Status;
     }
 
+    InstallAttempted = TRUE;
     HDEVINFO DeviceInfoList = INVALID_HANDLE_VALUE;
     Status = InstallDriver(FullFileName, &DeviceInfoList, RebootRequired);
     if (ERROR_SUCCESS != Status) {
         LogError(
             "Failed to install driver. Error: %d. Error message: %s",
             Status, win32_strerror(Status).c_str());
-        return Status;
+        goto Exit;
     }
 
     if (!UpdateDriverForPlugAndPlayDevicesA(
@@ -771,7 +773,17 @@ DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
         LogError(
             "Updating driver failed. Error: %d. Error message: %s",
             Status, win32_strerror(Status).c_str());
-        return Status;
+        goto Exit;
+    }
+
+Exit:
+    if (Status && InstallAttempted) {
+        LogInfo("Rolling back failed driver installation.");
+        TempStatus = WnbdUninstallDriver(RebootRequired);
+        if (TempStatus) {
+            Status = TempStatus;
+            LogError("Driver rollback failed. Error: %d.", Status);
+        }
     }
 
     return Status;
