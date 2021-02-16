@@ -751,10 +751,22 @@ DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
     }
 
     if (AdapterExists) {
-        LogError("A WNBD adapter already exists. Please uninstall it "
-                 "before updating the driver.");
+        LogError("An active WNBD adapter already exists. "
+                 "Please uninstall it before updating the driver.");
         Status = ERROR_DUPLICATE_FOUND;
         return Status;
+    }
+
+    // In certain situations, such as failed installs, we can end up with
+    // stale WNBD adapters that don't have an associated driver or class.
+    // Instead of erroring out, we're going to do a cleanup.
+    BOOL StaleAdaptersFound = FALSE;
+    Status = RemoveStaleWnbdAdapters(RebootRequired, &StaleAdaptersFound);
+    if (Status) {
+        return Status;
+    }
+    if (StaleAdaptersFound) {
+        LogInfo("Cleaned up stale WNBD adapters.");
     }
 
     InstallAttempted = TRUE;
