@@ -91,6 +91,10 @@ You can also download the latest prebuilt packages from Appveyor via the links:
 * [Debug](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Debug.zip?job=Configuration%3A+Debug)
 * [Release](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Release.zip?job=Configuration%3A+Release)
 
+When using the above Appveyor artifacts, make sure to also install the latest
+Microsoft VC runtime. Note that VS 2015, 2017 and 2019 use the same redistributable
+VC runtime package. You can skip this step when using the below MSI installer.
+
 [This project](https://github.com/cloudbase/ceph-windows-installer) allows building
 an MSI installer that bundles WNBD and the Ceph Windows clients.
 [Here's](https://cloudbase.it/downloads/ceph_v16_0_0_beta.msi) a nightly build of
