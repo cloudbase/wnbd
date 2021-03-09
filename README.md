@@ -148,6 +148,28 @@ to a directory that's part of the ``PATH`` environment variable.
 [This project](https://github.com/cloudbase/ceph-windows-installer) allows building
 an MSI installer that bundles WNBD and the Ceph Windows clients.
 
+Version
+-------
+
+The following command can be used to retrieve the wnbd-client, libwnbd and wnbd
+driver version:
+
+```PowerShell
+wnbd-client.exe -v
+```
+```
+wnbd-client.exe: 0.2.1-3-g3dc976b
+libwnbd.dll: 0.2.1-3-g3dc976b
+wnbd.sys: 0.2.1-3-g3dc976b
+```
+
+The driver version may also be retrieved by right clicking the ``wnbd.sys`` file
+and going to the ``Details`` section of the ``Properties`` page.
+
+Note that the driver version reported by the Windows Device Manager is actually
+the build timestamp included in the ``DriverVer`` section of the ``wnbd.inf``
+file (e.g. DriverVer = 02/19/2021,14.21.25.925).
+
 Ceph integration
 ----------------
 
