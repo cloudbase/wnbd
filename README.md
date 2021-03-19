@@ -97,11 +97,17 @@ VC runtime package. You can skip this step when using the below MSI installer.
 
 [This project](https://github.com/cloudbase/ceph-windows-installer) allows building
 an MSI installer that bundles WNBD and the Ceph Windows clients.
-[Here's](https://cloudbase.it/downloads/ceph_v16_0_0_beta.msi) a nightly build of
-the Ceph Pacific MSI installer.
 
 How to install
 --------------
+
+### MSI installer
+
+The Ceph MSI installer bundles a signed version of the WNBD driver. It can be
+downloaded from here: https://cloudbase.it/ceph-for-windows/
+
+If however you're interested in the manual install procedure, check the following
+sections.
 
 ### Prerequisites
 
@@ -144,9 +150,6 @@ storage adapters and then remove any previous installations of the driver.
 
 After installing the driver, you may want to copy ``wnbd-client.exe`` and ``libwnbd.dll``
 to a directory that's part of the ``PATH`` environment variable.
-
-[This project](https://github.com/cloudbase/ceph-windows-installer) allows building
-an MSI installer that bundles WNBD and the Ceph Windows clients.
 
 Version
 -------
