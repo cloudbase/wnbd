@@ -375,6 +375,36 @@ wnbd-client.exe reset-opt LogLevel
 
 Passing the ``--persistent`` flag will remove the persistent setting as well.
 
+Limitations
+===========
+
+### CSV support
+
+At the moment, the Microsoft Failover Cluster can't use WNBD disks as
+Cluster Shared Volumes (CSVs) underlying storage. The main reason is that
+``WNBD`` doesn't support the *SCSI Persistent Reservations* feature yet.
+
+### Hyper-V disk addressing
+
+**Warning:** Hyper-V identifies passthrough VM disks by number instead of
+SCSI ID, although the disk number can change across host reboots. This means
+that the VMs can end up using incorrect disks after rebooting the host, which
+is an important security concern. This issue also affects iSCSI and Fibre
+Channel disks.
+
+There are a few possible ways of avoiding this Hyper-V limitation:
+
+* use an NTFS/ReFS partition to store VHDX image files instead of directly
+  attaching the WNBD disk. This may slightly impact the IO performance.
+* use the Hyper-V ``AutomaticStartAction`` setting to prevent the VMs from
+  booting with the incorrect disks and have a script that updates VM disks
+  attachments before powering them back on. The ``ElementName`` field of the
+  [Msvm_StorageAllocationSettingData](https://docs.microsoft.com/en-us/windows/win32/hyperv_v2/msvm-storageallocationsettingdata)
+  [WMI](https://docs.microsoft.com/en-us/windows/win32/wmisdk/wmi-start-page)
+  class may be used to label VM disk attachments.
+* use the Openstack Hyper-V driver, which automatically refreshes the VM disk
+  attachments before powering them back on.
+
 Troubleshooting
 ===============
 
