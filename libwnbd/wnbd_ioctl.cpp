@@ -217,11 +217,13 @@ Exit:
             if (ExpectExisting)
                 LogError(
                     "No WNBD adapter found. Please make sure that the driver "
-                    "is installed.");
+                    "is installed. A reboot may be required after "
+                    "installing the driver.");
         } else {
             LogError(
                 "Could not open WNBD adapter device. Please make sure that "
-                "the driver is installed. Error: %d. Error message: %s",
+                "the driver is installed. A reboot may be required after "
+                "installing the driver. Error: %d. Error message: %s",
                 Status, win32_strerror(Status).c_str());
         }
     }
