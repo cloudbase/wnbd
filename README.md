@@ -151,6 +151,9 @@ storage adapters and then remove any previous installations of the driver.
 After installing the driver, you may want to copy ``wnbd-client.exe`` and ``libwnbd.dll``
 to a directory that's part of the ``PATH`` environment variable.
 
+Note that a host reboot may be required after installing or uninstalling the
+WNBD driver.
+
 Version
 -------
 
