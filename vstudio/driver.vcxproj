@@ -132,6 +132,9 @@
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
+    <DriverSign>
+      <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
+    </DriverSign>
     <PostBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(SolutionFileName) /p:Configuration=Release; msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Release /p:SolutionDir=$(SolutionDir); msbuild $(ProjectFileName) /p:Configuration=Release /P:RunCodeAnalysisOnce=True</Command>
     </PostBuildEvent>
