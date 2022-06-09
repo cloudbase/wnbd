@@ -4,7 +4,9 @@ branches:
   only:
   - master
 configuration:
-  - Analyze
+  # We're currently skipping the "Analyze" Appveyor job. It's a resource
+  # intensive operation that often times out.
+  # - Analyze
   - Debug
   - Release
 clone_folder: C:\wnbd
