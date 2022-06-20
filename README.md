@@ -4,7 +4,7 @@ Windows Network Block Device (WNBD)
 Build Status:
 -------------
 
-[![Build status](https://ci.appveyor.com/api/projects/status/2m73dxm2t7s7jlit/branch/master?svg=true)](https://ci.appveyor.com/project/aserdean/wnbd/branch/master)
+[![Build status](https://ci.appveyor.com/api/projects/status/2m73dxm2t7s7jlit/branch/main?svg=true)](https://ci.appveyor.com/project/aserdean/wnbd/branch/main)
 
 What is WNBD?
 -------------
@@ -179,7 +179,7 @@ file (e.g. DriverVer = 02/19/2021,14.21.25.925).
 Ceph integration
 ----------------
 
-Mapping and umapping RBD images is straightforward, just use [rbd](https://docs.ceph.com/docs/master/man/8/rbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
+Mapping and umapping RBD images is straightforward, just use [rbd](https://docs.ceph.com/en/latest/man/8/rbd/), part of the [Ceph Windows port](https://github.com/ceph/ceph/pull/34859).
 
 ```PowerShell
 rbd device map $imageName

@@ -3,7 +3,7 @@ Submitting Patches to WNBD
 ==========================
 
 If you have a patch that fixes an issue, feel free to open a GitHub pull request
-("PR") targeting the "master" branch, but do read this document first, as it
+("PR") targeting the "main" branch, but do read this document first, as it
 contains important information for ensuring that your PR passes code review
 smoothly.
 
@@ -120,7 +120,7 @@ In the body of your commit message, be as specific as possible. If the commit
 message title was too short to fully state what the commit is doing, use the
 body to explain not just the "what", but also the "why".
 
-For positive examples, peruse ``git log`` in the ``master`` branch. A negative
+For positive examples, peruse ``git log`` in the ``main`` branch. A negative
 example would be a commit message that merely states the obvious. For example:
 "this patch includes updates for component X. Please apply."
 
@@ -161,7 +161,7 @@ PRs should be opened on branches contained in your fork of
 https://github.com/cloudbase/wnbd.git - do not push branches directly to
 ``cloudbase/wnbd.git``.
 
-PRs should target "master".
+PRs should target "main".
 
 In addition to a base, or "target" branch, PRs have several other components:
 the `PR title`_, the `PR description`_, labels, comments, etc. Of these, the PR
