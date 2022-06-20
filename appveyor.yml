@@ -2,7 +2,7 @@ version: 1.0.{build}
 image: Visual Studio 2019
 branches:
   only:
-  - master
+  - main
 configuration:
   # We're currently skipping the "Analyze" Appveyor job. It's a resource
   # intensive operation that often times out.
