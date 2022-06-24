@@ -1,0 +1,30 @@
+name: Mirror main branch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  master:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # fetch the entire git history (the default is `fetch-depth: 1`)
+
+      - name: Mirror to master branch
+        run: |
+          set -e
+          if ! git show-ref --quiet master; then
+            # create new branch if it doesn't already exist
+            CHECKOUT_OPTS="-b"
+          fi
+          git checkout $CHECKOUT_OPTS master
+          git rebase main
+          git push origin master
