@@ -38,5 +38,5 @@ git clone https://github.com/cloudbase/wnbd
 msbuild wnbd\vstudio\wnbd.sln
 copy wnbd\vstudio\x64\Debug\driver\* .
 copy wnbd\vstudio\x64\Debug\wnbd-client.exe .
-copy wnbd\vstudio\x64\Debug\wnbd.dll .
+copy wnbd\vstudio\x64\Debug\libwnbd.dll .
 ```
