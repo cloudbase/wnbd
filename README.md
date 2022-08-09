@@ -14,7 +14,7 @@ connect to a [Network Block Device (NBD)](https://nbd.sourceforge.io/) server, w
 device details and acts as an IO channel. As an alternative, it can dispatch IO commands to
 an userspace process using a DeviceIoControl based interface.
 
-The project also provides the ``wnbd.dll`` library, which handles the userspace and driver
+The project also provides the ``libwnbd.dll`` library, which handles the userspace and driver
 communication. It provides the following features:
 
 * Creating WNBD devices (optionally connecting to a NBD server)
@@ -48,7 +48,7 @@ Folders
 * [include](include/) public headers
 * [ksocket_wsk](ksocket_wsk/) a WSK wrapper used to communicate with the Network Block Device server
 * [wnbd-client](wnbd-client/) the WNBD CLI
-* [libwnbd](libwbd/) ``wnbd.dll`` - the WNBD userspace library
+* [libwnbd](libwbd/) ``libwnbd.dll`` - the WNBD userspace library
 * [vstudio](vstudio/) the Visual Studio solution file and its projects
 
 How to build

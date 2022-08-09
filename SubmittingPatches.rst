@@ -100,7 +100,7 @@ summarizing the change, and prefixed with the module you are changing.
 Also, it is conventional to use the imperative mood in the commit title.
 Positive examples include::
 
-     wnbd-client: Use wnbd.dll
+     wnbd-client: Use libwnbd.dll
 
 Some negative examples (how *not* to title a commit message)::
 
