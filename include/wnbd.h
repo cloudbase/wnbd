@@ -60,7 +60,9 @@ typedef struct _WNBD_USR_STATS
     UINT64 TotalRWRequests;
     UINT64 TotalReadBlocks;
     UINT64 TotalWrittenBlocks;
-    BYTE Reserved[144];
+    UINT64 PersistResInErrors;
+    UINT64 PersistResOutErrors;
+    BYTE Reserved[128];
 } WNBD_USR_STATS, *PWNBD_USR_STATS;
 WNBD_ASSERT_SZ_EQ(WNBD_USR_STATS, 256);
 
@@ -129,6 +131,18 @@ typedef VOID (*LogMessageFunc)(
     const char* FileName,
     UINT32 Line,
     const char* FunctionName);
+typedef VOID (*PersistResInFunc)(
+    PWNBD_DISK Disk,
+    UINT64 RequestHandle,
+    UINT8 ServiceAction);
+typedef VOID (*PersistResOutFunc)(
+    PWNBD_DISK Disk,
+    UINT64 RequestHandle,
+    UINT8 ServiceAction,
+    UINT8 Scope,
+    UINT8 Type,
+    PVOID Buffer,
+    UINT32 ParameterListLength);
 
 // The following IO callbacks should be implemented by the consumer when
 // not using NBD. As an alternative, the underlying *Ioctl* functions may
@@ -139,7 +153,9 @@ typedef struct _WNBD_INTERFACE
     WriteFunc Write;
     FlushFunc Flush;
     UnmapFunc Unmap;
-    VOID* Reserved[15];
+    PersistResInFunc PersistResIn;
+    PersistResOutFunc PersistResOut;
+    VOID* Reserved[13];
 } WNBD_INTERFACE, *PWNBD_INTERFACE;
 WNBD_ASSERT_SZ_EQ(WNBD_INTERFACE, 152);
 

@@ -37,7 +37,7 @@ DWORD WnbdCreate(
     ErrorCode = WnbdOpenAdapter(&Disk->Handle);
 
     LogDebug("Mapping device. Name=%s, Serial=%s, Owner=%s, "
-             "BC=%llu, BS=%lu, RO=%u, Flush=%u, "
+             "BC=%llu, BS=%lu, RO=%u, Flush=%u, PerRes=%u, "
              "Unmap=%u, UnmapAnchor=%u, MaxUnmapDescCount=%u, "
              "Nbd=%u.",
              Properties->InstanceName,
@@ -47,6 +47,7 @@ DWORD WnbdCreate(
              Properties->BlockSize,
              Properties->Flags.ReadOnly,
              Properties->Flags.FlushSupported,
+             Properties->Flags.PersistResSupported,
              Properties->Flags.UnmapSupported,
              Properties->Flags.UnmapAnchorSupported,
              Properties->MaxUnmapDescCount,
@@ -550,6 +551,12 @@ DWORD WnbdSendResponseEx(
         case WnbdReqTypeUnmap:
             InterlockedIncrement64((PLONG64)&Disk->Stats.UnmapErrors);
             break;
+        case WnbdReqTypePersistResIn:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.PersistResInErrors);
+            break;
+        case WnbdReqTypePersistResOut:
+            InterlockedIncrement64((PLONG64)&Disk->Stats.PersistResOutErrors);
+            break;
         }
     }
 
@@ -671,6 +678,42 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                 Request->RequestHandle,
                 (PWNBD_UNMAP_DESCRIPTOR)Buffer,
                 Request->Cmd.Unmap.Count);
+            break;
+        case WnbdReqTypePersistResIn:
+            if (!Disk->Interface->PersistResIn ||
+                    !Disk->Properties.Flags.PersistResSupported)
+                goto Unsupported;
+            LogDebug("Dispatching PERSISTENT_RESERVE_IN(action=0x%x) "
+                        "allocLen=0x%x # %llx.",
+                     Request->Cmd.PersistResIn.ServiceAction,
+                     Request->Cmd.PersistResIn.AllocationLength,
+                     Request->RequestHandle);
+
+            Disk->Interface->PersistResIn(
+                Disk,
+                Request->RequestHandle,
+                Request->Cmd.PersistResIn.ServiceAction);
+            break;
+        case WnbdReqTypePersistResOut:
+            if (!Disk->Interface->PersistResOut ||
+                    !Disk->Properties.Flags.PersistResSupported)
+                goto Unsupported;
+            LogDebug("Dispatching PERSISTENT_RESERVE_OUT"
+                        "(action=0x%x, scope=0x%x, type=0x%x) "
+                        "paramListLen=0x%x # %llx.",
+                     Request->Cmd.PersistResOut.ServiceAction,
+                     Request->Cmd.PersistResOut.Scope,
+                     Request->Cmd.PersistResOut.Type,
+                     Request->Cmd.PersistResOut.ParameterListLength,
+                     Request->RequestHandle);
+            Disk->Interface->PersistResOut(
+                Disk,
+                Request->RequestHandle,
+                Request->Cmd.PersistResOut.ServiceAction,
+                Request->Cmd.PersistResOut.Scope,
+                Request->Cmd.PersistResOut.Type,
+                Buffer,
+                Request->Cmd.PersistResOut.ParameterListLength);
             break;
         default:
         Unsupported:
