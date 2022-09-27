@@ -63,6 +63,8 @@ WnbdFindDeviceByInstanceName(
 
 BOOLEAN
 IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
+BOOLEAN
+IsPerResInSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
 
 VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device);
 VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device);
@@ -99,6 +101,10 @@ ScsiOpToWnbdReqType(int ScsiOp)
     case SCSIOP_SYNCHRONIZE_CACHE:
     case SCSIOP_SYNCHRONIZE_CACHE16:
         return WnbdReqTypeFlush;
+    case SCSIOP_PERSISTENT_RESERVE_IN:
+        return WnbdReqTypePersistResIn;
+    case SCSIOP_PERSISTENT_RESERVE_OUT:
+        return WnbdReqTypePersistResOut;
     default:
         return WnbdReqTypeUnknown;
     }

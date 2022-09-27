@@ -309,24 +309,38 @@ IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
 }
 
 BOOLEAN
+IsPerResInSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
+{
+    PCDB Cdb = SrbGetCdb(Srb);
+    if (!Cdb) {
+        return FALSE;
+    }
+
+    return Cdb->AsByte[0] == SCSIOP_PERSISTENT_RESERVE_IN;
+}
+
+BOOLEAN
 ValidateScsiRequest(
     _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element)
 {
     PCDB Cdb = (PCDB)&Element->Srb->Cdb;
     int ScsiOp = Cdb->AsByte[0];
-    int NbdReqType = ScsiOpToWnbdReqType(ScsiOp);
+    int WnbdReqType = ScsiOpToWnbdReqType(ScsiOp);
     PWNBD_PROPERTIES DevProps = &Device->Properties;
 
-    switch (NbdReqType) {
+    switch (WnbdReqType) {
     case WnbdReqTypeUnmap:
     case WnbdReqTypeWrite:
     case WnbdReqTypeFlush:
+    case WnbdReqTypePersistResOut:
         if (DevProps->Flags.ReadOnly) {
             WNBD_LOG_DEBUG(
-                "Write, flush or trim requested on a read-only disk.");
+                "Write, flush, trim or PR out requested "
+                "on a read-only disk.");
             return FALSE;
         }
+    case WnbdReqTypePersistResIn:
     case WnbdReqTypeRead:
         break;
     default:
@@ -334,13 +348,26 @@ ValidateScsiRequest(
         return FALSE;
     }
 
-    if (NbdReqType == WnbdReqTypeUnmap && !DevProps->Flags.UnmapSupported) {
-        WNBD_LOG_DEBUG("The NBD server doesn't accept TRIM/UNMAP.");
-        return FALSE;
-    }
-    if (NbdReqType == WnbdReqTypeFlush && !DevProps->Flags.FlushSupported) {
-        WNBD_LOG_DEBUG("The NBD server doesn't accept flush requests");
-        return FALSE;
+    switch (WnbdReqType) {
+    case WnbdReqTypeUnmap:
+        if (!DevProps->Flags.UnmapSupported) {
+            WNBD_LOG_DEBUG("The backend doesn't accept TRIM/UNMAP.");
+            return FALSE;
+        }
+        break;
+    case WnbdReqTypeFlush:
+        if (!DevProps->Flags.FlushSupported) {
+            WNBD_LOG_DEBUG("The backend doesn't accept flush requests");
+            return FALSE;
+        }
+        break;
+    case WnbdReqTypePersistResOut:
+        if (!DevProps->Flags.PersistResSupported) {
+             WNBD_LOG_DEBUG(
+                "The backend doesn't accept persistent reservations");
+            return FALSE;
+        }
+        break;
     }
 
     return TRUE;

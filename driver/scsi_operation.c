@@ -605,6 +605,22 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
             FALSE);
         }
         break;
+    case SCSIOP_PERSISTENT_RESERVE_IN:
+    case SCSIOP_PERSISTENT_RESERVE_OUT:
+        ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
+
+        if (DataTransferLength > WNBD_DEFAULT_MAX_TRANSFER_LENGTH)
+        {
+            Srb->SrbStatus = SRB_STATUS_ABORTED;
+            Status = STATUS_BUFFER_TOO_SMALL;
+            break;
+        }
+
+        Status = WnbdPendElement(DeviceExtension, Device, Srb,
+            0,
+            DataTransferLength,
+            FALSE);
+        break;
     default:
         WNBD_LOG_INFO("Unknown SCSI operation: %#x", Cdb->AsByte[0]);
         Status = STATUS_INSUFFICIENT_RESOURCES;
@@ -645,6 +661,8 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     case SCSIOP_WRITE16:
     case SCSIOP_SYNCHRONIZE_CACHE:
     case SCSIOP_SYNCHRONIZE_CACHE16:
+    case SCSIOP_PERSISTENT_RESERVE_IN:
+    case SCSIOP_PERSISTENT_RESERVE_OUT:
     case SCSIOP_UNMAP:
         Srb->SrbStatus = SRB_STATUS_ABORTED;
         status = WnbdPendOperation(DeviceExtension, Device, Srb);

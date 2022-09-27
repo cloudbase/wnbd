@@ -136,6 +136,8 @@ NTSTATUS WnbdDispatchRequest(
         WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx Type: %d",
                        Element->Srb, Element->Tag, RequestType);
 
+        // TODO: consider moving this to WnbdPendOperation so that we don't
+        // queue unsupported requests.
         if (!ValidateScsiRequest(Device, Element)) {
             Element->Srb->DataTransferLength = 0;
             Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
@@ -164,30 +166,6 @@ NTSTATUS WnbdDispatchRequest(
                 Element->DataLength / DevProps->BlockSize;
             Request->Cmd.Write.ForceUnitAccess =
                 Element->FUA && DevProps->Flags.FUASupported;
-
-            if (Element->DataLength > Command->DataBufferSize) {
-                // The user buffer must be at least as large as
-                // the specified maximum transfer length.
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                CompleteRequest(Device, Element, TRUE);
-                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
-                Status = STATUS_BUFFER_TOO_SMALL;
-                goto Exit;
-            }
-
-            PVOID SrbBuffer;
-            ULONG StorResult = StorPortGetSystemAddress(
-                Element->DeviceExtension, Element->Srb, &SrbBuffer);
-            if (StorResult) {
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-                CompleteRequest(Device, Element, TRUE);
-                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
-                WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
-                              Element->Srb, Element->Tag, StorResult);
-                continue;
-            }
-
-            RtlCopyMemory(Buffer, SrbBuffer, Element->DataLength);
             break;
         case WnbdReqTypeFlush:
             Request->Cmd.Flush.BlockAddress =
@@ -217,6 +195,52 @@ NTSTATUS WnbdDispatchRequest(
                 Element->StartingLbn / DevProps->BlockSize;
             UnmapDescriptor->BlockCount =
                 Element->DataLength / DevProps->BlockSize;
+            break;
+        case WnbdReqTypePersistResIn:
+            Request->Cmd.PersistResIn.ServiceAction =
+                Cdb->PERSISTENT_RESERVE_IN.ServiceAction;
+            REVERSE_BYTES_2(
+                &Request->Cmd.PersistResIn.AllocationLength,
+                &Cdb->PERSISTENT_RESERVE_IN.AllocationLength);
+            break;
+        case WnbdReqTypePersistResOut:
+            Request->Cmd.PersistResOut.ServiceAction =
+                Cdb->PERSISTENT_RESERVE_OUT.ServiceAction;
+            Request->Cmd.PersistResOut.Scope =
+                Cdb->PERSISTENT_RESERVE_OUT.Scope;
+            Request->Cmd.PersistResOut.Type =
+                Cdb->PERSISTENT_RESERVE_OUT.Type;
+            REVERSE_BYTES_2(
+                &Request->Cmd.PersistResOut.ParameterListLength,
+                &Cdb->PERSISTENT_RESERVE_OUT.ParameterListLength);
+            break;
+        }
+
+        // Copy SRB buffer if needed
+        switch(RequestType) {
+        case WnbdReqTypeWrite:
+        case WnbdReqTypePersistResOut:
+            if (Element->DataLength > Command->DataBufferSize) {
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                CompleteRequest(Device, Element, TRUE);
+                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
+                Status = STATUS_BUFFER_TOO_SMALL;
+                goto Exit;
+            }
+
+            PVOID SrbBuffer;
+            ULONG StorResult = StorPortGetSystemAddress(
+                Element->DeviceExtension, Element->Srb, &SrbBuffer);
+            if (StorResult) {
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                CompleteRequest(Device, Element, TRUE);
+                InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
+                WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
+                              Element->Srb, Element->Tag, StorResult);
+                continue;
+            }
+
+            RtlCopyMemory(Buffer, SrbBuffer, Element->DataLength);
             break;
         }
 
@@ -294,7 +318,7 @@ NTSTATUS WnbdHandleResponse(
         WNBD_LOG_DEBUG("Received reply header for %d %p 0x%llx.",
                        RequestType, Element->Srb, Element->Tag);
 
-        if (IsReadSrb(Element->Srb)) {
+        if (IsReadSrb(Element->Srb) || IsPerResInSrb(Element->Srb)) {
             StorResult = StorPortGetSystemAddress(Element->DeviceExtension, Element->Srb, &SrbBuff);
             if (STOR_STATUS_SUCCESS != StorResult) {
                 WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
@@ -309,7 +333,8 @@ NTSTATUS WnbdHandleResponse(
                        Element->Srb, Element->Tag);
     }
 
-    if (!Response->Status.ScsiStatus && IsReadSrb(Element->Srb)) {
+    if (!Response->Status.ScsiStatus &&
+            (IsReadSrb(Element->Srb) || IsPerResInSrb(Element->Srb))) {
         Status = LockUsermodeBuffer(
             Command->DataBuffer, Command->DataBufferSize, FALSE,
             &LockedUserBuff, &Mdl, &BufferLocked);
