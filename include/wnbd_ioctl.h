@@ -59,7 +59,9 @@ typedef enum
     WnbdReqTypeWrite = 2,
     WnbdReqTypeFlush = 3,
     WnbdReqTypeUnmap = 4,
-    WnbdReqTypeDisconnect = 5
+    WnbdReqTypeDisconnect = 5,
+    WnbdReqTypePersistResIn = 6,
+    WnbdReqTypePersistResOut = 7,
 } WnbdRequestType;
 
 typedef UINT64 WNBD_CONNECTION_ID;
@@ -111,7 +113,8 @@ typedef struct
     // be submitted through the IOCTL_WNBD_FETCH_REQ/IOCTL_WNBD_SEND_RSP
     // DeviceIoControl commands.
     UINT32 UseNbd:1;
-    UINT32 Reserved: 26;
+    UINT32 PersistResSupported:1;
+    UINT32 Reserved: 25;
 } WNBD_FLAGS, *PWNBD_FLAGS;
 WNBD_ASSERT_SZ_EQ(WNBD_FLAGS, 4);
 
@@ -227,6 +230,18 @@ typedef struct
             UINT32 Anchor:1;
             UINT32 Reserved:31;
         } Unmap;
+        struct
+        {
+            UINT8 ServiceAction;
+            UINT16 AllocationLength;
+        } PersistResIn;
+        struct
+        {
+            UINT8 ServiceAction;
+            UINT8 Scope:4;
+            UINT8 Type:4;
+            UINT16 ParameterListLength;
+        } PersistResOut;
     } Cmd;
     BYTE Reserved[32];
 } WNBD_IO_REQUEST, *PWNBD_IO_REQUEST;
@@ -419,6 +434,10 @@ static inline const CHAR* WnbdRequestTypeToStr(WnbdRequestType RequestType) {
             return "UNMAP";
         case WnbdReqTypeDisconnect:
             return "DISCONNECT";
+        case WnbdReqTypePersistResIn:
+            return "PERSISTENT_RESERVE_IN";
+        case WnbdReqTypePersistResOut:
+            return "PERSISTENT_RESERVE_OUT";
         default:
             return "UNKNOWN";
     }
