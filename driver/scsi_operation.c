@@ -123,9 +123,42 @@ WnbdSetVpdSupportedPages(_In_ PVOID Data,
     VpdPages->SupportedPageList[2] = VPD_BLOCK_LIMITS;
     VpdPages->SupportedPageList[3] = VPD_BLOCK_DEVICE_CHARACTERISTICS;
     VpdPages->SupportedPageList[4] = VPD_LOGICAL_BLOCK_PROVISIONING;
+    VpdPages->SupportedPageList[5] = VPD_DEVICE_IDENTIFIERS;
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages);
 
+    return SRB_STATUS_SUCCESS;
+}
+
+UCHAR
+WnbdSetVpdDeviceIdentifier(_In_ PVOID Data,
+    _In_ PCHAR DeviceSerial,
+    _In_ PSCSI_REQUEST_BLOCK Srb)
+{
+    WNBD_LOG_DEBUG(": Enter");
+    ASSERT(Data);
+    ASSERT(Srb);
+    PVPD_IDENTIFICATION_PAGE Id;
+    UCHAR Size = (UCHAR)strlen(DeviceSerial) + 1;
+    PVPD_IDENTIFICATION_DESCRIPTOR IdDescriptor;
+
+    Id = Data;
+    Id->DeviceType = DIRECT_ACCESS_DEVICE;
+    Id->DeviceTypeQualifier = DEVICE_QUALIFIER_ACTIVE;
+    Id->PageCode = VPD_DEVICE_IDENTIFIERS;
+    Id->PageLength = Size + sizeof(VPD_IDENTIFICATION_DESCRIPTOR);
+
+    IdDescriptor = (PVPD_IDENTIFICATION_DESCRIPTOR)Id->Descriptors;
+    IdDescriptor->CodeSet = VpdCodeSetAscii;
+    IdDescriptor->IdentifierType = VpdIdentifierTypeFCPHName;
+    IdDescriptor->Association = VpdAssocDevice;
+    IdDescriptor->IdentifierLength = Size;
+    RtlCopyMemory(IdDescriptor->Identifier, DeviceSerial, Size);
+
+    SrbSetDataTransferLength(Srb, sizeof(VPD_IDENTIFICATION_PAGE) +
+        sizeof(VPD_IDENTIFICATION_DESCRIPTOR) + Size);
+
+    WNBD_LOG_DEBUG(": Exit");
     return SRB_STATUS_SUCCESS;
 }
 
@@ -242,9 +275,11 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
     ASSERT(Cdb);
 
     UCHAR SrbStatus = SRB_STATUS_SUCCESS;
-    UCHAR NumberOfSupportedPages = 5;
+    UCHAR NumberOfSupportedPages = 6;
     UCHAR MaxSerialNumberSize = sizeof(VPD_SERIAL_NUMBER_PAGE) + sizeof(UCHAR[36]);
     UCHAR MaxVpdSuportedPage = sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages;
+    UCHAR MaxDeviceNumberSize = sizeof(VPD_IDENTIFICATION_PAGE) +
+        sizeof(VPD_IDENTIFICATION_DESCRIPTOR) + sizeof(UCHAR[36]);
 
     switch (Cdb->CDB6INQUIRY3.PageCode) {
     case VPD_SUPPORTED_PAGES:
@@ -283,6 +318,15 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
             return SRB_STATUS_DATA_OVERRUN;
 
         WnbdSetVpdBlockDeviceCharacteristics(Data, Device, Srb);
+        break;
+    case VPD_DEVICE_IDENTIFIERS:
+        if (MaxDeviceNumberSize > Length) {
+            SrbStatus = SRB_STATUS_DATA_OVERRUN;
+            goto Exit;
+        }
+        SrbStatus = WnbdSetVpdDeviceIdentifier(Data,
+            Device->Properties.SerialNumber,
+            Srb);
         break;
     default:
         WNBD_LOG_INFO("Unknown VPD Page: %u", Cdb->CDB6INQUIRY3.PageCode);
