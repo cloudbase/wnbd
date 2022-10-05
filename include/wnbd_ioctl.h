@@ -45,6 +45,7 @@ static const GUID WNBD_GUID = {
 #define WNBD_MAX_OWNER_LENGTH 16
 #define WNBD_MAX_OPT_NAME_LENGTH 64
 #define WNBD_MAX_VERSION_STR_LENGTH 128
+#define WNBD_NAA_ID_LENGTH 16
 // For transfers larger than 16MB, Storport sends 0 sized buffers.
 #define WNBD_DEFAULT_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
 
@@ -116,9 +117,14 @@ typedef struct
     // DeviceIoControl commands.
     UINT32 UseNbd:1;
     UINT32 PersistResSupported:1;
-    UINT32 Reserved: 25;
+    UINT32 NaaIdSpecified:1;
+    UINT32 Reserved: 24;
 } WNBD_FLAGS, *PWNBD_FLAGS;
 WNBD_ASSERT_SZ_EQ(WNBD_FLAGS, 4);
+
+typedef struct {
+    BYTE data[WNBD_NAA_ID_LENGTH];
+} WNBD_NAA_ID, *PWNBD_NAA_ID;
 
 typedef struct
 {
@@ -141,7 +147,8 @@ typedef struct
     // NBD server details must be provided when the "UseNbd" flag
     // is set.
     NBD_CONNECTION_PROPERTIES NbdProperties;
-    BYTE Reserved[256];
+    WNBD_NAA_ID NaaIdentifier;
+    BYTE Reserved[240];
 } WNBD_PROPERTIES, *PWNBD_PROPERTIES;
 WNBD_ASSERT_SZ_EQ(WNBD_PROPERTIES, 1368);
 
