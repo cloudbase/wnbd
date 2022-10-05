@@ -123,9 +123,76 @@ WnbdSetVpdSupportedPages(_In_ PVOID Data,
     VpdPages->SupportedPageList[2] = VPD_BLOCK_LIMITS;
     VpdPages->SupportedPageList[3] = VPD_BLOCK_DEVICE_CHARACTERISTICS;
     VpdPages->SupportedPageList[4] = VPD_LOGICAL_BLOCK_PROVISIONING;
+    VpdPages->SupportedPageList[5] = VPD_DEVICE_IDENTIFIERS;
 
     SrbSetDataTransferLength(Srb, sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages);
 
+    return SRB_STATUS_SUCCESS;
+}
+
+UCHAR
+WnbdSetVpdDeviceIdentifier(_In_ PVOID Data,
+    _In_ PWNBD_DISK_DEVICE Device,
+    _In_ PSCSI_REQUEST_BLOCK Srb)
+{
+    WNBD_LOG_DEBUG(": Enter");
+    ASSERT(Data);
+    ASSERT(Srb);
+    PVPD_IDENTIFICATION_PAGE Id;
+
+    UCHAR NaaIdSize = 0;
+    ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
+    ULONG RequiredBufferSize = sizeof(VPD_IDENTIFICATION_PAGE);
+
+    if (Device->Properties.Flags.NaaIdSpecified) {
+        BYTE NaaType = (Device->Properties.NaaIdentifier.data[0] >> 4) & 0xf;
+
+        switch (NaaType) {
+        case 0x2:
+        case 0x5:
+            NaaIdSize = 0x8u;
+            break;
+        case 0x6:
+            NaaIdSize = 0x10u;
+        default:
+            NaaIdSize = sizeof(WNBD_NAA_ID);
+            break;
+        }
+
+        RequiredBufferSize += sizeof(VPD_IDENTIFICATION_DESCRIPTOR) + NaaIdSize;
+    }
+
+    if (DataTransferLength < RequiredBufferSize) {
+        WNBD_LOG_DEBUG("Insufficient buffer size: %d < %d",
+            DataTransferLength, RequiredBufferSize);
+        return SRB_STATUS_DATA_OVERRUN;
+    }
+
+    Id = Data;
+    Id->DeviceType = DIRECT_ACCESS_DEVICE;
+    Id->DeviceTypeQualifier = DEVICE_QUALIFIER_ACTIVE;
+    Id->PageCode = VPD_DEVICE_IDENTIFIERS;
+    Id->PageLength = 0;
+
+    if (Device->Properties.Flags.NaaIdSpecified) {
+        Id->PageLength += sizeof(VPD_IDENTIFICATION_DESCRIPTOR) + NaaIdSize;
+
+        PVPD_IDENTIFICATION_DESCRIPTOR IdDescriptor;
+
+        IdDescriptor = (PVPD_IDENTIFICATION_DESCRIPTOR)Id->Descriptors;
+        IdDescriptor->CodeSet = VpdCodeSetBinary;
+        IdDescriptor->IdentifierType = VpdIdentifierTypeFCPHName;
+        IdDescriptor->Association = VpdAssocDevice;
+        IdDescriptor->IdentifierLength = NaaIdSize;
+
+        RtlCopyMemory(IdDescriptor->Identifier, &Device->Properties.NaaIdentifier, NaaIdSize);
+
+        WNBD_LOG_DEBUG(": set NAA ID");
+    }
+
+    SrbSetDataTransferLength(Srb, RequiredBufferSize);
+
+    WNBD_LOG_DEBUG(": Exit");
     return SRB_STATUS_SUCCESS;
 }
 
@@ -251,7 +318,7 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
     ASSERT(Cdb);
 
     UCHAR SrbStatus = SRB_STATUS_SUCCESS;
-    UCHAR NumberOfSupportedPages = 5;
+    UCHAR NumberOfSupportedPages = 6;
     UCHAR MaxVpdSuportedPage = sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages;
 
     switch (Cdb->CDB6INQUIRY3.PageCode) {
@@ -285,6 +352,9 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
             return SRB_STATUS_DATA_OVERRUN;
 
         WnbdSetVpdBlockDeviceCharacteristics(Data, Device, Srb);
+        break;
+    case VPD_DEVICE_IDENTIFIERS:
+        SrbStatus = WnbdSetVpdDeviceIdentifier(Data, Device, Srb);
         break;
     default:
         WNBD_LOG_INFO("Unknown VPD Page: %u", Cdb->CDB6INQUIRY3.PageCode);
