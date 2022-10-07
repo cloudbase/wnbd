@@ -335,16 +335,30 @@ NTSTATUS WnbdHandleResponse(
 
     if (!Response->Status.ScsiStatus &&
             (IsReadSrb(Element->Srb) || IsPerResInSrb(Element->Srb))) {
-        Status = LockUsermodeBuffer(
-            Command->DataBuffer, Command->DataBufferSize, FALSE,
-            &LockedUserBuff, &Mdl, &BufferLocked);
-        if (Status) {
-            Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
-            goto Exit;
+        if (!Command->DataBuffer) {
+            if (Command->DataBufferSize > 0) {
+                WNBD_LOG_DEBUG("Invalid reply: %p 0x%llx. "
+                               "NULL buffer with non-zero buffer size: %d.",
+                               Element->Srb, Element->Tag, Command->DataBufferSize);
+                Status = STATUS_INVALID_PARAMETER;
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                goto Exit;
+            }
+        } else {
+            Status = LockUsermodeBuffer(
+                Command->DataBuffer, Command->DataBufferSize, FALSE,
+                &LockedUserBuff, &Mdl, &BufferLocked);
+            if (Status) {
+                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                goto Exit;
+            }
         }
         if (!Element->Aborted && SrbBuff) {
-            RtlCopyMemory(SrbBuff, LockedUserBuff,
-                          min(Element->DataLength, Command->DataBufferSize));
+            if (Command->DataBuffer && Command->DataBufferSize > 0) {
+                RtlCopyMemory(
+                    SrbBuff, LockedUserBuff,
+                    min(Element->DataLength, Command->DataBufferSize));
+            }
             if (Command->DataBufferSize < Element->DataLength) {
                 RtlZeroMemory(
                     (char*)SrbBuff + Command->DataBufferSize,
