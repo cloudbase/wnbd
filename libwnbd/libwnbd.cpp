@@ -690,7 +690,13 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
                          AdditionalSenseCode);
             // Avoid negative count
             InterlockedIncrement64((PLONG64)&Disk->Stats.PendingSubmittedRequests);
-            WnbdSendResponse(Disk, &Response, NULL, 0);
+            DWORD Status = WnbdSendResponse(Disk, &Response, NULL, 0);
+            
+            if (Status == ERROR_NOT_FOUND) {
+                LogDebug("Unable to send response, device not found. Performing cleanup.");
+                WnbdSignalStopped(Disk);
+            }
+
             break;
     }
 
