@@ -932,7 +932,7 @@ DWORD WnbdIoctlRemove(
 
     if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
         if (Status == ERROR_FILE_NOT_FOUND) {
-            LogDebug("Could not find the disk to be removed.");
+            LogDebug("Could not find the disk to be removed. It might have been removed already.");
         }
         else {
             LogError("Could not remove WNBD disk. Error: %d. Error message: %s",

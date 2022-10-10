@@ -217,6 +217,9 @@ DWORD WnbdRemoveEx(
                            "Falling back to hard removal.");
             }
         }
+        else {
+            LogDebug("PNP removal succeeded");
+        }
     }
     Status = WnbdIoctlRemove(Handle, InstanceName, NULL, NULL);
     CloseHandle(Handle);
