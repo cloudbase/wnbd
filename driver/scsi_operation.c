@@ -139,6 +139,15 @@ WnbdSetVpdSerialNumber(_In_ PVOID Data,
 
     PVPD_SERIAL_NUMBER_PAGE VpdSerial;
     UCHAR Size = (UCHAR)strlen(DeviceSerial) + 1;
+    ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
+    ULONG RequiredBufferSize = sizeof(VPD_SERIAL_NUMBER_PAGE) + Size;
+
+    if (DataTransferLength < RequiredBufferSize) {
+        WNBD_LOG_DEBUG("Insufficient buffer size: %d < %d",
+            DataTransferLength, RequiredBufferSize);
+        return SRB_STATUS_DATA_OVERRUN;
+    }
+
     WNBD_LOG_DEBUG("Setting device serial: %s, size: %d", DeviceSerial, Size);
 
     VpdSerial = Data;
@@ -243,7 +252,6 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
 
     UCHAR SrbStatus = SRB_STATUS_SUCCESS;
     UCHAR NumberOfSupportedPages = 5;
-    UCHAR MaxSerialNumberSize = sizeof(VPD_SERIAL_NUMBER_PAGE) + sizeof(UCHAR[36]);
     UCHAR MaxVpdSuportedPage = sizeof(VPD_SUPPORTED_PAGES_PAGE) + NumberOfSupportedPages;
 
     switch (Cdb->CDB6INQUIRY3.PageCode) {
@@ -256,15 +264,9 @@ WnbdProcessExtendedInquiry(_In_ PVOID Data,
         break;
 
     case VPD_SERIAL_NUMBER:
-        {
-        if (MaxSerialNumberSize > Length) {
-            SrbStatus = SRB_STATUS_DATA_OVERRUN;
-            goto Exit;
-        }
         SrbStatus = WnbdSetVpdSerialNumber(Data,
                                            Device->Properties.SerialNumber,
                                            Srb);
-        }
         break;
     case VPD_BLOCK_LIMITS:
         if (sizeof(VPD_BLOCK_LIMITS_PAGE) > Length)
