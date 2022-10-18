@@ -367,6 +367,10 @@ NTSTATUS WnbdHandleResponse(
         }
     }
     if (Response->Status.ScsiStatus) {
+        WNBD_LOG_DEBUG(
+            "Received reply with non-zero scsi status: 0x%llx # 0x%llx",
+            Response->Status.ScsiStatus,
+            Response->RequestHandle);
         Element->Srb->DataTransferLength = 0;
         Element->Srb->SrbStatus = SetSrbStatus(Element->Srb, &Response->Status);
     }

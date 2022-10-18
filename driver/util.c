@@ -379,6 +379,8 @@ UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
     PSENSE_DATA SenseInfoBuffer = SrbGetSenseInfoBuffer(Srb);
     UCHAR SenseInfoBufferLength = SrbGetSenseInfoBufferLength(Srb);
 
+    SrbSetScsiStatus(Srb, Status->ScsiStatus);
+
     if (SenseInfoBuffer && sizeof(SENSE_DATA) <= SenseInfoBufferLength &&
         !(SrbGetSrbFlags(Srb) & SRB_FLAGS_DISABLE_AUTOSENSE))
     {
@@ -396,7 +398,10 @@ UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
             SenseInfoBuffer->Valid = 1;
         }
 
-        SrbSetScsiStatus(Srb, SCSISTAT_CHECK_CONDITION);
+        // We'll avoid overriding non-zero scsi status
+        if (!Status->ScsiStatus) {
+            SrbSetScsiStatus(Srb, SCSISTAT_CHECK_CONDITION);
+        }
         SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
     }
 
