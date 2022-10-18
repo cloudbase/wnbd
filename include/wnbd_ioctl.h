@@ -11,6 +11,8 @@
 #pragma warning(push)
 // Disable "enum class" warnings, libwnbd must be C compatible.
 #pragma warning(disable:26812)
+// nonstandard extension used : bit field types other than int
+#pragma warning(disable:4214)
 #endif
 
 #include <assert.h>
