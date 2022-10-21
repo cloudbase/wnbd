@@ -381,12 +381,6 @@ Passing the ``--persistent`` flag will remove the persistent setting as well.
 Limitations
 ===========
 
-### CSV support
-
-At the moment, the Microsoft Failover Cluster can't use WNBD disks as
-Cluster Shared Volumes (CSVs) underlying storage. The main reason is that
-``WNBD`` doesn't support the *SCSI Persistent Reservations* feature yet.
-
 ### Hyper-V disk addressing
 
 **Warning:** Hyper-V identifies passthrough VM disks by number instead of
