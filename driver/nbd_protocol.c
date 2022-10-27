@@ -266,7 +266,7 @@ NbdNegotiate(_In_ INT* Pfd,
                     WNBD_LOG_ERROR("Connection not allowed by server policy.");
                 }
                 NbdFree(Reply);
-                return STATUS_FAIL_CHECK;
+                return STATUS_ACCESS_DENIED;
 
             default:
                 if (Reply->Datasize > 0) {
@@ -487,7 +487,11 @@ NbdReadReply(INT Fd,
 
     NTSTATUS error = STATUS_SUCCESS;
     if (-1 == NbdReadExact(Fd, Reply, sizeof(NBD_REPLY), &error)) {
-        WNBD_LOG_ERROR("Could not read command reply.");
+        if (error == STATUS_CONNECTION_DISCONNECTED) {
+            WNBD_LOG_INFO("NBD connection closed.");
+        } else {
+            WNBD_LOG_ERROR("Could not read command reply.");
+        }
         return error;
     }
 
