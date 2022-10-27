@@ -893,7 +893,9 @@ DWORD WnbdIoctlCreate(
         &Command, sizeof(Command), ConnectionInfo, sizeof(WNBD_CONNECTION_INFO),
         &BytesReturned, Overlapped);
     if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
-        LogError("Could not create WNBD disk. Error: %d. Error message: %s",
+        LogError("Could not create WNBD disk. Check the WNBD driver "
+                 "and NBD server logs for more information. "
+                 "Error: %d. Error message: %s",
                  Status, win32_strerror(Status).c_str());
     }
 
