@@ -347,7 +347,8 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         WNBD_LOG_INFO("Connecting to NBD server: %s:%p. "
                       "Export name: %s.",
                       Properties->NbdProperties.Hostname,
-                      Properties->NbdProperties.PortNumber);
+                      Properties->NbdProperties.PortNumber,
+                      Properties->NbdProperties.ExportName);
         Sock = NbdOpenAndConnect(
             Properties->NbdProperties.Hostname,
             Properties->NbdProperties.PortNumber);
