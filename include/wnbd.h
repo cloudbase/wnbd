@@ -172,6 +172,9 @@ DWORD WnbdRemove(
 DWORD WnbdRemoveEx(
     const char* InstanceName,
     PWNBD_REMOVE_OPTIONS RemoveOptions);
+DWORD WnbdSetDiskSize(
+    PWNBD_DISK Disk,
+    UINT64 BlockCount);
 // Cleanup the PWNBD_DISK structure. This should be called after stopping
 // the IO dispatchers.
 VOID WnbdClose(PWNBD_DISK Disk);
@@ -374,6 +377,11 @@ DWORD WnbdIoctlFetchRequest(
     PWNBD_IO_REQUEST Request,
     PVOID DataBuffer,
     UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped);
+DWORD WnbdIoctlSetDiskSize(
+    HANDLE Adapter,
+    WNBD_CONNECTION_ID ConnectionId,
+    UINT64 BlockCount,
     LPOVERLAPPED Overlapped);
 DWORD WnbdIoctlSendResponse(
     HANDLE Adapter,

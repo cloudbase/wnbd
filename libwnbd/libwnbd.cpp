@@ -251,6 +251,78 @@ DWORD WnbdRemoveEx(
     return Status;
 }
 
+DWORD WnbdSetDiskSize(PWNBD_DISK Disk, UINT64 BlockCount) {
+    DWORD ErrorCode = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    LogInfo("Resizing device %s. New block count: %d. "
+            "Old block count: %d.",
+            Disk->Properties.InstanceName, BlockCount,
+            Disk->Properties.BlockCount);
+    if (!Disk->Handle || Disk->Handle == INVALID_HANDLE_VALUE) {
+        LogDebug("WNBD device not found");
+        return ERROR_NOT_FOUND;
+    }
+
+    ErrorCode = WnbdIoctlSetDiskSize(
+        Disk->Handle,
+        Disk->ConnectionInfo.ConnectionId,
+        BlockCount,
+        NULL);
+
+    if (ErrorCode) {
+        return ErrorCode;
+    }
+
+    WNBD_CONNECTION_INFO ConnectionInfo = {0};
+    ErrorCode = WnbdShow(Disk->Properties.InstanceName, &ConnectionInfo);
+
+    if (ErrorCode) {
+        return ErrorCode;
+    }
+
+    HANDLE hDevice = NULL;
+    std::string deviceName = "\\\\.\\PhysicalDrive"
+                             + std::to_string(ConnectionInfo.DiskNumber);
+
+    hDevice = CreateFileA(deviceName.c_str(),
+                         GENERIC_READ | GENERIC_WRITE,
+                         FILE_SHARE_READ | FILE_SHARE_WRITE,
+                         NULL,
+                         OPEN_EXISTING,
+                         NULL,
+                         NULL);
+    if (hDevice == INVALID_HANDLE_VALUE) {
+        ErrorCode = GetLastError();
+        LogError("Failed opening physical device: %s. Error: %d",
+                 deviceName, ErrorCode);
+        return ErrorCode;
+    }
+
+    if (!DeviceIoControl(
+            hDevice,
+            IOCTL_DISK_UPDATE_PROPERTIES,
+            NULL,
+            0,
+            NULL,
+            0,
+            &BytesReturned,
+            NULL))
+    {
+        ErrorCode = GetLastError();
+        LogError("Failed notifying disk size update. Error: %d", ErrorCode);
+    }
+
+    if (!CloseHandle(hDevice)) {
+        ErrorCode = GetLastError();
+        LogError("Failed closing device handle. Error: %d", ErrorCode);
+    }
+
+    LogDebug("Exit: %d", ErrorCode);
+
+    return ErrorCode;
+}
+
 DWORD WnbdList(
     PWNBD_CONNECTION_LIST ConnectionList,
     PDWORD BufferSize)

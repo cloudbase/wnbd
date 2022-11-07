@@ -4,6 +4,7 @@ EXPORTS
     WnbdCreate
     WnbdRemove
     WnbdRemoveEx
+    WnbdSetDiskSize
     WnbdClose
     WnbdList
     WnbdShow
@@ -38,6 +39,7 @@ EXPORTS
     WnbdIoctlStats
     WnbdIoctlReloadConfig
     WnbdIoctlFetchRequest
+    WnbdIoctlSetDiskSize
     WnbdIoctlSendResponse
     WnbdIoctlGetDrvOpt
     WnbdIoctlSetDrvOpt
