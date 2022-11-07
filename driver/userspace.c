@@ -462,6 +462,34 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
 
 _Use_decl_annotations_
 NTSTATUS
+WnbdSetDiskSize(PWNBD_EXTENSION DeviceExtension, WNBD_CONNECTION_ID ConnectionId, UINT64 BlockCount) {
+    ASSERT(DeviceExtension);
+    ASSERT(ConnectionId);
+
+    PWNBD_DISK_DEVICE Device = WnbdFindDeviceByConnId(DeviceExtension, ConnectionId, TRUE);
+
+    if (!Device) {
+        WNBD_LOG_ERROR("Could not find the device to resize.");
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+    }
+
+    WNBD_LOG_INFO("Resized disk: %s. "
+        "Old block count %lld, new block count: %lld. "
+        "Block size: %d.",
+        Device->Properties.InstanceName,
+        Device->Properties.BlockCount,
+        BlockCount,
+        Device->Properties.BlockSize);
+
+    Device->Properties.BlockCount = BlockCount;
+
+    WnbdReleaseDevice(Device);
+
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
+NTSTATUS
 WnbdEnumerateActiveConnections(PWNBD_EXTENSION DeviceExtension, PIRP Irp)
 {
     ASSERT(DeviceExtension);
@@ -644,6 +672,15 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
 
         WNBD_LOG_INFO("Disconnecting disk: %s.", RmCmd->InstanceName);
         Status = WnbdDeleteConnection(DeviceExtension, RmCmd->InstanceName);
+        break;
+    case IOCTL_WNBD_SET_DISK_SIZE:
+        WNBD_LOG_DEBUG("IOCTL_WNBD_SET_DISK_SIZE");
+        PWNBD_IOCTL_SET_SIZE_COMMAND SetSizeCmd = (
+            PWNBD_IOCTL_SET_SIZE_COMMAND)Irp->AssociatedIrp.SystemBuffer;
+        Status = WnbdSetDiskSize(
+            DeviceExtension,
+            SetSizeCmd->ConnectionId,
+            SetSizeCmd->BlockCount);
         break;
 
      case IOCTL_WNBD_LIST:
