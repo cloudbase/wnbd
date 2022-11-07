@@ -1019,6 +1019,34 @@ DWORD WnbdIoctlSendResponse(
     return Status;
 }
 
+DWORD WnbdIoctlSetDiskSize(
+    HANDLE Adapter,
+    WNBD_CONNECTION_ID ConnectionId,
+    UINT64 BlockCount,
+    LPOVERLAPPED Overlapped)
+{
+    DWORD Status = ERROR_SUCCESS;
+    DWORD BytesReturned = 0;
+
+    WNBD_IOCTL_SET_SIZE_COMMAND Command = { 0 };
+
+    Command.IoControlCode = IOCTL_WNBD_SET_DISK_SIZE;
+    Command.ConnectionId = ConnectionId;
+    Command.BlockCount = BlockCount;
+
+    Status = WnbdDeviceIoControl(
+        Adapter, IOCTL_MINIPORT_PROCESS_SERVICE_IRP,
+        &Command, sizeof(Command), NULL, 0,
+        &BytesReturned, Overlapped);
+
+    if (Status && !(Status == ERROR_IO_PENDING && Overlapped)) {
+        LogError("Could not set disk size. Error: %d. Error message: %s",
+            Status, win32_strerror(Status).c_str());
+    }
+
+    return Status;
+}
+
 DWORD WnbdIoctlList(
     HANDLE Adapter,
     PWNBD_CONNECTION_LIST ConnectionList,
