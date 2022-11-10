@@ -7,6 +7,8 @@
 #include <windows.h>
 
 #include <stdio.h>
+#include <sstream>
+#include <iomanip>
 
 #define _NTSCSI_USER_MODE_
 #include <scsi.h>
@@ -124,11 +126,25 @@ DWORD PnpRemoveDevice(
                 Status = ERROR_TIMEOUT;
             }
 
-            LogDebug(
+            std::ostringstream TimeLeftSS;
+            if (!TimeoutMs) {
+                TimeLeftSS << "infinite";
+            } else {
+                TimeLeftSS << std::setprecision(2)
+                           << (TimeoutMs - ElapsedMs.QuadPart) / 1000.0
+                           << "s";
+            }
+
+            LogWarning(
                "Could not remove device. CM status: %d, "
-               "veto type %d, veto name: %ls. Time elapsed: %.2fs",
+               "veto type %d, veto name: %ls. "
+               "Time elapsed: %.2fs, time left: %s. "
+               "Check the Windows System event log (Kernel-PnP source) "
+               "for more information about the process that is holding "
+               "the disk.",
                CMStatus, VetoType, VetoName,
-               ElapsedMs.QuadPart / 1000.0);
+               ElapsedMs.QuadPart / 1000.0,
+               TimeLeftSS.str());
         }
         if (RemoveVetoed && TimeLeft) {
             Sleep(RetryIntervalMs);
