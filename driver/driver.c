@@ -190,6 +190,50 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
     // The device removal might be vetoed by other parts of the storage stack,
     // so we'd affect soft removals. The only downside is that if the remove
     // gets vetoed, uninstalling the driver will require a reboot.
+    case IRP_MN_QUERY_REMOVE_DEVICE:
+        {
+            if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
+                break;
+            }
+            Status = WnbdGetScsiAddress(DeviceObject, &ScsiAddress);
+            if (Status) {
+                WNBD_LOG_WARN("Could not query SCSI address. Error: 0x%x.", Status);
+                break;
+            }
+
+            WNBD_LOG_DEBUG("Device about to be removed, "
+                "checking for pending requests");
+            PWNBD_DISK_DEVICE Device = WnbdFindDeviceByAddr(
+                GlobalExt, ScsiAddress.PathId,
+                ScsiAddress.TargetId, ScsiAddress.Lun, TRUE);
+            if (!Device) {
+                WNBD_LOG_DEBUG("Device already removed.");
+                break;
+            }
+            if (Device->PDO != DeviceObject) {
+                WNBD_LOG_INFO(
+                    "Different device found at the specified address. "
+                    "The requested device might've been removed already.");
+                WnbdReleaseDevice(Device);
+                break;
+            }
+            BOOLEAN HasPendingRequests = HasPendingAsyncRequests(Device);
+            WnbdReleaseDevice(Device);
+            if (HasPendingRequests) {
+                Status = STATUS_DEVICE_BUSY;
+                WNBD_LOG_WARN("Device removal requested while having pending IO, "
+                    "reporting device busy: %s",
+                    Device->Properties.InstanceName);
+                Irp->IoStatus.Status = Status;
+                IoCompleteRequest(Irp, IO_NO_INCREMENT);
+                WNBD_LOG_DEBUG("Exit: 0x%x", Status);
+                return Status;
+            } else {
+                WNBD_LOG_INFO("Device removal requested, no pending IO: %s",
+                    Device->Properties.InstanceName);
+            }
+        }
+        break;
     case IRP_MN_REMOVE_DEVICE:
         {
             if (NULL == GlobalExt || !GlobalExt->DeviceCount) {
