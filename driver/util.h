@@ -19,6 +19,8 @@ VOID
 CompleteRequest(_In_ PWNBD_DISK_DEVICE Device,
                 _In_ PSRB_QUEUE_ELEMENT Element,
                 _In_ BOOLEAN FreeElement);
+BOOLEAN
+HasPendingAsyncRequests(_In_ PWNBD_DISK_DEVICE Device);
 
 VOID
 WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension);

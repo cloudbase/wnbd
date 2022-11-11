@@ -79,6 +79,36 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
     KeReleaseSpinLock(ListLock, Irql);
 }
 
+
+BOOLEAN HasPendingAsyncRequests(_In_ PWNBD_DISK_DEVICE Device)
+{
+    KIRQL IrqlSubmitted = { 0 };
+    KIRQL IrqlPending = { 0 };
+
+    KeAcquireSpinLock(&Device->SubmittedReqListLock, &IrqlSubmitted);
+    KeAcquireSpinLock(&Device->PendingReqListLock, &IrqlPending);
+
+    BOOLEAN HasRequests = FALSE;
+    if (!IsListEmpty(&Device->SubmittedReqListHead)) {
+        WNBD_LOG_DEBUG("pending submitted requests");
+        HasRequests = TRUE;
+    } else {
+        WNBD_LOG_DEBUG("no pending submitted requests");
+    }
+
+    if (!IsListEmpty(&Device->PendingReqListHead)) {
+        WNBD_LOG_DEBUG("pending unsubmitted requests");
+        HasRequests = TRUE;
+    } else {
+        WNBD_LOG_DEBUG("no pending unsubmitted requests");
+    }
+
+    KeReleaseSpinLock(&Device->PendingReqListLock, IrqlPending);
+    KeReleaseSpinLock(&Device->SubmittedReqListLock, IrqlSubmitted);
+
+    return HasRequests;
+}
+
 VOID
 WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
 {
