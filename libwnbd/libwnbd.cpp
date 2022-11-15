@@ -318,6 +318,8 @@ DWORD WnbdSetDiskSize(PWNBD_DISK Disk, UINT64 BlockCount) {
         LogError("Failed closing device handle. Error: %d", ErrorCode);
     }
 
+    Disk->Properties.BlockCount = BlockCount;
+
     LogDebug("Exit: %d", ErrorCode);
 
     return ErrorCode;
