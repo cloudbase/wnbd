@@ -547,6 +547,28 @@ Exit:
     return SrbStatus;
 }
 
+UCHAR
+WnbdReportLuns(_In_ PSCSI_REQUEST_BLOCK Srb) {
+    ASSERT(Srb);
+
+    PVOID DataBuffer = SrbGetDataBuffer(Srb);
+    ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
+
+    if (NULL == DataBuffer) {
+        return SRB_STATUS_INTERNAL_ERROR;
+    }
+
+    // the LUN address is expected to be zero
+    RtlZeroMemory(DataBuffer, DataTransferLength);
+
+    PLUN_LIST LunList;
+    LunList = DataBuffer;
+    LunList->LunListLength[3] = 8;
+
+    SrbSetDataTransferLength(Srb, sizeof(LUN_LIST) + 8);
+    return SRB_STATUS_SUCCESS;
+}
+
 NTSTATUS
 WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
                 _In_ PWNBD_DISK_DEVICE Device,
@@ -778,7 +800,11 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     case SCSIOP_TEST_UNIT_READY:
         Srb->SrbStatus = SRB_STATUS_SUCCESS;
         break;
+    case SCSIOP_REPORT_LUNS:
+        Srb->SrbStatus = WnbdReportLuns(Srb);
+        break;
     default:
+        WNBD_LOG_INFO("Received unsupported SCSI command: 0x%x", Cdb->AsByte[0]);
         Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;
     };
