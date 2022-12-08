@@ -694,10 +694,11 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
         case WnbdReqTypeRead:
             if (!Disk->Interface->Read)
                 goto Unsupported;
-            LogDebug("Dispatching READ @ 0x%llx~0x%x # %llx.",
+            LogDebug("Dispatching READ @ 0x%llx~0x%x # %llx, FUA: %d.",
                      Request->Cmd.Read.BlockAddress,
                      Request->Cmd.Read.BlockCount,
-                     Request->RequestHandle);
+                     Request->RequestHandle,
+                     Request->Cmd.Read.ForceUnitAccess);
             Disk->Interface->Read(
                 Disk,
                 Request->RequestHandle,
@@ -713,10 +714,11 @@ VOID WnbdHandleRequest(PWNBD_DISK Disk, PWNBD_IO_REQUEST Request,
         case WnbdReqTypeWrite:
             if (!Disk->Interface->Write)
                 goto Unsupported;
-            LogDebug("Dispatching WRITE @ 0x%llx~0x%x # %llx." ,
+            LogDebug("Dispatching WRITE @ 0x%llx~0x%x # %llx, FUA: %d." ,
                      Request->Cmd.Write.BlockAddress,
                      Request->Cmd.Write.BlockCount,
-                     Request->RequestHandle);
+                     Request->RequestHandle,
+                     Request->Cmd.Write.ForceUnitAccess);
             Disk->Interface->Write(
                 Disk,
                 Request->RequestHandle,
