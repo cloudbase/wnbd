@@ -43,5 +43,7 @@ tags
 /vstudio/sdv/
 /vstudiox64/
 /vstudio/deps
+/vstudio/packages
+/tests/libwnbd_tests/x64
 
 include/version.h
