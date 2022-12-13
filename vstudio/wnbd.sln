@@ -23,6 +23,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libwnbd", "..\libwnbd\libwn
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "build_deps", "build_deps.vcxproj", "{4EE28B36-2083-4FBA-88D7-FE60027B81BB}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libwnbd_tests", "..\tests\libwnbd_tests\libwnbd_tests.vcxproj", "{CB9F16AC-7578-4122-A364-A54AA527C426}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Analyze|x64 = Analyze|x64
@@ -64,6 +66,12 @@ Global
 		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Debug|x64.Build.0 = Debug|x64
 		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Release|x64.ActiveCfg = Release|x64
 		{4EE28B36-2083-4FBA-88D7-FE60027B81BB}.Release|x64.Build.0 = Release|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Analyze|x64.ActiveCfg = Debug|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Analyze|x64.Build.0 = Debug|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Debug|x64.ActiveCfg = Debug|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Debug|x64.Build.0 = Debug|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Release|x64.ActiveCfg = Release|x64
+		{CB9F16AC-7578-4122-A364-A54AA527C426}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
