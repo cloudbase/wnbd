@@ -48,6 +48,8 @@ static const GUID WNBD_GUID = {
 #define WNBD_MAX_VERSION_STR_LENGTH 128
 #define WNBD_NAA_ID_LENGTH 16
 // For transfers larger than 16MB, Storport sends 0 sized buffers.
+// TODO: "default" suggests that the max transfer length is configurable,
+// however it's not. We shold rename it, dropping the "default" keyword.
 #define WNBD_DEFAULT_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
 
 // Only used for NBD connections, in which case the block size is optional.
