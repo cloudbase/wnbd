@@ -144,7 +144,7 @@ DWORD PnpRemoveDevice(
                "the disk.",
                CMStatus, VetoType, VetoName,
                ElapsedMs.QuadPart / 1000.0,
-               TimeLeftSS.str());
+               TimeLeftSS.str().c_str());
         }
         if (RemoveVetoed && TimeLeft) {
             Sleep(RetryIntervalMs);
