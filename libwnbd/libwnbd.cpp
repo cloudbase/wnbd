@@ -968,10 +968,14 @@ DWORD WnbdWaitDispatcher(PWNBD_DISK Disk)
         return ERROR_PIPE_NOT_CONNECTED;
     }
 
-    if (!Disk->DispatcherThreads || !Disk->DispatcherThreadsCount ||
-            !WnbdIsRunning(Disk)) {
+    if (!Disk->DispatcherThreads || !Disk->DispatcherThreadsCount) {
         LogInfo("The dispatcher isn't running.");
         return 0;
+    }
+
+    if (!WnbdIsRunning(Disk)) {
+        LogInfo("Dispatcher stopped, waiting for any remaining "
+                "dispatcher threads.");
     }
 
     DWORD Ret = WaitForMultipleObjects(
