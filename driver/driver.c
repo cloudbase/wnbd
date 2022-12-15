@@ -210,6 +210,12 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 WNBD_LOG_DEBUG("Device already removed.");
                 break;
             }
+            char InstanceName[256] = { 0 };
+            // Copy InstanceName to a local buffer in order to log it
+            // without accessing the released device
+            RtlCopyMemory(&InstanceName, &Device->Properties.InstanceName,
+                strlen(Device->Properties.InstanceName));
+
             if (Device->PDO != DeviceObject) {
                 WNBD_LOG_INFO(
                     "Different device found at the specified address. "
@@ -222,15 +228,14 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
             if (HasPendingRequests) {
                 Status = STATUS_DEVICE_BUSY;
                 WNBD_LOG_WARN("Device removal requested while having pending IO, "
-                    "reporting device busy: %s",
-                    Device->Properties.InstanceName);
+                    "reporting device busy: %s", InstanceName);
                 Irp->IoStatus.Status = Status;
                 IoCompleteRequest(Irp, IO_NO_INCREMENT);
                 WNBD_LOG_DEBUG("Exit: 0x%x", Status);
                 return Status;
             } else {
                 WNBD_LOG_INFO("Device removal requested, no pending IO: %s",
-                    Device->Properties.InstanceName);
+                    InstanceName);
             }
         }
         break;
@@ -253,6 +258,12 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 WNBD_LOG_DEBUG("Device already removed.");
                 break;
             }
+            char InstanceName[256] = { 0 };
+            // Copy InstanceName to a local buffer in order to log it
+            // without accessing the released device
+            RtlCopyMemory(&InstanceName, &Device->Properties.InstanceName,
+                strlen(Device->Properties.InstanceName));
+
             if (Device->PDO != DeviceObject) {
                 WNBD_LOG_INFO(
                     "Different device found at the specified address. "
@@ -260,11 +271,11 @@ WnbdDispatchPnp(PDEVICE_OBJECT DeviceObject,
                 WnbdReleaseDevice(Device);
                 break;
             }
-            WNBD_LOG_INFO("Disconnecting disk: %s.",
-                          Device->Properties.InstanceName);
+            WNBD_LOG_INFO("Disconnecting disk: %s.", InstanceName);
+
             WnbdDisconnectSync(Device);
-            WNBD_LOG_INFO("Successfully disconnected disk: %s",
-                          Device->Properties.InstanceName);
+
+            WNBD_LOG_INFO("Successfully disconnected disk: %s", InstanceName);
         }
         break;
     }
