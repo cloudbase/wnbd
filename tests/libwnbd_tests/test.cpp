@@ -105,15 +105,61 @@ TEST(TestMap, ReadOnly) {
         true);
 }
 
-TEST(TestMap, Map4kSector) {
-    TestMap(
-        DefaultBlockCount, 4096);
-}
+// TODO: we're now enforcing the sector size to be 512 due to some crashes
+// that occur when accessing the read SRB data buffers while handling IO
+// replies.
+//
+// TEST(TestMap, Map4kSector) {
+//     TestMap(
+//         DefaultBlockCount, 4096);
+// }
 
 TEST(TestMap, Map2PBDisk) {
     TestMap(
         (2LL << 50) / DefaultBlockSize,
         DefaultBlockSize);
+}
+
+void TestMapUnsupported(
+    uint64_t BlockCount = DefaultBlockCount,
+    uint32_t BlockSize = DefaultBlockSize)
+{
+    auto InstanceName = GetNewInstanceName();
+
+    HANDLE AdapterHandle = INVALID_HANDLE_VALUE;
+    DWORD ErrorCode = WnbdOpenAdapter(&AdapterHandle);
+    ASSERT_FALSE(ErrorCode) << "unable to open WNBD adapter";
+    std::unique_ptr<void, decltype(&CloseHandle)> HandleCloser(
+        AdapterHandle, &CloseHandle);
+
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+
+    InstanceName.copy(WnbdProps.InstanceName, sizeof(WnbdProps.InstanceName));
+
+    WnbdProps.BlockCount = BlockCount;
+    WnbdProps.BlockSize = BlockSize;
+    WnbdProps.MaxUnmapDescCount = 1;
+
+    DWORD err = WnbdIoctlCreate(
+        AdapterHandle,
+        &WnbdProps,
+        &ConnectionInfo,
+        nullptr);
+    ASSERT_TRUE(err)
+        << "WnbdCreate succeeded although it was expected to fail";
+}
+
+TEST(TestMapUnsupported, UnsupportedBlockCount) {
+    TestMapUnsupported(0);
+}
+
+TEST(TestMapUnsupported, UnsupportedBlockSize) {
+    TestMapUnsupported(DefaultBlockCount, 0);
+    TestMapUnsupported(DefaultBlockCount, 256);
+    // TODO: allow 4k sector sizes once we sort out the crashes
+    TestMapUnsupported(DefaultBlockCount, 4096);
+    TestMapUnsupported(DefaultBlockCount, 64 * 1024);
 }
 
 void TestWrite(
@@ -244,10 +290,12 @@ TEST(TestWrite, CacheDisabled) {
         false);
 }
 
-TEST(TestWrite, Write4kSector) {
-    TestWrite(
-        DefaultBlockCount, 4096);
-}
+// TODO: allow 4k sector sizes once we sort out the crashes
+//
+// TEST(TestWrite, Write4kSector) {
+//     TestWrite(
+//         DefaultBlockCount, 4096);
+// }
 
 TEST(TestWrite, Write2PBDisk) {
     TestWrite(
@@ -403,10 +451,12 @@ TEST(TestRead, CacheDisabled) {
         false);
 }
 
-TEST(TestRead, Read4kSector) {
-    TestRead(
-        DefaultBlockCount, 4096);
-}
+// TODO: allow 4k sector sizes once we sort out the crashes
+//
+// TEST(TestRead, Read4kSector) {
+//     TestRead(
+//         DefaultBlockCount, 4096);
+// }
 
 TEST(TestRead, Read2PBDisk) {
     TestRead(

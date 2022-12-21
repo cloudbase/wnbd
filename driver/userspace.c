@@ -378,7 +378,17 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         Device->Properties.Flags.FUASupported |= CHECK_NBD_SEND_FUA(NbdFlags);
     }
 
-    if (!Device->Properties.BlockSize || !Device->Properties.BlockCount ||
+    // TODO: fix the 4k sector size issue, potentially allowing even larger sector
+    // sizes.
+    if (Device->Properties.BlockSize != 512) {
+        WNBD_LOG_ERROR("Invalid block size: %d. "
+                       "Only 512 is allowed for the time being.",
+                       Device->Properties.BlockSize);
+        Status = STATUS_INVALID_PARAMETER;
+        goto Exit;
+    }
+
+    if (!Device->Properties.BlockCount ||
         Device->Properties.BlockCount > ULLONG_MAX / Device->Properties.BlockSize)
     {
         WNBD_LOG_ERROR("Invalid block size or block count. "
@@ -615,7 +625,7 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         BOOLEAN UseNbdNegotiation =
             Props.Flags.UseNbd && !Props.NbdProperties.Flags.SkipNegotiation;
         if (!UseNbdNegotiation) {
-            if (!Props.BlockCount || !Props.BlockCount ||
+            if (!Props.BlockCount || !Props.BlockSize ||
                 Props.BlockCount > ULLONG_MAX / Props.BlockSize)
             {
                 WNBD_LOG_WARN(
