@@ -107,4 +107,8 @@ private:
         PVOID DataBuffer,
         UINT32 DataBufferSize
     );
+public:
+    PWNBD_DISK GetDisk() {
+        return WnbdDisk;
+    }
 };

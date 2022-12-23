@@ -463,3 +463,86 @@ TEST(TestRead, Read2PBDisk) {
         (2LL << 50) / DefaultBlockSize,
         DefaultBlockSize);
 }
+
+void TestLiveResize(
+    uint64_t BlockCount = DefaultBlockCount,
+    uint64_t NewBlockCount = 2 * DefaultBlockCount)
+{
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        BlockCount,
+        DefaultBlockSize,
+        false,
+        false
+    );
+    WnbdDaemon.Start();
+
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
+
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    ASSERT_EQ(BlockCount, WnbdDisk->Properties.BlockCount);
+    ASSERT_EQ(WnbdSetDiskSize(WnbdDisk, NewBlockCount), ERROR_SUCCESS);
+    ASSERT_EQ(NewBlockCount, WnbdDisk->Properties.BlockCount);
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+    ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+        << "couldn't open disk: " << DiskPath
+        << ", error: " << WinStrError(GetLastError());
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    int WriteBufferSize = 4 << 20;
+    std::unique_ptr<void, decltype(&free)> WriteBuffer(
+        malloc(WriteBufferSize), free);
+    ASSERT_TRUE(WriteBuffer.get()) << "couldn't allocate: " << WriteBufferSize;
+    memset(WriteBuffer.get(), WRITE_BYTE_CONTENT, WriteBufferSize);
+    DWORD BytesWritten = 0;
+
+    // Set file pointer past the old disk size.
+    LARGE_INTEGER Offset;
+
+    if (NewBlockCount < BlockCount) {
+        Offset.QuadPart = (BlockCount - 1) * DefaultBlockSize;
+        ASSERT_TRUE(SetFilePointerEx(
+            DiskHandle,
+            Offset,
+            NULL, FILE_BEGIN));
+        // Write passed the end of the disk after shrinking, expecting a failure.
+        ASSERT_FALSE(WriteFile(
+            DiskHandle, WriteBuffer.get(),
+            DefaultBlockSize, &BytesWritten, NULL));
+        ASSERT_EQ(0, BytesWritten);
+    }
+
+    // We should be able to write before the new limit
+    Offset.QuadPart = (NewBlockCount - 1) * DefaultBlockSize;
+    ASSERT_TRUE(SetFilePointerEx(
+        DiskHandle,
+        Offset,
+        NULL, FILE_BEGIN));
+    ASSERT_TRUE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(DefaultBlockSize, BytesWritten);
+}
+
+TEST(TestLiveResize, DoubleDiskSize) {
+    TestLiveResize();
+}
+
+TEST(TestLiveResize, HalfDiskSize) {
+    TestLiveResize(DefaultBlockCount, DefaultBlockCount/2);
+}
