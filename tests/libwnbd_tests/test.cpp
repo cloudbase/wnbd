@@ -546,3 +546,95 @@ TEST(TestLiveResize, DoubleDiskSize) {
 TEST(TestLiveResize, HalfDiskSize) {
     TestLiveResize(DefaultBlockCount, DefaultBlockCount/2);
 }
+
+void TestNaaIdentifier() {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false,
+        false,
+        true
+    );
+    WnbdDaemon.Start();
+
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
+
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    ASSERT_EQ(WnbdDisk->Properties.Flags.NaaIdSpecified, 1);
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        NULL,
+        NULL);
+
+    ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
+        << "couldn't open wnbd disk: " << InstanceName
+        << ", error: " << WinStrError(GetLastError());
+        
+
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    const int DeviceIdDescriptorSize = sizeof(STORAGE_DEVICE_ID_DESCRIPTOR)
+                                       + sizeof(STORAGE_IDENTIFIER) + 16;
+    std::unique_ptr<STORAGE_DEVICE_ID_DESCRIPTOR> DeviceIdDescriptor(
+        (PSTORAGE_DEVICE_ID_DESCRIPTOR) new BYTE[DeviceIdDescriptorSize]);
+
+    STORAGE_PROPERTY_QUERY property_query = { 0 };
+    property_query.PropertyId = StorageDeviceIdProperty;
+    property_query.QueryType = PropertyStandardQuery;
+
+    DWORD BytesReturned = 0;
+
+    BOOL Succeeded = DeviceIoControl(
+        DiskHandle,
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        (LPVOID)&property_query,
+        sizeof(STORAGE_PROPERTY_QUERY),
+        (LPVOID)DeviceIdDescriptor.get(),
+        DeviceIdDescriptorSize,
+        &BytesReturned,
+        NULL
+    );
+
+    ASSERT_NE(Succeeded, 0) << "DeviceIoControlFailed: "
+                            << GetLastError() << std::endl;
+    ASSERT_NE(BytesReturned, 0);
+
+    PSTORAGE_IDENTIFIER StorageIdentifier =
+        (PSTORAGE_IDENTIFIER)&DeviceIdDescriptor->Identifiers[0];
+
+    ASSERT_EQ(StorageIdentifier->CodeSet, StorageIdCodeSetBinary);
+    ASSERT_EQ(StorageIdentifier->Type, StorageIdTypeFCPHName);
+    ASSERT_EQ(StorageIdentifier->Association, StorageIdAssocDevice);
+
+    ASSERT_EQ(
+        sizeof(WnbdDisk->Properties.NaaIdentifier.data),
+        (unsigned int)StorageIdentifier->IdentifierSize
+    );
+    ASSERT_EQ(memcmp(WnbdDisk->Properties.NaaIdentifier.data,
+                     StorageIdentifier->Identifier,
+                     sizeof(WnbdDisk->Properties.NaaIdentifier.data)), 0)
+        << "VPD 83h identifiers don't match: [ 0x"
+        << ByteArrayToHex(WnbdDisk->Properties.NaaIdentifier.data, 16)
+        << " ] vs [ 0x" 
+        << ByteArrayToHex(StorageIdentifier->Identifier,
+            (int)StorageIdentifier->IdentifierSize)
+        << " ]" << std::endl;
+}
+
+TEST(TestNaaIdentifier, TestSetNaaId) {
+    TestNaaIdentifier();
+}

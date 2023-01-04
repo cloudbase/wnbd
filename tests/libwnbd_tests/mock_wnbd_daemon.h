@@ -29,17 +29,19 @@ private:
     uint32_t BlockSize;
     bool ReadOnly;
     bool CacheEnabled;
+    bool UseCustomNaaIdentifier;
 
 public:
     MockWnbdDaemon(
             std::string _InstanceName,
             uint64_t _BlockCount, uint32_t _BlockSize,
-            bool _ReadOnly, bool _CacheEnabled)
+            bool _ReadOnly, bool _CacheEnabled, bool _UseCustomNaaIdentifier = false)
         : InstanceName(_InstanceName)
         , BlockCount(_BlockCount)
         , BlockSize(_BlockSize)
         , ReadOnly(_ReadOnly)
         , CacheEnabled(_CacheEnabled)
+        , UseCustomNaaIdentifier(_UseCustomNaaIdentifier)
     {
     };
     ~MockWnbdDaemon();
@@ -108,7 +110,5 @@ private:
         UINT32 DataBufferSize
     );
 public:
-    PWNBD_DISK GetDisk() {
-        return WnbdDisk;
-    }
+    PWNBD_DISK GetDisk();
 };
