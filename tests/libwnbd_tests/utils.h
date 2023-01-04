@@ -27,3 +27,7 @@ void SetDiskWritable(HANDLE DiskHandle);
 // missing.
 // Raises a runtime error upon failure.
 std::string GetEnv(std::string Name);
+
+// Returns a string containing the hex values of the byte array
+// received as parameter.
+std::string ByteArrayToHex(BYTE* arr, int length);

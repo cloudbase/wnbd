@@ -42,6 +42,13 @@ void MockWnbdDaemon::Start()
         WnbdProps.Flags.FlushSupported = 1;
     }
 
+    if (UseCustomNaaIdentifier) {
+        WnbdProps.Flags.NaaIdSpecified = 1;
+        WnbdProps.NaaIdentifier.data[0] = 0x60;
+        for (int i = 1; i < sizeof(WnbdProps.NaaIdentifier.data); i++)
+            WnbdProps.NaaIdentifier.data[i] = (BYTE)rand();
+    }
+
     DWORD err = WnbdCreate(
         &WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
         this, &WnbdDisk);
@@ -250,4 +257,8 @@ void MockWnbdDaemon::SendIoResponse(
 
     ASSERT_FALSE(err) << "unable to send wnbd response, error: "
                       << GetLastError();
+}
+
+PWNBD_DISK MockWnbdDaemon::GetDisk() {
+    return WnbdDisk;
 }
