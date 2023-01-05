@@ -638,3 +638,88 @@ void TestNaaIdentifier() {
 TEST(TestNaaIdentifier, TestSetNaaId) {
     TestNaaIdentifier();
 }
+
+void TestDeviceSerial() {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false,
+        false,
+        false,
+        true
+    );
+    WnbdDaemon.Start();
+
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
+
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        NULL,
+        NULL);
+
+    ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
+        << "couldn't open wnbd disk: " << InstanceName
+        << ", error: " << WinStrError(GetLastError());
+
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    STORAGE_PROPERTY_QUERY storagePropertyQuery;
+    ZeroMemory(&storagePropertyQuery, sizeof(STORAGE_PROPERTY_QUERY));
+    storagePropertyQuery.PropertyId = StorageDeviceProperty;
+    storagePropertyQuery.QueryType = PropertyStandardQuery;
+
+    STORAGE_DESCRIPTOR_HEADER storageDescriptorHeader = { 0 };
+    DWORD dwBytesReturned = 0;
+    ASSERT_NE(DeviceIoControl(
+        DiskHandle,
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        &storagePropertyQuery,
+        sizeof(STORAGE_PROPERTY_QUERY),
+        &storageDescriptorHeader,
+        sizeof(STORAGE_DESCRIPTOR_HEADER),
+        &dwBytesReturned,
+        NULL), 0);
+
+    const DWORD dwOutBufferSize = storageDescriptorHeader.Size;
+    std::unique_ptr<BYTE> pOutBuffer(new BYTE[dwOutBufferSize]);
+    ZeroMemory(pOutBuffer.get(), dwOutBufferSize);
+
+    ASSERT_NE(DeviceIoControl(
+        DiskHandle,
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        &storagePropertyQuery,
+        sizeof(STORAGE_PROPERTY_QUERY),
+        pOutBuffer.get(),
+        dwOutBufferSize,
+        &dwBytesReturned,
+        NULL), 0);
+
+    STORAGE_DEVICE_DESCRIPTOR* pDeviceDescriptor =
+        (STORAGE_DEVICE_DESCRIPTOR*)pOutBuffer.get();
+    const DWORD dwSerialNumberOffset = pDeviceDescriptor->SerialNumberOffset;
+    char* strSerialNumber;
+
+    if (dwSerialNumberOffset != 0) {
+        strSerialNumber = (char*)(pOutBuffer.get() + dwSerialNumberOffset);
+    }
+
+    ASSERT_STREQ(strSerialNumber, WnbdDisk->Properties.SerialNumber);
+}
+
+TEST(TestDeviceSerial, TestSetDeviceSerial) {
+    TestDeviceSerial();
+}

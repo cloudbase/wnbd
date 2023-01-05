@@ -30,18 +30,22 @@ private:
     bool ReadOnly;
     bool CacheEnabled;
     bool UseCustomNaaIdentifier;
+    bool UseCustomDeviceSerial;
 
 public:
     MockWnbdDaemon(
             std::string _InstanceName,
             uint64_t _BlockCount, uint32_t _BlockSize,
-            bool _ReadOnly, bool _CacheEnabled, bool _UseCustomNaaIdentifier = false)
+            bool _ReadOnly, bool _CacheEnabled,
+            bool _UseCustomNaaIdentifier = false,
+            bool _UseCustomDeviceSerial = false)
         : InstanceName(_InstanceName)
         , BlockCount(_BlockCount)
         , BlockSize(_BlockSize)
         , ReadOnly(_ReadOnly)
         , CacheEnabled(_CacheEnabled)
         , UseCustomNaaIdentifier(_UseCustomNaaIdentifier)
+        , UseCustomDeviceSerial(_UseCustomDeviceSerial)
     {
     };
     ~MockWnbdDaemon();
