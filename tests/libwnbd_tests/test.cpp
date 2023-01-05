@@ -280,6 +280,60 @@ void TestWrite(
     ASSERT_EQ(CacheEnabled, WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
 }
 
+void TestWriteReadOnly() {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        true, // non-writable
+        true
+    );
+    WnbdDaemon.Start();
+
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+    
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+    ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+        << "couldn't open disk: " << DiskPath
+        << ", error: " << WinStrError(GetLastError());
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    int WriteBufferSize = 4 << 20;
+    std::unique_ptr<void, decltype(&free)> WriteBuffer(
+        malloc(WriteBufferSize), free);
+    ASSERT_TRUE(WriteBuffer.get()) << "couldn't allocate: " << WriteBufferSize;
+    memset(WriteBuffer.get(), WRITE_BYTE_CONTENT, WriteBufferSize);
+
+    WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
+    ExpWnbdRequest.RequestType = WnbdReqTypeWrite;
+    ExpWnbdRequest.Cmd.Write.BlockAddress = 0;
+    ExpWnbdRequest.Cmd.Write.BlockCount = 1;
+    // We expect to be the first ones writing to this disk.
+    ASSERT_FALSE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
+
+    DWORD BytesWritten = 0;
+
+    // Expect failure since disk is read-only
+    ASSERT_FALSE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(0, BytesWritten);
+}
+
 TEST(TestWrite, CacheEnabled) {
     TestWrite();
 }
@@ -313,6 +367,10 @@ TEST(TestWrite, FUACacheEnabled) {
     TestWrite(
         DefaultBlockCount, DefaultBlockSize,
         true, true);
+}
+
+TEST(TestWrite, WriteReadOnly) {
+    TestWriteReadOnly();
 }
 
 void TestRead(
