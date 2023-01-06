@@ -183,7 +183,7 @@ std::string ByteArrayToHex(BYTE* arr, int length) {
     std::stringstream ss;
 
     for (int i = 0; i < length; i++)
-        ss << std::hex << (int) arr[i];
+        ss << std::hex << (int) arr[i] << " ";
 
     return ss.str();
 }

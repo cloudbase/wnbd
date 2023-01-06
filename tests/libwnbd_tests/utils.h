@@ -10,6 +10,24 @@
 
 #include <wnbd.h>
 
+#define EVENTUALLY(expression, retry_attempts, retry_interval_ms)   \
+{                                                                   \
+    static_assert(retry_attempts > 0);                              \
+    static_assert(retry_interval_ms > 0);                           \
+    int _retry_attempts = retry_attempts;                           \
+    bool ok = false;                                                \
+    while (_retry_attempts--) {                                     \
+        if (expression) {                                           \
+            ok = true;                                              \
+        }                                                           \
+        else {                                                      \
+            Sleep(retry_interval_ms);                               \
+        }                                                           \
+    }                                                               \
+    if (!ok)                                                        \
+        GTEST_FATAL_FAILURE_("Expression mismatch: "#expression);   \
+}
+
 // Converts a Windows error code to a string, including the error
 // description.
 std::string WinStrError(DWORD Err);

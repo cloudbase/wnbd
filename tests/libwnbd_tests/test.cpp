@@ -781,3 +781,145 @@ void TestDeviceSerial() {
 TEST(TestDeviceSerial, TestSetDeviceSerial) {
     TestDeviceSerial();
 }
+
+void TestIoStats() {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false, // writable
+        true
+    );
+    WnbdDaemon.Start();
+
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
+
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+
+    WNBD_USR_STATS UserspaceStats = { 0 };
+    WNBD_DRV_STATS DriverStats = { 0 };
+
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+
+    // No requests have been sent, write counters should be 0
+    ASSERT_EQ(UserspaceStats.TotalWrittenBlocks, 0);
+    ASSERT_EQ(UserspaceStats.WriteErrors, 0);
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_WRITE | GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+    ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+        << "couldn't open disk: " << DiskPath
+        << ", error: " << WinStrError(GetLastError());
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    int WriteBufferSize = 4 << 20;
+    std::unique_ptr<void, decltype(&free)> WriteBuffer(
+        malloc(WriteBufferSize), free);
+    ASSERT_TRUE(WriteBuffer.get()) << "couldn't allocate: " << WriteBufferSize;
+    memset(WriteBuffer.get(), WRITE_BYTE_CONTENT, WriteBufferSize);
+
+    int ReadBufferSize = 4 << 20;
+    std::unique_ptr<void, decltype(&free)> ReadBuffer(
+        malloc(ReadBufferSize), free);
+    ASSERT_TRUE(ReadBuffer.get()) << "couldn't allocate: " << ReadBufferSize;
+
+    DWORD BytesRead = 0;
+
+    WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
+    ExpWnbdRequest.RequestType = WnbdReqTypeWrite;
+    ExpWnbdRequest.Cmd.Write.BlockAddress = 0;
+    ExpWnbdRequest.Cmd.Write.BlockCount = 1;
+    // We expect to be the first ones writing to this disk.
+    ASSERT_FALSE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
+
+    DWORD BytesWritten = 0;
+    ASSERT_TRUE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(DefaultBlockSize, BytesWritten);
+    ASSERT_TRUE(FlushFileBuffers(DiskHandle));
+
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+    EVENTUALLY(UserspaceStats.TotalWrittenBlocks >= 1, 20, 100);
+    EVENTUALLY(UserspaceStats.WriteErrors >= 0, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 1, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 1, 20, 100);
+
+    // Clear read buffer
+    memset(ReadBuffer.get(), 0, ReadBufferSize);
+    // 1 block
+    ASSERT_TRUE(ReadFile(
+        DiskHandle, ReadBuffer.get(),
+        DefaultBlockSize, &BytesRead, NULL)) << "Read failed: "
+                                             << GetLastError() << std::endl;
+    ASSERT_EQ(DefaultBlockSize, BytesRead);
+
+    EVENTUALLY(UserspaceStats.TotalReadBlocks >= 1, 20, 100);
+    EVENTUALLY(UserspaceStats.TotalRWRequests >= 2, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 2, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 2, 20, 100);
+
+    // Write one block past the end of the disk.
+    LARGE_INTEGER Offset;
+    Offset.QuadPart = (DefaultBlockCount) * DefaultBlockSize;
+    ASSERT_TRUE(SetFilePointerEx(
+        DiskHandle,
+        Offset,
+        NULL, FILE_BEGIN));
+    ASSERT_FALSE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(0, BytesWritten);
+
+    BytesWritten = 0;
+    // Write passed the end of the disk, expecting a failure.
+    ASSERT_FALSE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(0, BytesWritten);
+
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+    EVENTUALLY(UserspaceStats.WriteErrors >= 1, 20, 100);
+    EVENTUALLY(UserspaceStats.TotalRWRequests >= 3, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 3, 20, 100);
+    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 3, 20, 100);
+
+    ASSERT_EQ(UserspaceStats.InvalidRequests, 0);
+
+    // Move file pointer back to the beggining of the disk
+    Offset.QuadPart = 0;
+    ASSERT_TRUE(SetFilePointerEx(
+        DiskHandle,
+        Offset,
+        NULL, FILE_BEGIN));
+    ASSERT_TRUE(WriteFile(
+        DiskHandle, WriteBuffer.get(),
+        DefaultBlockSize, &BytesWritten, NULL));
+    ASSERT_EQ(DefaultBlockSize, BytesWritten);
+
+    WnbdDisk->Properties.Flags.FlushSupported = 0;
+    ASSERT_FALSE(FlushFileBuffers(DiskHandle));
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+
+    EVENTUALLY(UserspaceStats.InvalidRequests >= 1, 150, 100);
+}
+
+TEST(TestIoStats, TestIoStats) {
+    TestIoStats();
+}
