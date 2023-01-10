@@ -189,12 +189,11 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     KeEnterCriticalRegion();
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
     RemoveEntryList(&Device->ListEntry);
+    RtlClearBits(&ScsiBitMapHeader,
+                 Device->Target + (Device->Bus * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
     StorPortNotification(BusChangeDetected, DeviceExtension, 0);
-
-    RtlClearBits(&ScsiBitMapHeader,
-                 Device->Target + (Device->Bus * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
     InterlockedDecrement(&DeviceExtension->DeviceCount);
 
     if (Device->InquiryData) {
@@ -278,6 +277,8 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     NTSTATUS Status = STATUS_SUCCESS;
     INT Sock = -1;
     PINQUIRYDATA InquiryData = NULL;
+    ULONG ScsiBitNumber = 0xFFFFFFFF;
+    KIRQL Irql = { 0 };
 
     KeEnterCriticalRegion();
     BOOLEAN RPAcquired = ExAcquireRundownProtection(&DeviceExtension->RundownProtection);
@@ -320,16 +321,19 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     WnbdSetInquiryData(InquiryData);
     Device->InquiryData = InquiryData;
 
-    ULONG bitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
-    if (0xFFFFFFFF == bitNumber) {
-        Status = STATUS_INVALID_FIELD_IN_PARAMETER_LIST;
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    ScsiBitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+    if (0xFFFFFFFF == ScsiBitNumber) {
+        WNBD_LOG_ERROR("No more SCSI addesses available.");
+        Status = STATUS_TOO_MANY_ADDRESSES;
         goto Exit;
     }
 
     static UINT64 ConnectionId = 1;
 
-    Device->Bus = (USHORT)(bitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
-    Device->Target = bitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
+    Device->Bus = (USHORT)(ScsiBitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
+    Device->Target = ScsiBitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
     Device->Lun = 0;
     Device->DiskNumber = -1;
     Device->ConnectionId = (UINT64)InterlockedIncrement64(&(LONG64)ConnectionId);
@@ -433,6 +437,12 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     return Status;
 
 Exit:
+    if (ScsiBitNumber != 0xFFFFFFFF) {
+        KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+        RtlClearBits(&ScsiBitMapHeader, ScsiBitNumber, 1);
+        KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+    }
+
     if (Status && RPAcquired) {
         KeEnterCriticalRegion();
         ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
