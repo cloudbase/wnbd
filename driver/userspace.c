@@ -26,12 +26,20 @@
 #define CHECK_O_LOCATION_SZ(Io, Size) (Io->Parameters.DeviceIoControl.OutputBufferLength < Size)
 #define Malloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, (S), 'DBNu')
 
+// Ensure that the WNBD limits do not exceed the ones defined by storport.h.
+static_assert(MAX_NUMBER_OF_SCSI_BUSES <= SCSI_MAXIMUM_BUSES_PER_ADAPTER,
+    "invalid maximum number of buses");
+static_assert(MAX_NUMBER_OF_SCSI_TARGETS <= SCSI_MAXIMUM_TARGETS_PER_BUS,
+    "invalid number of targets per bus");
+static_assert(MAX_NUMBER_OF_SCSI_LOGICAL_UNITS <= SCSI_MAXIMUM_LUNS_PER_TARGET,
+    "invalid number of luns per target");
+
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
-ULONG AssignedScsiIds[((SCSI_MAXIMUM_TARGETS_PER_BUS / 8) / sizeof(ULONG)) * MAX_NUMBER_OF_SCSI_TARGETS];
+ULONG AssignedScsiIds[MAX_NUMBER_OF_DISKS / 8 / sizeof(ULONG)];
 VOID WnbdInitScsiIds()
 {
     RtlZeroMemory(AssignedScsiIds, sizeof(AssignedScsiIds));
-    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, SCSI_MAXIMUM_TARGETS_PER_BUS * MAX_NUMBER_OF_SCSI_TARGETS);
+    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, MAX_NUMBER_OF_DISKS);
 }
 
 VOID
@@ -190,10 +198,15 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
     RemoveEntryList(&Device->ListEntry);
     RtlClearBits(&ScsiBitMapHeader,
-                 Device->Target + (Device->Bus * SCSI_MAXIMUM_TARGETS_PER_BUS), 1);
+                 Device->Lun +
+                 Device->Target * MAX_NUMBER_OF_SCSI_LOGICAL_UNITS +
+                 Device->Bus *
+                    MAX_NUMBER_OF_SCSI_LOGICAL_UNITS *
+                    MAX_NUMBER_OF_SCSI_TARGETS,
+                 1);
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-    StorPortNotification(BusChangeDetected, DeviceExtension, 0);
+    StorPortNotification(BusChangeDetected, DeviceExtension, Device->Bus);
     InterlockedDecrement(&DeviceExtension->DeviceCount);
 
     if (Device->InquiryData) {
@@ -332,9 +345,14 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
 
     static UINT64 ConnectionId = 1;
 
-    Device->Bus = (USHORT)(ScsiBitNumber / MAX_NUMBER_OF_SCSI_TARGETS);
-    Device->Target = ScsiBitNumber % SCSI_MAXIMUM_TARGETS_PER_BUS;
-    Device->Lun = 0;
+    Device->Bus = (USHORT)(
+        ScsiBitNumber /
+        MAX_NUMBER_OF_SCSI_LOGICAL_UNITS /
+        MAX_NUMBER_OF_SCSI_TARGETS);
+    Device->Target = (USHORT)(
+        (ScsiBitNumber / MAX_NUMBER_OF_SCSI_LOGICAL_UNITS) %
+        MAX_NUMBER_OF_SCSI_TARGETS);
+    Device->Lun = ScsiBitNumber % MAX_NUMBER_OF_SCSI_LOGICAL_UNITS;
     Device->DiskNumber = -1;
     Device->ConnectionId = (UINT64)InterlockedIncrement64(&(LONG64)ConnectionId);
     WNBD_LOG_INFO("New device address: bus: %d, target: %d, lun: %d, "
@@ -429,7 +447,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         &DeviceExtension->DeviceListLock);
 
     InterlockedIncrement(&DeviceExtension->DeviceCount);
-    StorPortNotification(BusChangeDetected, DeviceExtension, 0);
+    StorPortNotification(BusChangeDetected, DeviceExtension, Device->Bus);
 
     Device->Connected = TRUE;
     Status = STATUS_SUCCESS;
