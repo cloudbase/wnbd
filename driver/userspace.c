@@ -42,6 +42,20 @@ VOID WnbdInitScsiIds()
     RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, WNBD_MAX_NUMBER_OF_DISKS);
 }
 
+ULONG
+GetNumberOfUsedScsiIds(_In_ PWNBD_EXTENSION DeviceExtension)
+{
+    ASSERT(DeviceExtension);
+    KIRQL Irql = { 0 };
+    ULONG UsedScsiIds = 0;
+
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+    UsedScsiIds = RtlNumberOfSetBits(&ScsiBitMapHeader);
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
+    return UsedScsiIds;
+}
+
 VOID
 WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
 {
@@ -495,6 +509,9 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
 
     WnbdDisconnectSync(Device);
 
+    ULONG UsedScsiIds = GetNumberOfUsedScsiIds(DeviceExtension);
+    WNBD_LOG_INFO("Unmapped disk. Used WNBD SCSI slots: %d.", UsedScsiIds);
+
     return STATUS_SUCCESS;
 }
 
@@ -669,9 +686,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         ExAcquireResourceSharedLite(&DeviceExtension->DeviceCreationLock, TRUE);
         KeLeaveCriticalRegion();
 
-        WNBD_LOG_INFO("Mapping disk. Name: %s, Serial=%s, BC=%llu, BS=%lu, Pid=%d",
+        ULONG UsedScsiIds = GetNumberOfUsedScsiIds(DeviceExtension);
+
+        WNBD_LOG_INFO("Mapping disk. "
+                      "Name: %s, Serial=%s, BC=%llu, BS=%lu, Pid=%d. "
+                      "Used WNBD SCSI slots: %d.",
                       Props.InstanceName, Props.SerialNumber,
-                      Props.BlockCount, Props.BlockSize, Props.Pid);
+                      Props.BlockCount, Props.BlockSize, Props.Pid,
+                      UsedScsiIds);
 
         WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
         Status = WnbdCreateConnection(DeviceExtension, &Props, &ConnectionInfo);
