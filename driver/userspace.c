@@ -27,19 +27,19 @@
 #define Malloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, (S), 'DBNu')
 
 // Ensure that the WNBD limits do not exceed the ones defined by storport.h.
-static_assert(MAX_NUMBER_OF_SCSI_BUSES <= SCSI_MAXIMUM_BUSES_PER_ADAPTER,
+static_assert(WNBD_MAX_BUSES_PER_ADAPTER <= SCSI_MAXIMUM_BUSES_PER_ADAPTER,
     "invalid maximum number of buses");
-static_assert(MAX_NUMBER_OF_SCSI_TARGETS <= SCSI_MAXIMUM_TARGETS_PER_BUS,
+static_assert(WNBD_MAX_TARGETS_PER_BUS <= SCSI_MAXIMUM_TARGETS_PER_BUS,
     "invalid number of targets per bus");
-static_assert(MAX_NUMBER_OF_SCSI_LOGICAL_UNITS <= SCSI_MAXIMUM_LUNS_PER_TARGET,
+static_assert(WNBD_MAX_LUNS_PER_TARGET <= SCSI_MAXIMUM_LUNS_PER_TARGET,
     "invalid number of luns per target");
 
 extern RTL_BITMAP ScsiBitMapHeader = { 0 };
-ULONG AssignedScsiIds[MAX_NUMBER_OF_DISKS / 8 / sizeof(ULONG)];
+ULONG AssignedScsiIds[WNBD_MAX_NUMBER_OF_DISKS / 8 / sizeof(ULONG)];
 VOID WnbdInitScsiIds()
 {
     RtlZeroMemory(AssignedScsiIds, sizeof(AssignedScsiIds));
-    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, MAX_NUMBER_OF_DISKS);
+    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, WNBD_MAX_NUMBER_OF_DISKS);
 }
 
 VOID
@@ -199,10 +199,10 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     RemoveEntryList(&Device->ListEntry);
     RtlClearBits(&ScsiBitMapHeader,
                  Device->Lun +
-                 Device->Target * MAX_NUMBER_OF_SCSI_LOGICAL_UNITS +
+                 Device->Target * WNBD_MAX_LUNS_PER_TARGET +
                  Device->Bus *
-                    MAX_NUMBER_OF_SCSI_LOGICAL_UNITS *
-                    MAX_NUMBER_OF_SCSI_TARGETS,
+                    WNBD_MAX_LUNS_PER_TARGET *
+                    WNBD_MAX_TARGETS_PER_BUS,
                  1);
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
@@ -347,12 +347,12 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
 
     Device->Bus = (USHORT)(
         ScsiBitNumber /
-        MAX_NUMBER_OF_SCSI_LOGICAL_UNITS /
-        MAX_NUMBER_OF_SCSI_TARGETS);
+        WNBD_MAX_LUNS_PER_TARGET /
+        WNBD_MAX_TARGETS_PER_BUS);
     Device->Target = (USHORT)(
-        (ScsiBitNumber / MAX_NUMBER_OF_SCSI_LOGICAL_UNITS) %
-        MAX_NUMBER_OF_SCSI_TARGETS);
-    Device->Lun = ScsiBitNumber % MAX_NUMBER_OF_SCSI_LOGICAL_UNITS;
+        (ScsiBitNumber / WNBD_MAX_LUNS_PER_TARGET) %
+        WNBD_MAX_TARGETS_PER_BUS);
+    Device->Lun = ScsiBitNumber % WNBD_MAX_LUNS_PER_TARGET;
     Device->DiskNumber = -1;
     Device->ConnectionId = (UINT64)InterlockedIncrement64(&(LONG64)ConnectionId);
     WNBD_LOG_INFO("New device address: bus: %d, target: %d, lun: %d, "
