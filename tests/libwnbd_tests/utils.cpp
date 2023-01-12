@@ -8,6 +8,13 @@
 
 #include "utils.h"
 
+std::string GetNewInstanceName()
+{
+    auto TestInstance = ::testing::UnitTest::GetInstance();
+    auto TestName = std::string(TestInstance->current_test_info()->name());
+    return TestName + "-" + std::to_string(rand());
+}
+
 std::string WinStrError(DWORD Err)
 {
     LPSTR Msg = NULL;

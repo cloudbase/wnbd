@@ -28,6 +28,11 @@
         GTEST_FATAL_FAILURE_("Expression mismatch: "#expression);   \
 }
 
+static const uint64_t DefaultBlockCount = 1 << 20;
+static const uint64_t DefaultBlockSize = 512;
+
+std::string GetNewInstanceName();
+
 // Converts a Windows error code to a string, including the error
 // description.
 std::string WinStrError(DWORD Err);
