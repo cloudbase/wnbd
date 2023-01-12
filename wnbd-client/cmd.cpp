@@ -215,6 +215,9 @@ DWORD CmdShow(string InstanceName)
          << setw(25) << "Pid" << " : " <<  ConnInfo.Properties.Pid << endl
          << setw(25) << "DiskNumber" << " : " <<  ConnInfo.DiskNumber << endl
          << setw(25) << "PNPDeviceID" << " : " <<  to_string(wstring(ConnInfo.PNPDeviceID)) << endl
+         << setw(25) << "BusNumber" << " : " <<  ConnInfo.BusNumber << endl
+         << setw(25) << "TargetId" << " : " <<  ConnInfo.TargetId << endl
+         << setw(25) << "Lun" << " : " <<  ConnInfo.Lun << endl
          << endl;
 
     if (ConnInfo.Properties.Flags.UseNbd) {

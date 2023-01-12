@@ -74,8 +74,12 @@ DWORD WnbdCreate(
         goto Exit;
     }
 
-    LogInfo("Mapped device. Connection id: %llu.",
-            Disk->ConnectionInfo.ConnectionId);
+    LogInfo("Mapped device. Connection id: %llu. "
+            "Bus: %d, target: %d, lun: %d.",
+            Disk->ConnectionInfo.ConnectionId,
+            Disk->ConnectionInfo.BusNumber,
+            Disk->ConnectionInfo.TargetId,
+            Disk->ConnectionInfo.Lun);
 
     *PDisk = Disk;
 
