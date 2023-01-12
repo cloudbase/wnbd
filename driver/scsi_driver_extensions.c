@@ -95,12 +95,12 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     ConfigInfo->MaxNumberOfIO = WNBD_MAX_IN_FLIGHT_REQUESTS;
     ConfigInfo->NumberOfPhysicalBreaks = SP_UNINITIALIZED_VALUE;
     ConfigInfo->AlignmentMask = FILE_BYTE_ALIGNMENT;
-    ConfigInfo->NumberOfBuses = MAX_NUMBER_OF_SCSI_BUSES;
+    ConfigInfo->NumberOfBuses = WNBD_MAX_BUSES_PER_ADAPTER;
     ConfigInfo->ScatterGather = TRUE;
     ConfigInfo->Master = TRUE;
     ConfigInfo->CachesData = TRUE;
-    ConfigInfo->MaximumNumberOfTargets = MAX_NUMBER_OF_SCSI_TARGETS;
-    ConfigInfo->MaximumNumberOfLogicalUnits = MAX_NUMBER_OF_SCSI_LOGICAL_UNITS;
+    ConfigInfo->MaximumNumberOfTargets = WNBD_MAX_TARGETS_PER_BUS;
+    ConfigInfo->MaximumNumberOfLogicalUnits = WNBD_MAX_LUNS_PER_TARGET;
     ConfigInfo->WmiDataProvider = FALSE;
     ConfigInfo->SynchronizationModel = StorSynchronizeFullDuplex;
     ConfigInfo->VirtualDevice = TRUE;
