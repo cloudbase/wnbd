@@ -76,7 +76,8 @@ void MockWnbdDaemon::Shutdown()
         // We're requesting the disk to be removed but continue serving IO
         // requests until the driver sends us the "Disconnect" event.
         DWORD Ret = WnbdRemove(WnbdDisk, NULL);
-        ASSERT_FALSE(Ret) << "couldn't stop the wnbd dispatcher, err: " << Ret;
+        if (Ret && Ret != ERROR_FILE_NOT_FOUND)
+            ASSERT_FALSE(Ret) << "couldn't stop the wnbd dispatcher, err: " << Ret;
         Wait();
         Terminated = true;
     }
@@ -265,4 +266,8 @@ void MockWnbdDaemon::SendIoResponse(
 
 PWNBD_DISK MockWnbdDaemon::GetDisk() {
     return WnbdDisk;
+}
+
+void MockWnbdDaemon::TerminatingInProgress() {
+    TerminateInProgress = true;
 }

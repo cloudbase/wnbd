@@ -115,4 +115,6 @@ private:
     );
 public:
     PWNBD_DISK GetDisk();
+
+    void TerminatingInProgress();
 };

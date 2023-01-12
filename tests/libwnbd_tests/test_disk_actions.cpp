@@ -376,3 +376,84 @@ TEST(TestDeviceSerial, TestSetDeviceSerial) {
 
     ASSERT_STREQ(strSerialNumber, WnbdDisk->Properties.SerialNumber);
 }
+
+void TestUnmap(
+    bool FailureExpected = false,
+    int SoftRemoveTimeoutMs = WNBD_DEFAULT_RM_TIMEOUT_MS,
+    int SoftRemoveRetryIntervalMs = WNBD_DEFAULT_RM_RETRY_INTERVAL_MS,
+    bool HardRemove = false,
+    bool HardRemoveFallback = true
+)
+{
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false,
+        false
+    );
+
+    WnbdDaemon.Start();
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+        << "couldn't retrieve WNBD disk info";
+
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    WNBD_REMOVE_OPTIONS RemoveOptions = { 0 };
+    RemoveOptions.Flags.HardRemove = HardRemove;
+    RemoveOptions.Flags.HardRemoveFallback = HardRemoveFallback;
+    RemoveOptions.SoftRemoveTimeoutMs = SoftRemoveTimeoutMs;
+    RemoveOptions.SoftRemoveRetryIntervalMs = SoftRemoveRetryIntervalMs;
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        NULL,
+        NULL);
+    ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+        << "couldn't open disk: " << DiskPath
+        << ", error: " << WinStrError(GetLastError());
+
+    WnbdDaemon.TerminatingInProgress();
+
+    if (FailureExpected) {
+        ASSERT_NE(WnbdRemove(WnbdDisk, &RemoveOptions), 0);
+        CloseHandle(DiskHandle);
+    } else {
+        if (!HardRemove && !HardRemoveFallback) {
+            CloseHandle(DiskHandle);
+        }
+
+        ASSERT_EQ(WnbdRemove(WnbdDisk, &RemoveOptions), 0);
+
+        if (HardRemove || HardRemoveFallback) {
+            CloseHandle(DiskHandle);
+        }
+    }
+}
+
+TEST(TestUnmap, TestSoftUnmap) {
+    TestUnmap(false, 0, 0, false, false);
+}
+
+TEST(TestUnmap, TestSoftUnmapTimeout) {
+    // Expect to fail due to time-out
+    TestUnmap(true, 1, 1, false, false);
+}
+
+TEST(TestUnmap, TestHardUnmapFallback) {
+    // Make soft unmap time-out and fallback to hard unmap
+    TestUnmap(false, 1, 1);
+}
+
+TEST(TestUnmap, TestHardUnmap) {
+    TestUnmap(false, 0, 0, true);
+}
