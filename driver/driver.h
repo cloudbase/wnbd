@@ -10,9 +10,9 @@
 #include "version.h"
 
 // Maximum number of scsi targets per bus
-#define WNBD_MAX_TARGETS_PER_BUS      128
+#define WNBD_MAX_TARGETS_PER_BUS      2
 // Maximum number of luns per target
-#define WNBD_MAX_LUNS_PER_TARGET      1
+#define WNBD_MAX_LUNS_PER_TARGET      255
 // Maximum number of buses per target
 #define WNBD_MAX_BUSES_PER_ADAPTER    1
 // The maximum number of disks per WNBD adapter

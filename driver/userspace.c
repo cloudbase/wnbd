@@ -34,12 +34,11 @@ static_assert(WNBD_MAX_TARGETS_PER_BUS <= SCSI_MAXIMUM_TARGETS_PER_BUS,
 static_assert(WNBD_MAX_LUNS_PER_TARGET <= SCSI_MAXIMUM_LUNS_PER_TARGET,
     "invalid number of luns per target");
 
-extern RTL_BITMAP ScsiBitMapHeader = { 0 };
 ULONG AssignedScsiIds[WNBD_MAX_NUMBER_OF_DISKS / 8 / sizeof(ULONG)];
-VOID WnbdInitScsiIds()
+VOID WnbdInitScsiIds(_In_ PRTL_BITMAP ScsiBitMapHeader)
 {
     RtlZeroMemory(AssignedScsiIds, sizeof(AssignedScsiIds));
-    RtlInitializeBitMap(&ScsiBitMapHeader, AssignedScsiIds, WNBD_MAX_NUMBER_OF_DISKS);
+    RtlInitializeBitMap(ScsiBitMapHeader, AssignedScsiIds, WNBD_MAX_NUMBER_OF_DISKS);
 }
 
 ULONG
@@ -50,7 +49,7 @@ GetNumberOfUsedScsiIds(_In_ PWNBD_EXTENSION DeviceExtension)
     ULONG UsedScsiIds = 0;
 
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    UsedScsiIds = RtlNumberOfSetBits(&ScsiBitMapHeader);
+    UsedScsiIds = RtlNumberOfSetBits(&DeviceExtension->ScsiBitMapHeader);
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
     return UsedScsiIds;
@@ -211,7 +210,7 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     KeEnterCriticalRegion();
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
     RemoveEntryList(&Device->ListEntry);
-    RtlClearBits(&ScsiBitMapHeader,
+    RtlClearBits(&DeviceExtension->ScsiBitMapHeader,
                  Device->Lun +
                  Device->Target * WNBD_MAX_LUNS_PER_TARGET +
                  Device->Bus *
@@ -350,7 +349,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->InquiryData = InquiryData;
 
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-    ScsiBitNumber = RtlFindClearBitsAndSet(&ScsiBitMapHeader, 1, 0);
+    ScsiBitNumber = RtlFindClearBitsAndSet(&DeviceExtension->ScsiBitMapHeader, 1, 0);
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
     if (0xFFFFFFFF == ScsiBitNumber) {
         WNBD_LOG_ERROR("No more SCSI addesses available.");
@@ -475,7 +474,7 @@ Exit:
 
         if (ScsiBitNumber != 0xFFFFFFFF) {
             KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-            RtlClearBits(&ScsiBitMapHeader, ScsiBitNumber, 1);
+            RtlClearBits(&DeviceExtension->ScsiBitMapHeader, ScsiBitNumber, 1);
             KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
         }
 
@@ -484,9 +483,11 @@ Exit:
             ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
             KeLeaveCriticalRegion();
         }
+
         if (InquiryData) {
             ExFreePool(InquiryData);
         }
+
         if (-1 != Sock) {
             WNBD_LOG_INFO("Closing socket FD: %d", Sock);
             Close(Sock);

@@ -548,9 +548,16 @@ Exit:
 }
 
 UCHAR
-WnbdReportLuns(_In_ PSCSI_REQUEST_BLOCK Srb) {
+WnbdReportLuns(
+    _In_ PWNBD_DISK_DEVICE Device,
+    _In_ PWNBD_EXTENSION DeviceExtension,
+    _In_ PSCSI_REQUEST_BLOCK Srb)
+{
+    WNBD_LOG_DEBUG(": Enter");
+    ASSERT(DeviceExtension);
     ASSERT(Srb);
 
+    UCHAR SrbStatus = SRB_STATUS_SUCCESS;
     PVOID DataBuffer = SrbGetDataBuffer(Srb);
     ULONG DataTransferLength = SrbGetDataTransferLength(Srb);
 
@@ -558,15 +565,65 @@ WnbdReportLuns(_In_ PSCSI_REQUEST_BLOCK Srb) {
         return SRB_STATUS_INTERNAL_ERROR;
     }
 
-    // the LUN address is expected to be zero
     RtlZeroMemory(DataBuffer, DataTransferLength);
+    PLUN_LIST LunList = (PLUN_LIST) DataBuffer;
 
-    PLUN_LIST LunList;
-    LunList = DataBuffer;
-    LunList->LunListLength[3] = 8;
+    KIRQL Irql = { 0 };
+    KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
 
-    SrbSetDataTransferLength(Srb, sizeof(LUN_LIST) + 8);
-    return SRB_STATUS_SUCCESS;
+    ULONG LunCount = 0;
+    ULONG LunListLength = 0;
+    ULONG BitmapStart = Device->Bus * WNBD_MAX_TARGETS_PER_BUS * WNBD_MAX_LUNS_PER_TARGET + Device->Target * WNBD_MAX_LUNS_PER_TARGET;
+    ULONG HintIndex = BitmapStart;
+    ULONG BitmapEnd = BitmapStart + WNBD_MAX_LUNS_PER_TARGET;
+
+    if (DataTransferLength < sizeof(LUN_LIST)) {
+        WNBD_LOG_ERROR("Buffer of size %d insufficient to store "
+            "LUN list of size: %d", DataTransferLength, sizeof(LUN_LIST));
+        KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
+        return SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+    }
+    DataTransferLength -= sizeof(LUN_LIST);
+
+    while (BitmapStart != 0xFFFFFFFF && BitmapStart < BitmapEnd) {
+        BitmapStart = RtlFindSetBits(
+            &DeviceExtension->ScsiBitMapHeader,
+            1,
+            HintIndex);
+        if (BitmapStart < HintIndex) {
+            break;
+        }
+        HintIndex = BitmapStart + 1;
+        WNBD_LOG_DEBUG("Bitmap start: %d ; Bitmap end: %d ; Data transfer length: %d", (int)BitmapStart, (int)BitmapEnd, (int)DataTransferLength);
+
+        if (BitmapStart != 0xFFFFFFFF && BitmapStart < BitmapEnd) {
+            if (DataTransferLength < 8) {
+                // TODO: Remove unneccessary comments
+                WNBD_LOG_DEBUG("Lun: %d was found but data transfer length is insufficient for storing it: %d", (int)BitmapStart, (int)DataTransferLength);
+                KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
+                return SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+            }
+            LunList->Lun[LunCount][0] = (UCHAR)(
+                            BitmapStart /
+                            WNBD_MAX_LUNS_PER_TARGET /
+                            WNBD_MAX_TARGETS_PER_BUS);
+            LunList->Lun[LunCount][1] = (UCHAR)BitmapStart % WNBD_MAX_LUNS_PER_TARGET;
+            WNBD_LOG_DEBUG("Added lun ID %d to lun list", (int) BitmapStart % WNBD_MAX_LUNS_PER_TARGET);
+            LunCount++;
+            DataTransferLength -= 8;
+        }
+    }
+    KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+
+    LunListLength = 8 * LunCount;
+
+    REVERSE_BYTES_4(&LunList->LunListLength, &LunListLength);
+
+    SrbSetDataTransferLength(Srb, sizeof(LUN_LIST) + LunListLength);
+
+    return SrbStatus;
 }
 
 NTSTATUS
@@ -801,7 +858,7 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
         Srb->SrbStatus = SRB_STATUS_SUCCESS;
         break;
     case SCSIOP_REPORT_LUNS:
-        Srb->SrbStatus = WnbdReportLuns(Srb);
+        Srb->SrbStatus = WnbdReportLuns(Device, DeviceExtension, Srb);
         break;
     default:
         WNBD_LOG_INFO("Received unsupported SCSI command: 0x%x", Cdb->AsByte[0]);

@@ -24,6 +24,7 @@ typedef struct _WNBD_EXTENSION {
 
     EX_RUNDOWN_REF                    RundownProtection;
     KEVENT                            GlobalDeviceRemovalEvent;
+    RTL_BITMAP                        ScsiBitMapHeader;
 } WNBD_EXTENSION, *PWNBD_EXTENSION;
 
 typedef struct _WNBD_DISK_DEVICE

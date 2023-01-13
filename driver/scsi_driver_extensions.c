@@ -132,7 +132,7 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
         goto CleanLock;
     }
 
-    WnbdInitScsiIds();
+    WnbdInitScsiIds(&Ext->ScsiBitMapHeader);
 
     if (!NT_SUCCESS(Status)) {
         goto Exit;
