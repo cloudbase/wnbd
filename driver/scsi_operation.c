@@ -530,7 +530,7 @@ WnbdModeSense(_In_ PWNBD_DISK_DEVICE Device,
         !!Device->Properties.Flags.FUASupported,
         &Page, &Length);
     if (SRB_STATUS_SUCCESS != SrbStatus || NULL == Page) {
-        WNBD_LOG_INFO("Could not set mode sense. Status: %d", SrbStatus);
+        WNBD_LOG_DEBUG("Could not set mode sense. Status: %d", SrbStatus);
         goto Exit;
     }
 
