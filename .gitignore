@@ -31,7 +31,7 @@ Module.symvers
 TAGS
 cscope.*
 tags
-*/.vs
+**/.vs
 */x64/
 /vstudio/SDV-default.xml
 /vstudio/runsdvui.cmd
