@@ -306,6 +306,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     PINQUIRYDATA InquiryData = NULL;
     ULONG ScsiBitNumber = 0xFFFFFFFF;
     KIRQL Irql = { 0 };
+    PWNBD_DISK_DEVICE Device = NULL;
 
     KeEnterCriticalRegion();
     BOOLEAN RPAcquired = ExAcquireRundownProtection(&DeviceExtension->RundownProtection);
@@ -330,11 +331,12 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         goto Exit;
     }
 
-    PWNBD_DISK_DEVICE Device = (PWNBD_DISK_DEVICE) Malloc(sizeof(WNBD_DISK_DEVICE));
+    Device = (PWNBD_DISK_DEVICE)Malloc(sizeof(WNBD_DISK_DEVICE));
     if (!Device) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
+
     RtlZeroMemory(Device, sizeof(WNBD_DISK_DEVICE));
     RtlCopyMemory(&Device->Properties, Properties, sizeof(WNBD_PROPERTIES));
 
@@ -469,24 +471,28 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     return Status;
 
 Exit:
-    if (ScsiBitNumber != 0xFFFFFFFF) {
-        KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
-        RtlClearBits(&ScsiBitMapHeader, ScsiBitNumber, 1);
-        KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
-    }
+    if (Device && !Device->DeviceMonitorThread) {
+        ExFreePool(Device);
 
-    if (Status && RPAcquired) {
-        KeEnterCriticalRegion();
-        ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
-        KeLeaveCriticalRegion();
-    }
-    if (InquiryData) {
-        ExFreePool(InquiryData);
-    }
-    if (-1 != Sock) {
-        WNBD_LOG_INFO("Closing socket FD: %d", Sock);
-        Close(Sock);
-        Sock = -1;
+        if (ScsiBitNumber != 0xFFFFFFFF) {
+            KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
+            RtlClearBits(&ScsiBitMapHeader, ScsiBitNumber, 1);
+            KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
+        }
+
+        if (Status && RPAcquired) {
+            KeEnterCriticalRegion();
+            ExReleaseRundownProtection(&DeviceExtension->RundownProtection);
+            KeLeaveCriticalRegion();
+        }
+        if (InquiryData) {
+            ExFreePool(InquiryData);
+        }
+        if (-1 != Sock) {
+            WNBD_LOG_INFO("Closing socket FD: %d", Sock);
+            Close(Sock);
+            Sock = -1;
+        }
     }
 
     return Status;
