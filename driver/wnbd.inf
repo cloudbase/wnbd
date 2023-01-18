@@ -18,9 +18,9 @@ DefaultDestDir = 12
 wnbdSVM.ntamd64.Application = 11
 
 [Manufacturer]
-%wnbd%=wnbdSVM, NTamd64
+%wnbd%=wnbdSVM, NTamd64.10.0...17763
 
-[wnbdSVM.NTamd64]
+[wnbdSVM.NTamd64.10.0...17763]
 %WNBDVMDeviceDesc%=wnbdSVM_Device, %rootstr%
 
 [wnbdSVM_Device]
