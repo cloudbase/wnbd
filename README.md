@@ -27,6 +27,12 @@ WNBD provides a low level API (the ``*Ioctl*`` functions), as well as a high lev
 includes the IO dispatching boilerplate. Please check the [public headers](include/) for
 more details.
 
+Requirements
+------------
+
+Windows 10.0.17763 (Windows Server 2019) is the minimum supported version. The WNBD driver
+will refuse to install on older unsupported versions.
+
 Submitting patches
 ------------------
 

@@ -32,6 +32,11 @@ extern "C" {
 #define WNBD_HARDWAREID "root\\wnbd"
 #define WNBD_HARDWAREID_LEN sizeof(WNBD_HARDWAREID)
 
+// Minimum supported Windows version
+#define WNBD_REQ_WIN_VERSION_MAJOR 10
+#define WNBD_REQ_WIN_VERSION_MINOR 0
+#define WNBD_REQ_WIN_VERSION_BUILD 17763
+
 typedef enum
 {
     WnbdLogLevelCritical = 0,
