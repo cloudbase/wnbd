@@ -728,6 +728,10 @@ DWORD InstallDriver(
 
 DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired)
 {
+    if (!EnsureWindowsVersionSupported()) {
+        return ERROR_NOT_SUPPORTED;
+    }
+
     CHAR FullFileName[MAX_PATH];
     DWORD Status = 0, TempStatus = 0;
     BOOL InstallAttempted = FALSE;

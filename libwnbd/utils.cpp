@@ -4,13 +4,19 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
+#include <algorithm>
 #include <locale>
+#include <optional>
 #include <string>
 #include <sstream>
+#include <vector>
 
 #include <windows.h>
 
 #include <boost/locale/encoding_utf.hpp>
+
+#include "wnbd.h"
+#include "wnbd_log.h"
 
 using boost::locale::conv::utf_to_utf;
 
@@ -58,4 +64,77 @@ std::string guid_to_string(GUID guid)
               guid.Data4[4], guid.Data4[5], guid.Data4[6],
               guid.Data4[7]);
     return std::string(str_guid);
+}
+
+std::optional<_OSVERSIONINFOEXW> GetWinVersion()
+{
+    HMODULE Lib;
+    OSVERSIONINFOEXW Version = {};
+    Version.dwOSVersionInfoSize = sizeof(Version);
+
+    typedef DWORD(WINAPI* RtlGetVersion_T) (OSVERSIONINFOEXW*);
+
+    Lib = LoadLibraryW(L"Ntdll.dll");
+    if (!Lib) {
+        LogError("Unable to load Ntdll.dll.");
+        return {};
+    }
+
+    auto RtlGetVersionF = (RtlGetVersion_T) GetProcAddress(
+        Lib, "RtlGetVersion");
+
+    if (RtlGetVersionF) {
+        NTSTATUS Status = RtlGetVersionF(&Version);
+        if (Status) {
+            LogError("Unable to retrieve Windows version. Error: %d", Status);
+        }
+    } else {
+        LogError("Unable to load RtlGetVersion function.");
+    }
+
+    FreeLibrary(Lib);
+    return Version;
+}
+
+bool CheckWindowsVersion(DWORD Major, DWORD Minor, DWORD BuildNumber)
+{
+    auto VersionOpt = GetWinVersion();
+    if (!VersionOpt.has_value()) {
+        LogError("Couldn't retrieve Windows version.");
+        return false;
+    }
+
+    auto Version = VersionOpt.value();
+    std::vector<DWORD> VersionVec{
+        Version.dwMajorVersion, Version.dwMinorVersion, Version.dwBuildNumber};
+    std::vector<DWORD> ExpVersionVec{Major, Minor, BuildNumber};
+
+    bool VersionSatisfied = !std::lexicographical_compare(
+        VersionVec.begin(), VersionVec.end(),
+        ExpVersionVec.begin(), ExpVersionVec.end());
+
+    LogDebug("Windows version %d.%d.%d %s "
+             "minimum required version %d.%d.%d.",
+             Version.dwMajorVersion, Version.dwMinorVersion,
+             Version.dwBuildNumber,
+             VersionSatisfied ? "satisfies" : "doesn't satisfy",
+             Major, Minor, BuildNumber);
+
+    return VersionSatisfied;
+}
+
+bool EnsureWindowsVersionSupported()
+{
+    if (!CheckWindowsVersion(
+            WNBD_REQ_WIN_VERSION_MAJOR,
+            WNBD_REQ_WIN_VERSION_MINOR,
+            WNBD_REQ_WIN_VERSION_BUILD)) {
+        LogError("Unsupported Windows version. "
+                 "Minimum requirement: %d.%d.%d.",
+                 WNBD_REQ_WIN_VERSION_MAJOR,
+                 WNBD_REQ_WIN_VERSION_MINOR,
+                 WNBD_REQ_WIN_VERSION_BUILD);
+        return false;
+    }
+    return true;
 }
