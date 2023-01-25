@@ -53,6 +53,9 @@ void MockWnbdDaemon::Start()
         strcpy(WnbdProps.SerialNumber,(std::to_string(rand()) + "-"
                + std::to_string(rand())).c_str());
 
+    if (EnablePersistentReservations)
+        WnbdProps.Flags.PersistResSupported = 1;
+
     DWORD err = WnbdCreate(
         &WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
         this, &WnbdDisk);
@@ -228,6 +231,85 @@ void MockWnbdDaemon::Unmap(
         sizeof(WNBD_UNMAP_DESCRIPTOR) * Count);
 
     // TODO: validate unmap descriptors
+
+    handler->SendIoResponse(
+        RequestHandle, RequestType,
+        handler->MockStatus, NULL, 0);
+}
+
+void MockWnbdDaemon::PersistentReserveIn(
+    PWNBD_DISK Disk,
+    UINT64 RequestHandle,
+    UINT8 ServiceAction)
+{
+    MockWnbdDaemon* handler = nullptr;
+    ASSERT_FALSE(WnbdGetUserContext(Disk, (PVOID*)&handler));
+
+    WnbdRequestType RequestType = WnbdReqTypePersistResIn;
+    WNBD_IO_REQUEST WnbdReq = { 0 };
+    WnbdReq.RequestType = RequestType;
+    WnbdReq.RequestHandle = RequestHandle;
+    WnbdReq.Cmd.PersistResIn.ServiceAction = ServiceAction;
+
+    handler->ReqLog.AddEntry(WnbdReq);
+
+    switch (ServiceAction)
+    {
+    case RESERVATION_ACTION_READ_KEYS:
+    case RESERVATION_ACTION_READ_RESERVATIONS:
+        break;
+    default:
+        WnbdSetSense(
+            &handler->MockStatus,
+            SCSI_SENSE_ILLEGAL_REQUEST,
+            SCSI_ADSENSE_ILLEGAL_COMMAND);
+        break;
+    }
+
+    handler->SendIoResponse(
+        RequestHandle, RequestType,
+        handler->MockStatus, NULL, 0);
+}
+
+void MockWnbdDaemon::PersistentReserveOut(
+    PWNBD_DISK Disk,
+    UINT64 RequestHandle,
+    UINT8 ServiceAction,
+    UINT8 Scope,
+    UINT8 Type,
+    PVOID Buffer,
+    UINT32 ParameterListLength) 
+{
+    MockWnbdDaemon* handler = nullptr;
+    ASSERT_FALSE(WnbdGetUserContext(Disk, (PVOID*)&handler));
+
+    WnbdRequestType RequestType = WnbdReqTypePersistResOut;
+    WNBD_IO_REQUEST WnbdReq = { 0 };
+    WnbdReq.RequestType = RequestType;
+    WnbdReq.RequestHandle = RequestHandle;
+    WnbdReq.Cmd.PersistResOut.ServiceAction = ServiceAction;
+    WnbdReq.Cmd.PersistResOut.ParameterListLength = ParameterListLength;
+    WnbdReq.Cmd.PersistResOut.Scope = Scope;
+    WnbdReq.Cmd.PersistResOut.Type = Type;
+
+    handler->ReqLog.AddEntry(WnbdReq);
+
+    switch (ServiceAction)
+    {
+    case RESERVATION_ACTION_REGISTER:
+    case RESERVATION_ACTION_REGISTER_IGNORE_EXISTING:
+    case RESERVATION_ACTION_RESERVE:
+    case RESERVATION_ACTION_RELEASE:
+    case RESERVATION_ACTION_CLEAR:
+    case RESERVATION_ACTION_PREEMPT:
+        break;
+    default:
+        WnbdSetSense(
+            &handler->MockStatus,
+            SCSI_SENSE_ILLEGAL_REQUEST,
+            SCSI_ADSENSE_ILLEGAL_COMMAND);
+        break;
+    }
 
     handler->SendIoResponse(
         RequestHandle, RequestType,

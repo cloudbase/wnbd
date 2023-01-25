@@ -31,6 +31,7 @@ private:
     bool CacheEnabled;
     bool UseCustomNaaIdentifier;
     bool UseCustomDeviceSerial;
+    bool EnablePersistentReservations;
 
 public:
     MockWnbdDaemon(
@@ -38,7 +39,8 @@ public:
             uint64_t _BlockCount, uint32_t _BlockSize,
             bool _ReadOnly, bool _CacheEnabled,
             bool _UseCustomNaaIdentifier = false,
-            bool _UseCustomDeviceSerial = false)
+            bool _UseCustomDeviceSerial = false,
+            bool _EnablePersistentReservations = false)
         : InstanceName(_InstanceName)
         , BlockCount(_BlockCount)
         , BlockSize(_BlockSize)
@@ -46,6 +48,7 @@ public:
         , CacheEnabled(_CacheEnabled)
         , UseCustomNaaIdentifier(_UseCustomNaaIdentifier)
         , UseCustomDeviceSerial(_UseCustomDeviceSerial)
+        , EnablePersistentReservations(_EnablePersistentReservations)
     {
     };
     ~MockWnbdDaemon();
@@ -97,6 +100,18 @@ private:
         UINT64 RequestHandle,
         PWNBD_UNMAP_DESCRIPTOR Descriptors,
         UINT32 Count);
+    static void PersistentReserveIn(
+        PWNBD_DISK Disk,
+        UINT64 RequestHandle,
+        UINT8 ServiceAction);
+    static void PersistentReserveOut(
+        PWNBD_DISK Disk,
+        UINT64 RequestHandle,
+        UINT8 ServiceAction,
+        UINT8 Scope,
+        UINT8 Type,
+        PVOID Buffer,
+        UINT32 ParameterListLength);
 
     static constexpr WNBD_INTERFACE MockWnbdInterface =
     {
@@ -104,6 +119,8 @@ private:
         Write,
         Flush,
         Unmap,
+        PersistentReserveIn,
+        PersistentReserveOut
     };
 
     void SendIoResponse(
