@@ -110,7 +110,7 @@ NbdSendInfoRequest(_In_ INT Fd,
 PNBD_HANDSHAKE_RPL
 NbdReadHandshakeReply(_In_ INT Fd)
 {
-    PNBD_HANDSHAKE_RPL Retval = NbdMalloc(
+    PNBD_HANDSHAKE_RPL Retval = NbdMallocZero(
         sizeof(NBD_HANDSHAKE_RPL));
 
     if (!Retval) {
@@ -120,7 +120,6 @@ NbdReadHandshakeReply(_In_ INT Fd)
     }
 
     NTSTATUS error = STATUS_SUCCESS;
-    RtlZeroMemory(Retval, sizeof(NBD_HANDSHAKE_RPL));
     NbdReadExact(Fd, Retval, sizeof(*Retval), &error);
 
     Retval->Magic = RtlUlonglongByteSwap(Retval->Magic);
@@ -136,7 +135,7 @@ NbdReadHandshakeReply(_In_ INT Fd)
     }
     if (Retval->Datasize > 0) {
         INT NewSize = sizeof(NBD_HANDSHAKE_RPL) + Retval->Datasize;
-        PNBD_HANDSHAKE_RPL RetvalTemp = NbdMalloc(NewSize);
+        PNBD_HANDSHAKE_RPL RetvalTemp = NbdMallocZero(NewSize);
         if (!RetvalTemp) {
             WNBD_LOG_ERROR("Insufficient resources. Failed to allocate: %d bytes",
                 NewSize);
@@ -447,7 +446,7 @@ NbdWriteStat(INT Fd,
     UINT Needed = Length + sizeof(NBD_REQUEST);
     if (*PreallocatedLength < Needed) {
         PCHAR Buf = NULL;
-        Buf = NbdMalloc(Needed);
+        Buf = NbdMallocZero(Needed);
         if (NULL == Buf) {
             WNBD_LOG_ERROR("Insufficient resources. Failed to allocate: %ud bytes", Needed);
             Status = STATUS_INSUFFICIENT_RESOURCES;

@@ -24,7 +24,7 @@
 #define CHECK_I_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.InputBufferLength < sizeof(Type))
 #define CHECK_O_LOCATION(Io, Type) (Io->Parameters.DeviceIoControl.OutputBufferLength < sizeof(Type))
 #define CHECK_O_LOCATION_SZ(Io, Size) (Io->Parameters.DeviceIoControl.OutputBufferLength < Size)
-#define Malloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, (S), 'DBNu')
+#define MallocZero(S) ExAllocatePoolZero(NonPagedPoolNx, (S), 'DBNu')
 
 // Ensure that the WNBD limits do not exceed the ones defined by storport.h.
 static_assert(WNBD_MAX_BUSES_PER_ADAPTER <= SCSI_MAXIMUM_BUSES_PER_ADAPTER,
@@ -94,13 +94,13 @@ WnbdInitializeNbdClient(_In_ PWNBD_DISK_DEVICE Device)
     HANDLE request_thread_handle = NULL, reply_thread_handle = NULL;
     NTSTATUS Status = STATUS_SUCCESS;
 
-    Device->ReadPreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
+    Device->ReadPreallocatedBuffer = NbdMallocZero((UINT)WNBD_PREALLOC_BUFF_SZ);
     if (!Device->ReadPreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
     Device->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
-    Device->WritePreallocatedBuffer = NbdMalloc((UINT)WNBD_PREALLOC_BUFF_SZ);
+    Device->WritePreallocatedBuffer = NbdMallocZero((UINT)WNBD_PREALLOC_BUFF_SZ);
     if (!Device->WritePreallocatedBuffer) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
@@ -331,18 +331,17 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         goto Exit;
     }
 
-    Device = (PWNBD_DISK_DEVICE)Malloc(sizeof(WNBD_DISK_DEVICE));
+    Device = (PWNBD_DISK_DEVICE)MallocZero(sizeof(WNBD_DISK_DEVICE));
     if (!Device) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;
     }
 
-    RtlZeroMemory(Device, sizeof(WNBD_DISK_DEVICE));
     RtlCopyMemory(&Device->Properties, Properties, sizeof(WNBD_PROPERTIES));
 
     Device->DeviceExtension = DeviceExtension;
 
-    InquiryData = (PINQUIRYDATA) Malloc(sizeof(INQUIRYDATA));
+    InquiryData = (PINQUIRYDATA) MallocZero(sizeof(INQUIRYDATA));
     if (NULL == InquiryData) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         goto Exit;

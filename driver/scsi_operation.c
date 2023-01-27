@@ -582,7 +582,7 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
     InterlockedIncrement64(&Device->Stats.TotalReceivedIORequests);
     InterlockedIncrement64(&Device->Stats.UnsubmittedIORequests);
 
-    PSRB_QUEUE_ELEMENT Element = (PSRB_QUEUE_ELEMENT)ExAllocatePoolWithTag(NonPagedPoolNx, sizeof(SRB_QUEUE_ELEMENT), 'DBNs');
+    PSRB_QUEUE_ELEMENT Element = (PSRB_QUEUE_ELEMENT)ExAllocatePoolZero(NonPagedPoolNx, sizeof(SRB_QUEUE_ELEMENT), 'DBNs');
     if (NULL == Element) {
         Status = STATUS_INSUFFICIENT_RESOURCES;
         Srb->SrbStatus = SRB_STATUS_ABORTED;
