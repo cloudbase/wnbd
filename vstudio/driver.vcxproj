@@ -93,7 +93,7 @@
       <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WppEnabled>true</WppEnabled>
       <WppPreprocessorDefinitions>WPP_INLINE __inline</WppPreprocessorDefinitions>
-      <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WppTraceFunction>WnbdWppTrace{FLAGS=MYDRIVER_ALL_INFO}(LEVEL,MSG,...)</WppTraceFunction>
       <WppScanConfigurationData>$(KMDF_INC_PATH)$(KMDF_VER_PATH)\WdfTraceEnums.h</WppScanConfigurationData>
     </ClCompile>
@@ -112,7 +112,7 @@
       <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WppEnabled>true</WppEnabled>
       <WppPreprocessorDefinitions>WPP_INLINE __inline</WppPreprocessorDefinitions>
-      <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WppTraceFunction>WnbdWppTrace{FLAGS=MYDRIVER_ALL_INFO}(LEVEL,MSG,...)</WppTraceFunction>
       <WppScanConfigurationData>$(KMDF_INC_PATH)$(KMDF_VER_PATH)\WdfTraceEnums.h</WppScanConfigurationData>
     </ClCompile>
@@ -127,6 +127,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <ClCompile>
       <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>

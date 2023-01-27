@@ -30,6 +30,8 @@ NTSTATUS
 DriverEntry(PDRIVER_OBJECT DriverObject,
             PUNICODE_STRING RegistryPath)
 {
+    ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
+
     /*
      * Register with ETW
      */

@@ -94,7 +94,7 @@ __pragma(pack(pop))
 
 #define NBD_MEMPOOL_TAG      'pDBN'
 #define INIT_PASSWD           "NBDMAGIC"
-#define NbdMalloc(S) ExAllocatePoolWithTag(NonPagedPoolNx, S, NBD_MEMPOOL_TAG)
+#define NbdMallocZero(S) ExAllocatePoolZero(NonPagedPoolNx, S, NBD_MEMPOOL_TAG)
 #define NbdFree(S) ExFreePool(S)
 
 #ifdef __cplusplus

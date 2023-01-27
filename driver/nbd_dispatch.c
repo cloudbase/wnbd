@@ -256,7 +256,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
 
     if(!Reply.Error && IsReadSrb(Element->Srb)) {
         if (Element->DataLength > Device->ReadPreallocatedBufferLength) {
-            TempBuff = NbdMalloc(Element->DataLength);
+            TempBuff = NbdMallocZero(Element->DataLength);
             if (!TempBuff) {
                 Status = STATUS_INSUFFICIENT_RESOURCES;
                 WnbdDisconnectAsync(Device);
