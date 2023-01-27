@@ -6,7 +6,7 @@ FROM mcr.microsoft.com/windows/servercore:$WIN_VER
 
 ADD https://aka.ms/vs/16/release/vs_buildtools.exe C:\TEMP\vs_buildtools.exe
 ADD https://chocolatey.org/install.ps1 C:\TEMP\choco-install.ps1
-ADD https://go.microsoft.com/fwlink/?linkid=2085767 C:\TEMP\wdksetup.exe
+ADD https://go.microsoft.com/fwlink/?linkid=2164149 C:\TEMP\wdksetup.exe
 
 # Let's be explicit about the shell that we're going to use.
 SHELL ["cmd", "/S", "/C"]
@@ -19,7 +19,7 @@ RUN C:\TEMP\vs_buildtools.exe --quiet --wait --norestart --nocache `
     --add Microsoft.VisualStudio.Workload.MSBuildTools `
     --add Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre `
     --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-    --add Microsoft.VisualStudio.Component.Windows10SDK.18362 `
+    --add Microsoft.VisualStudio.Component.Windows10SDK.20348 `
     --add Microsoft.VisualStudio.Component.VC.14.24.x86.x64 `
     --add Microsoft.VisualStudio.Component.VC.14.24.x86.x64.Spectre `
  || IF "%ERRORLEVEL%"=="3010" EXIT 0
