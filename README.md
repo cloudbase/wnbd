@@ -66,7 +66,7 @@ Visual Studio 2019 build tools or GUI
 ([Community version](https://visualstudio.microsoft.com/thank-you-downloading-visual-studio/?sku=Community&rel=16)
 or above)
 
-[Windows Driver Kit 1909](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
+[Windows Driver Kit 2104 (10.0.20348.0)](https://docs.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk)
 
 As an alternative, you may use a [Docker Container](Dockerfile/Readme.md)
 that provides the build prerequisites.
