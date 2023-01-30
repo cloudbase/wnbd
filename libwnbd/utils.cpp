@@ -104,7 +104,7 @@ bool CheckWindowsVersion(DWORD Major, DWORD Minor, DWORD BuildNumber)
         return false;
     }
 
-    auto Version = VersionOpt.value();
+    auto& Version = VersionOpt.value();
     std::vector<DWORD> VersionVec{
         Version.dwMajorVersion, Version.dwMinorVersion, Version.dwBuildNumber};
     std::vector<DWORD> ExpVersionVec{Major, Minor, BuildNumber};

@@ -49,9 +49,11 @@ void MockWnbdDaemon::Start()
             WnbdProps.NaaIdentifier.data[i] = (BYTE)rand();
     }
 
-    if (UseCustomDeviceSerial)
-        strcpy(WnbdProps.SerialNumber,(std::to_string(rand()) + "-"
-               + std::to_string(rand())).c_str());
+    if (UseCustomDeviceSerial) {
+        std::string Serial = std::to_string(rand()) + "-" +
+                             std::to_string(rand());
+        Serial.copy(WnbdProps.SerialNumber, sizeof(WnbdProps.SerialNumber));
+    }
 
     DWORD err = WnbdCreate(
         &WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
