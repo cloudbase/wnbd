@@ -33,6 +33,11 @@ NTSTATUS
 WnbdDeleteConnection(_In_ PWNBD_EXTENSION DeviceExtension,
                      _In_ PCHAR InstanceName);
 
+NTSTATUS
+WnbdSetDiskSize(_In_ PWNBD_EXTENSION DeviceExtension,
+                _In_ WNBD_CONNECTION_ID ConnectionId,
+                _In_ UINT64 BlockCount);
+
 VOID
 WnbdInitScsiIds();
 

@@ -522,11 +522,15 @@ WnbdDeleteConnection(PWNBD_EXTENSION DeviceExtension,
 
 _Use_decl_annotations_
 NTSTATUS
-WnbdSetDiskSize(PWNBD_EXTENSION DeviceExtension, WNBD_CONNECTION_ID ConnectionId, UINT64 BlockCount) {
+WnbdSetDiskSize(PWNBD_EXTENSION DeviceExtension,
+                WNBD_CONNECTION_ID ConnectionId,
+                UINT64 BlockCount)
+{
     ASSERT(DeviceExtension);
     ASSERT(ConnectionId);
 
-    PWNBD_DISK_DEVICE Device = WnbdFindDeviceByConnId(DeviceExtension, ConnectionId, TRUE);
+    PWNBD_DISK_DEVICE Device = WnbdFindDeviceByConnId(
+        DeviceExtension, ConnectionId, TRUE);
 
     if (!Device) {
         WNBD_LOG_ERROR("Could not find the device to resize.");
