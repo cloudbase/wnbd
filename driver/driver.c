@@ -20,9 +20,8 @@ DRIVER_DISPATCH WnbdDispatchPnp;
 PDRIVER_UNLOAD StorPortDriverUnload;
 PDRIVER_DISPATCH StorPortDispatchPnp;
 
-WCHAR  GlobalRegistryPathBuffer[256];
 PWNBD_EXTENSION GlobalExt = NULL;
-extern UNICODE_STRING GlobalRegistryPath = { 0, 0, GlobalRegistryPathBuffer};
+extern HANDLE GlobalDrvRegHandle = NULL;
 extern UINT32 GlobalLogLevel = 0;
 
 _Use_decl_annotations_
@@ -78,13 +77,16 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
     WnbdInitData.AutoRequestSense     = TRUE;
     WnbdInitData.MultipleRequestPerLu = TRUE;
 
-    if (RegistryPath->MaximumLength > 0) {
-        if (RegistryPath->MaximumLength > sizeof(GlobalRegistryPathBuffer)) {
-            return STATUS_INSUFFICIENT_RESOURCES;
-        }
-        GlobalRegistryPath.MaximumLength = RegistryPath->MaximumLength;
-        RtlUnicodeStringCopy(&GlobalRegistryPath, RegistryPath);
-
+    Status = IoOpenDriverRegistryKey(
+        DriverObject,
+        DriverRegKeyPersistentState,
+        GENERIC_READ | GENERIC_WRITE,
+        0,
+        &GlobalDrvRegHandle);
+    if (!NT_SUCCESS(Status)) {
+        WNBD_LOG_ERROR(
+            "Couldn't open driver registry key. Status: 0x%x", Status);
+    } else {
         WnbdReloadPersistentOptions();
     }
 
@@ -302,4 +304,8 @@ WnbdDriverUnload(PDRIVER_OBJECT DriverObject)
      */
     EventUnregisterWNBD();
     WPP_CLEANUP(DriverObject);
+    if (GlobalDrvRegHandle) {
+        ZwClose(GlobalDrvRegHandle);
+        GlobalDrvRegHandle = NULL;
+    }
 }

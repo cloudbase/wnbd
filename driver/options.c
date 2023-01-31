@@ -12,7 +12,7 @@
 #pragma warning(push)
 #pragma warning(disable:4204)
 
-extern UNICODE_STRING GlobalRegistryPath;
+extern HANDLE GlobalDrvRegHandle;
 
 #define WNBD_DEF_OPT(OptName, TypeSuffix, DefaultVal) \
     {.Name = OptName, \
@@ -46,34 +46,6 @@ PWNBD_OPTION WnbdFindOpt(PWCHAR Name)
     return NULL;
 }
 
-_IRQL_requires_(PASSIVE_LEVEL)
-NTSTATUS
-ReadRegistryValue(
-    PWSTR Key,
-    ULONG Type,
-    PVOID Value)
-{
-    ASSERT(Key);
-    ASSERT(Value);
-
-    RTL_QUERY_REGISTRY_TABLE Table[2];
-    RtlZeroMemory(Table, sizeof(Table));
-    Table[0].Flags =
-        RTL_QUERY_REGISTRY_DIRECT |
-        RTL_QUERY_REGISTRY_REQUIRED |
-        RTL_QUERY_REGISTRY_TYPECHECK;
-    Table[0].Name = Key;
-    Table[0].EntryContext = Value;
-    Table[0].DefaultType = Type;
-
-    NTSTATUS Status = RtlQueryRegistryValues(
-        RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
-        GlobalRegistryPath.Buffer, Table, 0, 0);
-
-    WNBD_LOG_DEBUG("Exit: 0x%x", Status);
-    return Status;
-}
-
 _Use_decl_annotations_
 NTSTATUS WnbdGetPersistentOpt(
     PWCHAR Name,
@@ -85,33 +57,67 @@ NTSTATUS WnbdGetPersistentOpt(
         return STATUS_OBJECT_NAME_NOT_FOUND;
     }
 
-    PVOID Buff = NULL;
     RtlZeroMemory(&Value->Data, sizeof(Value->Data));
-    UNICODE_STRING StringBuff = {
-        0,
-        sizeof(Value->Data.AsWstr) - sizeof(WCHAR),
-        (PWCHAR) &Value->Data.AsWstr};
+
+    BYTE Buff[
+        sizeof(KEY_VALUE_PARTIAL_INFORMATION) +
+        (WNBD_MAX_NAME_LENGTH * sizeof(WCHAR))] = { 0 };
+    PKEY_VALUE_PARTIAL_INFORMATION ValueInformation = (
+        PKEY_VALUE_PARTIAL_INFORMATION) Buff;
+
+    UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+    ULONG RequiredBufferSize = 0;
+    NTSTATUS Status = ZwQueryValueKey(
+        GlobalDrvRegHandle, &KeyName, KeyValuePartialInformation,
+        ValueInformation,
+        sizeof(Buff), &RequiredBufferSize);
+    if (Status) {
+        WNBD_LOG_WARN("Couldn't retrieve registry key. Status: %d", Status);
+        return Status;
+    }
+
+    if (WnbdOptRegType(Option->Type) != ValueInformation->Type) {
+        WNBD_LOG_WARN(
+            "Registry value type mismatch. Expecting: %d, retrieved: %d",
+            Option->Type, ValueInformation->Type);
+        return STATUS_OBJECT_TYPE_MISMATCH;
+    }
+
     switch(Option->Type) {
     case WnbdOptBool:
+        // We're storing bool and int64 values as QWORD
+        if (ValueInformation->DataLength != sizeof(UINT64)) {
+            WNBD_LOG_WARN(
+                "Registry value size mismatch. Expecting: %d, actual: %d",
+                sizeof(UINT64), ValueInformation->DataLength);
+            return STATUS_OBJECT_TYPE_MISMATCH;
+        }
+        Value->Data.AsBool = !!*(PUINT64)ValueInformation->Data;
+        break;
     case WnbdOptInt64:
-        Buff = &Value->Data;
-        // We have to explicitly specify the data size using the
-        // first 4 bytes of the buffer when using data types larger
-        // than 4 bytes such as QWORD.
-        Value->Data.AsInt64 = (UINT64)-1 * WnbdOptRegSize(Option->Type);
+        if (ValueInformation->DataLength != sizeof(UINT64)) {
+            WNBD_LOG_WARN(
+                "Registry value size mismatch. Expecting: %d, actual: %d",
+                sizeof(UINT64), ValueInformation->DataLength);
+            return STATUS_OBJECT_TYPE_MISMATCH;
+        }
+        Value->Data.AsInt64 = *(PUINT64)ValueInformation->Data;
         break;
     case WnbdOptWstr:
-        Buff = &StringBuff;
+        if (ValueInformation->DataLength > sizeof(Value->Data.AsWstr)) {
+            WNBD_LOG_WARN(
+                "Registry value size overflow. Maximum allowed: %d, actual: %d",
+                sizeof(Value->Data.AsWstr), ValueInformation->DataLength);
+            return STATUS_BUFFER_OVERFLOW;
+        }
+        RtlCopyMemory(Value->Data.AsWstr, ValueInformation->Data,
+                      ValueInformation->DataLength);
         break;
     default:
         WNBD_LOG_WARN("Unsupported option type: %d", Option->Type);
         return STATUS_OBJECT_TYPE_MISMATCH;
     }
 
-    NTSTATUS Status = ReadRegistryValue(
-        Name,
-        WnbdOptRegType(Option->Type) << RTL_QUERY_REGISTRY_TYPECHECK_SHIFT,
-        Buff);
     if (!Status) {
         Value->Type = Option->Type;
     }
@@ -202,13 +208,16 @@ NTSTATUS WnbdSetDrvOpt(
     // We'll set the persistent value first. If that fails,
     // we won't set the runtime value.
     if (Persistent) {
-        Status = RtlWriteRegistryValue(
-            RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
-            GlobalRegistryPath.Buffer, Name,
+        UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+        Status = ZwSetValueKey(
+            GlobalDrvRegHandle,
+            &KeyName,
+            0,
             WnbdOptRegType(Option->Type),
             (PVOID)&Value->Data,
             WnbdOptRegSize(Option->Type));
         if (Status) {
+            WNBD_LOG_ERROR("Couln't set registry key. Status: %d", Status);
             return Status;
         }
     }
@@ -229,10 +238,12 @@ NTSTATUS WnbdResetDrvOpt(
     }
 
     if (Persistent) {
-        NTSTATUS Status = RtlDeleteRegistryValue(
-            RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
-            GlobalRegistryPath.Buffer, Name);
+        UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+        NTSTATUS Status = ZwDeleteValueKey(
+            GlobalDrvRegHandle,
+            &KeyName);
         if (Status) {
+            WNBD_LOG_ERROR("Couln't remove registry key. Status: %d", Status);
             return Status;
         }
     }

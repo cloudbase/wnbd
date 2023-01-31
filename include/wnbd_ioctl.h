@@ -17,8 +17,6 @@
 
 #include <assert.h>
 
-#define WNBD_REGISTRY_KEY "SYSTEM\\CurrentControlSet\\Services\\wnbd"
-
 #define IOCTL_WNBD_PING 1
 #define IOCTL_WNBD_CREATE 2
 #define IOCTL_WNBD_REMOVE 3
@@ -270,7 +268,7 @@ WNBD_ASSERT_SZ_EQ(WNBD_IO_RESPONSE, 80);
 
 typedef enum
 {
-    WnbdOptUnknon = 0,
+    WnbdOptUnknown = 0,
     WnbdOptBool = 1,
     WnbdOptInt64 = 2,
     WnbdOptWstr = 3,
