@@ -54,3 +54,22 @@ std::string GetEnv(std::string Name);
 // Returns a string containing the hex values of the byte array
 // received as parameter.
 std::string ByteArrayToHex(BYTE* arr, int length);
+
+// A simple wrapper on top of WNBD_OPTION_LIST, making it easier
+// to retrieve and parse.
+class WnbdOptionList {
+private:
+    PWNBD_OPTION_LIST OptionList = nullptr;
+    DWORD BuffSz = 0;
+
+public:
+    ~WnbdOptionList() {
+        if (OptionList) {
+            free(OptionList);
+            OptionList = nullptr;
+        }
+    }
+
+    DWORD Retrieve(BOOLEAN Persistent);
+    PWNBD_OPTION GetOpt(PWSTR Name);
+};

@@ -150,7 +150,8 @@ void SetDiskWritable(HANDLE DiskHandle)
     }
 }
 
-std::string GetEnv(std::string Name) {
+std::string GetEnv(std::string Name)
+{
     char* ValBuff;
     size_t ReqSize;
 
@@ -186,11 +187,70 @@ std::string GetEnv(std::string Name) {
     return ValStr;
 }
 
-std::string ByteArrayToHex(BYTE* arr, int length) {
+std::string ByteArrayToHex(BYTE* arr, int length)
+{
     std::stringstream ss;
 
     for (int i = 0; i < length; i++)
         ss << std::hex << (int) arr[i] << " ";
 
     return ss.str();
+}
+
+DWORD WnbdOptionList::Retrieve(BOOLEAN Persistent)
+{
+    DWORD ReqBuffSz = 0;
+    DWORD Status = 0;
+
+    if (OptionList && BuffSz) {
+        memset(OptionList, 0, BuffSz);
+    }
+
+    do {
+        if (ReqBuffSz) {
+            if (OptionList) {
+                free(OptionList);
+            }
+
+            OptionList = (PWNBD_OPTION_LIST) calloc(1, ReqBuffSz);
+            if (!OptionList) {
+                Status = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            }
+            BuffSz = ReqBuffSz;
+        } else {
+            ReqBuffSz = BuffSz;
+        }
+
+        // If the buffer is too small, the return value is 0 and "ReqBuffSz"
+        // will contain the required size.
+        Status = WnbdListDrvOpt(OptionList, &ReqBuffSz, Persistent);
+        if (Status)
+            break;
+    } while (BuffSz < ReqBuffSz);
+
+    if (Status && OptionList) {
+        free(OptionList);
+        OptionList = nullptr;
+    }
+
+    return Status;
+}
+
+PWNBD_OPTION WnbdOptionList::GetOpt(PWSTR Name)
+{
+    PWNBD_OPTION Option = nullptr;
+
+    if (!OptionList) {
+        return nullptr;
+    }
+
+    for (unsigned int Idx=0; Idx < OptionList->Count; Idx++) {
+        if (!wcscmp(Name, OptionList->Options[Idx].Name)) {
+            Option = &OptionList->Options[Idx];
+            break;
+        }
+    }
+
+    return Option;
 }
