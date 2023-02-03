@@ -51,6 +51,7 @@ NTSTATUS WnbdGetPersistentOpt(
     PWCHAR Name,
     PWNBD_OPTION_VALUE Value)
 {
+    WNBD_LOG_DEBUG("Retrieving persistent opt: %ls.", Name);
     PWNBD_OPTION Option = WnbdFindOpt(Name); 
     if (!Option) {
         WNBD_LOG_WARN("Could not find option: %ls.", Name);
@@ -72,14 +73,17 @@ NTSTATUS WnbdGetPersistentOpt(
         ValueInformation,
         sizeof(Buff), &RequiredBufferSize);
     if (Status) {
-        WNBD_LOG_WARN("Couldn't retrieve registry key. Status: %d", Status);
+        WNBD_LOG_WARN(
+            "Couldn't retrieve registry key: %ls. Status: %d",
+            Name, Status);
         return Status;
     }
 
     if (WnbdOptRegType(Option->Type) != ValueInformation->Type) {
         WNBD_LOG_WARN(
-            "Registry value type mismatch. Expecting: %d, retrieved: %d",
-            Option->Type, ValueInformation->Type);
+            "Registry value type mismatch: %ls. "
+            "Expecting: %d, retrieved: %d",
+            Name, Option->Type, ValueInformation->Type);
         return STATUS_OBJECT_TYPE_MISMATCH;
     }
 
@@ -88,8 +92,9 @@ NTSTATUS WnbdGetPersistentOpt(
         // We're storing bool and int64 values as QWORD
         if (ValueInformation->DataLength != sizeof(UINT64)) {
             WNBD_LOG_WARN(
-                "Registry value size mismatch. Expecting: %d, actual: %d",
-                sizeof(UINT64), ValueInformation->DataLength);
+                "Registry value size mismatch: %ls. "
+                "Expecting: %d, actual: %d",
+                Name, sizeof(UINT64), ValueInformation->DataLength);
             return STATUS_OBJECT_TYPE_MISMATCH;
         }
         Value->Data.AsBool = !!*(PUINT64)ValueInformation->Data;
@@ -97,8 +102,9 @@ NTSTATUS WnbdGetPersistentOpt(
     case WnbdOptInt64:
         if (ValueInformation->DataLength != sizeof(UINT64)) {
             WNBD_LOG_WARN(
-                "Registry value size mismatch. Expecting: %d, actual: %d",
-                sizeof(UINT64), ValueInformation->DataLength);
+                "Registry value size mismatch: %ls. "
+                "Expecting: %d, actual: %d",
+                Name, sizeof(UINT64), ValueInformation->DataLength);
             return STATUS_OBJECT_TYPE_MISMATCH;
         }
         Value->Data.AsInt64 = *(PUINT64)ValueInformation->Data;
@@ -106,7 +112,9 @@ NTSTATUS WnbdGetPersistentOpt(
     case WnbdOptWstr:
         if (ValueInformation->DataLength > sizeof(Value->Data.AsWstr)) {
             WNBD_LOG_WARN(
-                "Registry value size overflow. Maximum allowed: %d, actual: %d",
+                "Registry value size overflow: %ls. "
+                "Maximum allowed: %d, actual: %d",
+                Name,
                 sizeof(Value->Data.AsWstr), ValueInformation->DataLength);
             return STATUS_BUFFER_OVERFLOW;
         }
@@ -114,14 +122,15 @@ NTSTATUS WnbdGetPersistentOpt(
                       ValueInformation->DataLength);
         break;
     default:
-        WNBD_LOG_WARN("Unsupported option type: %d", Option->Type);
+        WNBD_LOG_WARN(
+            "Unsupported option type: %d. "
+            "Key: %ls.", Option->Type, Name);
         return STATUS_OBJECT_TYPE_MISMATCH;
     }
 
-    if (!Status) {
-        Value->Type = Option->Type;
-    }
-    return Status;
+    WNBD_LOG_DEBUG("Retrieved persistent option: %ls.", Name);
+    Value->Type = Option->Type;
+    return STATUS_SUCCESS;
 }
 
 _Use_decl_annotations_

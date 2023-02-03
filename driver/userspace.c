@@ -971,8 +971,13 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         }
 
         GetOptCmd->Name[WNBD_MAX_OPT_NAME_LENGTH - 1] = L'\0';
+        // Save the input buffer so that it won't get overridden by our output, which uses
+        // the same IRP system buffer.
+        WCHAR OptName[WNBD_MAX_OPT_NAME_LENGTH] = { 0 };
+        RtlStringCbCopyW(OptName, sizeof(OptName), GetOptCmd->Name);
+
         PWNBD_OPTION_VALUE Value = (PWNBD_OPTION_VALUE) Irp->AssociatedIrp.SystemBuffer;
-        Status = WnbdGetDrvOpt(GetOptCmd->Name, Value, GetOptCmd->Persistent);
+        Status = WnbdGetDrvOpt(OptName, Value, GetOptCmd->Persistent);
 
         Irp->IoStatus.Information = sizeof(WNBD_OPTION_VALUE);
         break;
