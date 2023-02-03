@@ -247,6 +247,7 @@ NTSTATUS WnbdDispatchRequest(
         ExInterlockedInsertTailList(
             &Device->SubmittedReqListHead,
             &Element->Link, &Device->SubmittedReqListLock);
+        InterlockedIncrement64(&Device->Stats.TotalSubmittedIORequests);
         InterlockedIncrement64(&Device->Stats.PendingSubmittedIORequests);
         InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
         // We managed to find a supported request, we can now exit the loop
