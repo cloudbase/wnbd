@@ -210,8 +210,6 @@ DWORD WnbdGetConnectionInfo(
 VOID WnbdSetLogger(LogMessageFunc Logger);
 VOID WnbdSetLogLevel(WnbdLogLevel LogLevel);
 
-DWORD WnbdRaiseDrvLogLevel(USHORT LogLevel);
-
 // Get libwnbd version.
 DWORD WnbdGetLibVersion(PWNBD_VERSION Version);
 DWORD WnbdGetDriverVersion(PWNBD_VERSION Version);
