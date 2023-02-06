@@ -106,6 +106,12 @@
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
     </DriverSign>
+    <Inf>
+      <SpecifyDriverVerDirectiveVersion>false</SpecifyDriverVerDirectiveVersion>
+    </Inf>
+    <Inf>
+      <SpecifyDriverVerDirectiveDate>false</SpecifyDriverVerDirectiveDate>
+    </Inf>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -123,6 +129,12 @@
     <DriverSign>
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
     </DriverSign>
+    <Inf>
+      <SpecifyDriverVerDirectiveVersion>false</SpecifyDriverVerDirectiveVersion>
+    </Inf>
+    <Inf>
+      <SpecifyDriverVerDirectiveDate>false</SpecifyDriverVerDirectiveDate>
+    </Inf>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <ClCompile>
@@ -139,9 +151,15 @@
     <PostBuildEvent>
       <Command>powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(SolutionFileName) /p:Configuration=Release; msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Release /p:SolutionDir=$(SolutionDir); msbuild $(ProjectFileName) /p:Configuration=Release /P:RunCodeAnalysisOnce=True</Command>
     </PostBuildEvent>
+    <Inf>
+      <SpecifyDriverVerDirectiveVersion>false</SpecifyDriverVerDirectiveVersion>
+    </Inf>
+    <Inf>
+      <SpecifyDriverVerDirectiveDate>false</SpecifyDriverVerDirectiveDate>
+    </Inf>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Inf Include="..\driver\wnbd.inf" />
+    <Inf Include="..\vstudio\wnbd.inf" />
   </ItemGroup>
   <ItemGroup>
     <FilesToPackage Include="$(TargetPath)" />

@@ -4,13 +4,27 @@ $scriptLocation = [System.IO.Path]::GetDirectoryName(
     $myInvocation.MyCommand.Definition)
 
 $versionHeaderPath = "$scriptLocation/../include/version.h"
+$driverInfBasePath = "$scriptLocation/../driver/wnbd.inf"
+# The wnbd.inf file is updated automatically (e.g. including the version tag). In order
+# to avoid unintended git changes, we'll make a copy.
+$driverInfDestPath = "$scriptLocation/../vstudio/wnbd.inf"
+
+function safe_exec() {
+    # Powershell doesn't check the command exit code, we'll need to
+    # do it ourselves. Also, in case of native commands, it treats stderr
+    # output as an exception, which is why we'll have to capture it.
+    cmd /c "$args 2>&1"
+    if ($LASTEXITCODE) {
+        throw "Command failed: $args"
+    }
+}
 
 try {
-    $gitShortDesc = git describe --tags
-    $gitLongDesc = git describe --tags --long
-    $gitTag = git describe --tags --abbrev=0
-    $gitBranch = git branch --show-current
-    $gitCommitCount = git rev-list --count "$gitTag..$gitBranch"
+    $gitShortDesc = safe_exec git describe --tags
+    $gitLongDesc = safe_exec git describe --tags --long
+    $gitTag = safe_exec git describe --tags --abbrev=0
+    $gitBranch = safe_exec git branch --show-current
+    $gitCommitCount = safe_exec git rev-list --count "$gitTag..$gitBranch"
     $isDev = (($gitLongDesc) -split "-")[-2] -ne "0"
 
     $gitTag -match "(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)"
@@ -78,4 +92,13 @@ Please fill in the WNBD version and then remove this error.
 "@
         echo $err | out-file -append -encoding utf8 -filepath $versionHeaderPath
     }
+}
+
+# update the driver inf version
+cp $driverInfBasePath $driverInfDestPath
+if ($versionDetected) {
+    $infVersion = "${versionMajor}.${versionMinor}.${versionPatch}.${gitCommitCount}"
+    safe_exec stampinf.exe -d "*" -a "amd64" -v "$infVersion" -f "$driverInfDestPath"
+} else {
+    safe_exec stampinf.exe -d "*" -a "amd64" -v "*" -f "$driverInfDestPath"
 }
