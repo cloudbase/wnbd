@@ -9,6 +9,7 @@ Signature="$WINDOWS NT$"
 Class=SCSIAdapter
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Provider=%wnbd%
+; The driver version is updated automatically using the git tag
 DriverVer = 02/17/2020,2.24.28.428
 CatalogFile = wnbd.cat
 PnpLockdown = 1
