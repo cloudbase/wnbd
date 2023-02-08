@@ -572,8 +572,15 @@ WnbdReportLuns(
     KeAcquireSpinLock(&DeviceExtension->DeviceListLock, &Irql);
 
     ULONG LunCount = 0;
+    // If the buffer is not large enough to hold all entries, we'll return
+    // as many luns as we can, setting the lun list size according to the
+    // total lun count and then return SRB_STATUS_DATA_OVERRUN.
+    // This allows the caller to adjust the buffer size and try again.
+    ULONG ReportedLunCount = 0;
     ULONG LunListLength = 0;
-    ULONG BitmapStart = Device->Bus * WNBD_MAX_TARGETS_PER_BUS * WNBD_MAX_LUNS_PER_TARGET + Device->Target * WNBD_MAX_LUNS_PER_TARGET;
+    ULONG BitmapStart =
+        Device->Bus * WNBD_MAX_TARGETS_PER_BUS * WNBD_MAX_LUNS_PER_TARGET +
+        Device->Target * WNBD_MAX_LUNS_PER_TARGET;
     ULONG HintIndex = BitmapStart;
     ULONG BitmapEnd = BitmapStart + WNBD_MAX_LUNS_PER_TARGET;
 
@@ -582,9 +589,10 @@ WnbdReportLuns(
             "LUN list of size: %d", DataTransferLength, sizeof(LUN_LIST));
         KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
 
-        return SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        return SRB_STATUS_DATA_OVERRUN;
     }
-    DataTransferLength -= sizeof(LUN_LIST);
+
+    ULONG RemainingBufferLength = DataTransferLength - sizeof(LUN_LIST);
 
     while (BitmapStart != 0xFFFFFFFF && BitmapStart < BitmapEnd) {
         BitmapStart = RtlFindSetBits(
@@ -595,24 +603,32 @@ WnbdReportLuns(
             break;
         }
         HintIndex = BitmapStart + 1;
-        WNBD_LOG_DEBUG("Bitmap start: %d ; Bitmap end: %d ; Data transfer length: %d", (int)BitmapStart, (int)BitmapEnd, (int)DataTransferLength);
+        WNBD_LOG_DEBUG(
+            "Bitmap start: %d ; Bitmap end: %d ; Remaining buffer length: %d",
+            (int)BitmapStart, (int)BitmapEnd, (int)RemainingBufferLength);
 
         if (BitmapStart != 0xFFFFFFFF && BitmapStart < BitmapEnd) {
-            if (DataTransferLength < 8) {
+            if (RemainingBufferLength < 8) {
                 // TODO: Remove unneccessary comments
-                WNBD_LOG_DEBUG("Lun: %d was found but data transfer length is insufficient for storing it: %d", (int)BitmapStart, (int)DataTransferLength);
-                KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
-
-                return SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
-            }
-            LunList->Lun[LunCount][0] = (UCHAR)(
+                WNBD_LOG_DEBUG(
+                    "Lun: %d was found but the remaining buffer length is "
+                    "insufficient for storing it: %d",
+                    (int)BitmapStart, (int)RemainingBufferLength);
+                SrbStatus = SRB_STATUS_DATA_OVERRUN;
+            } else {
+                LunList->Lun[LunCount][0] = (UCHAR)(
                             BitmapStart /
                             WNBD_MAX_LUNS_PER_TARGET /
                             WNBD_MAX_TARGETS_PER_BUS);
-            LunList->Lun[LunCount][1] = (UCHAR)BitmapStart % WNBD_MAX_LUNS_PER_TARGET;
-            WNBD_LOG_DEBUG("Added lun ID %d to lun list", (int) BitmapStart % WNBD_MAX_LUNS_PER_TARGET);
+                LunList->Lun[LunCount][1] = (UCHAR)BitmapStart % WNBD_MAX_LUNS_PER_TARGET;
+                WNBD_LOG_DEBUG(
+                    "Added lun ID %d to lun list, target: %d",
+                    (int) BitmapStart % WNBD_MAX_LUNS_PER_TARGET,
+                    (int) BitmapStart / WNBD_MAX_LUNS_PER_TARGET / WNBD_MAX_TARGETS_PER_BUS);
+                ReportedLunCount++;
+                RemainingBufferLength -= 8;
+            }
             LunCount++;
-            DataTransferLength -= 8;
         }
     }
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
@@ -621,7 +637,7 @@ WnbdReportLuns(
 
     REVERSE_BYTES_4(&LunList->LunListLength, &LunListLength);
 
-    SrbSetDataTransferLength(Srb, sizeof(LUN_LIST) + LunListLength);
+    SrbSetDataTransferLength(Srb, sizeof(LUN_LIST) + ReportedLunCount);
 
     return SrbStatus;
 }
