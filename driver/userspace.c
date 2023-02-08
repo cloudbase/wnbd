@@ -381,6 +381,16 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     Device->SocketToClose = -1;
     Device->NbdSocket = -1;
     if (Properties->Flags.UseNbd) {
+        WNBD_LOG_DEBUG("Initializing WSK.");
+        // WnbdCreateConnection calls are synchronized
+        // using DeviceExtension->DeviceCreationLock.
+        Status = KsInitialize();
+        if (!NT_SUCCESS(Status)) {
+            WNBD_LOG_ERROR("Could not initialize WSK framework. "
+                           "Status: 0x%x.", Status);
+            goto Exit;
+        }
+
         WNBD_LOG_INFO("Connecting to NBD server: %s:%p. "
                       "Export name: %s.",
                       Properties->NbdProperties.Hostname,

@@ -8,6 +8,7 @@ extern "C" {
 
 typedef struct _KSOCKET KSOCKET, *PKSOCKET;
 
+// KsInitialize and KsDestroy calls must be synchronized
 NTSTATUS
 NTAPI
 KsInitialize(

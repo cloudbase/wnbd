@@ -118,7 +118,6 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
     // for them to be removed after signaling the global device removal event.
     ExWaitForRundownProtectionRelease(&DeviceExtension->RundownProtection);
 
-    KsInitialize();
     KsDestroy();
 }
 

@@ -40,9 +40,11 @@ typedef struct _KSOCKET
 // Variables.
 //////////////////////////////////////////////////////////////////////////
 
-WSK_REGISTRATION     WskRegistration;
-WSK_PROVIDER_NPI     WskProvider;
+WSK_REGISTRATION     WskRegistration = { 0 };
+WSK_PROVIDER_NPI     WskProvider = { 0 };
 WSK_CLIENT_DISPATCH  WskDispatch = { MAKE_WSK_VERSION(1,0), 0, NULL };
+
+BOOLEAN WskInitialized = FALSE;
 
 //////////////////////////////////////////////////////////////////////////
 // Function prototypes.
@@ -264,10 +266,13 @@ KsInitialize(
   WskClient.ClientContext = NULL;
   WskClient.Dispatch      = &WskDispatch;
 
-  Status = WskRegister(&WskClient, &WskRegistration);
+  if (WskInitialized) {
+    // Already initialized.
+    return STATUS_SUCCESS;
+  }
 
-  if (!NT_SUCCESS(Status))
-  {
+  Status = WskRegister(&WskClient, &WskRegistration);
+  if (!NT_SUCCESS(Status)) {
     return Status;
   }
 
@@ -275,11 +280,17 @@ KsInitialize(
   // Capture the provider NPI.
   //
 
-  return WskCaptureProviderNPI(
-    &WskRegistration,
-    WSK_INFINITE_WAIT,
-    &WskProvider
-    );
+  Status = WskCaptureProviderNPI(
+      &WskRegistration,
+      WSK_INFINITE_WAIT,
+      &WskProvider);
+  if (!NT_SUCCESS(Status)) {
+    WskDeregister(&WskRegistration);
+    return Status;
+  }
+
+  WskInitialized = TRUE;
+  return STATUS_SUCCESS;
 }
 
 VOID
@@ -288,17 +299,22 @@ KsDestroy(
   VOID
   )
 {
+  if (!WskInitialized) {
+    // Nothing to do.
+    return;
+  }
+
   //
   // Release the provider NPI instance.
   //
-
   WskReleaseProviderNPI(&WskRegistration);
 
   //
   // Deregister as a WSK client.
   //
-
   WskDeregister(&WskRegistration);
+
+  WskInitialized = FALSE;
 }
 
 NTSTATUS
