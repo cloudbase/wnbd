@@ -391,6 +391,7 @@ ValidateScsiRequest(
             return FALSE;
         }
         break;
+    case WnbdReqTypePersistResIn:
     case WnbdReqTypePersistResOut:
         if (!DevProps->Flags.PersistResSupported) {
              WNBD_LOG_DEBUG(
