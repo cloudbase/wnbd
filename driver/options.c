@@ -66,7 +66,8 @@ NTSTATUS WnbdGetPersistentOpt(
     PKEY_VALUE_PARTIAL_INFORMATION ValueInformation = (
         PKEY_VALUE_PARTIAL_INFORMATION) Buff;
 
-    UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+    UNICODE_STRING KeyName = { 0 };
+    RtlInitUnicodeString(&KeyName, Name);
     ULONG RequiredBufferSize = 0;
     NTSTATUS Status = ZwQueryValueKey(
         GlobalDrvRegHandle, &KeyName, KeyValuePartialInformation,
@@ -217,7 +218,8 @@ NTSTATUS WnbdSetDrvOpt(
     // We'll set the persistent value first. If that fails,
     // we won't set the runtime value.
     if (Persistent) {
-        UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+        UNICODE_STRING KeyName = { 0 };
+        RtlInitUnicodeString(&KeyName, Name);
         Status = ZwSetValueKey(
             GlobalDrvRegHandle,
             &KeyName,
@@ -247,7 +249,8 @@ NTSTATUS WnbdResetDrvOpt(
     }
 
     if (Persistent) {
-        UNICODE_STRING KeyName = RTL_CONSTANT_STRING(Name);
+        UNICODE_STRING KeyName = { 0 };
+        RtlInitUnicodeString(&KeyName, Name);
         NTSTATUS Status = ZwDeleteValueKey(
             GlobalDrvRegHandle,
             &KeyName);
