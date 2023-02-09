@@ -413,6 +413,7 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         Device->Properties.Flags.UnmapSupported |= CHECK_NBD_SEND_TRIM(NbdFlags);
         Device->Properties.Flags.FlushSupported |= CHECK_NBD_SEND_FLUSH(NbdFlags);
         Device->Properties.Flags.FUASupported |= CHECK_NBD_SEND_FUA(NbdFlags);
+        Device->Properties.Flags.PersistResSupported = 0;
     }
 
     // TODO: fix the 4k sector size issue, potentially allowing even larger sector
