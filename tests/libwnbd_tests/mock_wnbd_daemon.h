@@ -40,8 +40,7 @@ public:
             uint64_t _BlockCount, uint32_t _BlockSize,
             bool _ReadOnly, bool _CacheEnabled,
             bool _UseCustomNaaIdentifier = false,
-            bool _UseCustomDeviceSerial = false,
-            bool _EnablePersistentReservations = false)
+            bool _UseCustomDeviceSerial = false)
         : InstanceName(_InstanceName)
         , BlockCount(_BlockCount)
         , BlockSize(_BlockSize)
@@ -137,7 +136,7 @@ public:
 };
 
 // We're stubbing READ_KEYS and READ_RESERVATIONS PR actions, both of which
-// use thw following header.
+// use the following header.
 typedef struct {
     UINT32 Generation;
     UINT32 AdditionalLength;
