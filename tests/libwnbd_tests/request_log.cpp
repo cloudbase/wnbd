@@ -56,7 +56,11 @@ bool RequestLog::HasEntry(
         if (!memcmp((char*) &ExpWnbdRequest + sizeof(ExpWnbdRequest.RequestHandle),
                    (char*) &Entry + sizeof(ExpWnbdRequest.RequestHandle),
                    sizeof(WNBD_IO_REQUEST) - sizeof(ExpWnbdRequest.RequestHandle))) {
-            if (CheckDataBuffer && Entry.DataBuffer.get()) {
+            if (CheckDataBuffer) {
+                if (!Entry.DataBuffer.get()) {
+                    continue;
+                }
+
                 // Found a matching request, let's compare the buffers.
                 if (Entry.DataBufferSize != DataBufferSize) {
                     continue;

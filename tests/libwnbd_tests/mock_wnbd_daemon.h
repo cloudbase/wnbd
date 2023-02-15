@@ -21,6 +21,8 @@
 #define READ_BYTE_CONTENT 0x0f
 #define WRITE_BYTE_CONTENT 0x0a
 
+#define MOCK_PR_GENERATION 0xf1e2
+
 class MockWnbdDaemon
 {
 private:
@@ -31,7 +33,6 @@ private:
     bool CacheEnabled;
     bool UseCustomNaaIdentifier;
     bool UseCustomDeviceSerial;
-    bool EnablePersistentReservations;
 
 public:
     MockWnbdDaemon(
@@ -48,7 +49,6 @@ public:
         , CacheEnabled(_CacheEnabled)
         , UseCustomNaaIdentifier(_UseCustomNaaIdentifier)
         , UseCustomDeviceSerial(_UseCustomDeviceSerial)
-        , EnablePersistentReservations(_EnablePersistentReservations)
     {
     };
     ~MockWnbdDaemon();
@@ -135,3 +135,10 @@ public:
 
     void TerminatingInProgress();
 };
+
+// We're stubbing READ_KEYS and READ_RESERVATIONS PR actions, both of which
+// use thw following header.
+typedef struct {
+    UINT32 Generation;
+    UINT32 AdditionalLength;
+} MOCK_PRI_LIST, *PMOCK_PRI_LIST;
