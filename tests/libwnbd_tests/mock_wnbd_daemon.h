@@ -14,7 +14,6 @@
 #include "request_log.h"
 
 #define IO_REQ_WORKERS 2
-#define WNBD_OWNER_NAME "WnbdTests"
 
 // The following byte will be used to fill read buffers,
 // allowing us to make assertions.
@@ -26,30 +25,10 @@
 class MockWnbdDaemon
 {
 private:
-    std::string InstanceName;
-    uint64_t BlockCount;
-    uint32_t BlockSize;
-    bool ReadOnly;
-    bool CacheEnabled;
-    bool UseCustomNaaIdentifier;
-    bool UseCustomDeviceSerial;
+    PWNBD_PROPERTIES WnbdProps;
 
 public:
-    MockWnbdDaemon(
-            std::string _InstanceName,
-            uint64_t _BlockCount, uint32_t _BlockSize,
-            bool _ReadOnly, bool _CacheEnabled,
-            bool _UseCustomNaaIdentifier = false,
-            bool _UseCustomDeviceSerial = false)
-        : InstanceName(_InstanceName)
-        , BlockCount(_BlockCount)
-        , BlockSize(_BlockSize)
-        , ReadOnly(_ReadOnly)
-        , CacheEnabled(_CacheEnabled)
-        , UseCustomNaaIdentifier(_UseCustomNaaIdentifier)
-        , UseCustomDeviceSerial(_UseCustomDeviceSerial)
-    {
-    };
+    MockWnbdDaemon(PWNBD_PROPERTIES _WnbdProps) : WnbdProps(_WnbdProps) {};
     ~MockWnbdDaemon();
 
     void Start();

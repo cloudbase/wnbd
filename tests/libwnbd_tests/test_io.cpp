@@ -10,22 +10,26 @@ void TestWrite(
     bool CacheEnabled = true,
     bool UseFUA = false)
 {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        BlockCount,
-        BlockSize,
-        false, // writable
-        CacheEnabled
-    );
+    WnbdProps.BlockCount = BlockCount;
+    WnbdProps.BlockSize = BlockSize;
+
+    if (CacheEnabled) {
+        WnbdProps.Flags.FUASupported = 1;
+        WnbdProps.Flags.FlushSupported = 1;
+    }
+
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
+
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
     DWORD OpenFlags = FILE_ATTRIBUTE_NORMAL;
     if (UseFUA) {
         OpenFlags |= FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH;
@@ -158,22 +162,19 @@ TEST(TestWrite, FUACacheEnabled) {
 }
 
 TEST(TestWrite, WriteReadOnly) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        true, // non-writable
-        true
-    );
+    WnbdProps.Flags.ReadOnly = 1;
+
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
 
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
@@ -216,22 +217,26 @@ void TestRead(
     uint32_t BlockSize = DefaultBlockSize,
     bool CacheEnabled = true)
 {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        BlockCount,
-        BlockSize,
-        false, // writable
-        CacheEnabled
-    );
+    WnbdProps.BlockCount = BlockCount;
+    WnbdProps.BlockSize = BlockSize;
+
+    if (CacheEnabled) {
+        WnbdProps.Flags.FUASupported = 1;
+        WnbdProps.Flags.FlushSupported = 1;
+    }
+
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
+
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
         GENERIC_READ,
@@ -356,30 +361,26 @@ TEST(TestRead, Read2PBDisk) {
 }
 
 TEST(TestIoStats, TestIoStats) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false, // writable
-        true
-    );
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
+
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
 
     WNBD_USR_STATS UserspaceStats = { 0 };
     WNBD_DRV_STATS DriverStats = { 0 };
 
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+    WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
 
     // No requests have been sent, write counters should be 0
     ASSERT_EQ(UserspaceStats.TotalWrittenBlocks, 0);
@@ -427,7 +428,7 @@ TEST(TestIoStats, TestIoStats) {
     ASSERT_TRUE(FlushFileBuffers(DiskHandle));
 
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+    WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
     EVENTUALLY(UserspaceStats.TotalWrittenBlocks >= 1, 20, 100);
     EVENTUALLY(UserspaceStats.WriteErrors >= 0, 20, 100);
     EVENTUALLY(DriverStats.TotalReceivedIORequests >= 1, 20, 100);
@@ -467,7 +468,7 @@ TEST(TestIoStats, TestIoStats) {
     ASSERT_EQ(0, BytesWritten);
 
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-    WnbdGetDriverStats(InstanceName.c_str(), &DriverStats);
+    WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
     EVENTUALLY(UserspaceStats.WriteErrors >= 1, 20, 100);
     EVENTUALLY(UserspaceStats.TotalRWRequests >= 3, 20, 100);
     EVENTUALLY(DriverStats.TotalReceivedIORequests >= 3, 20, 100);
@@ -496,22 +497,18 @@ TEST(TestIoStats, TestIoStats) {
 }
 
 TEST(TestPersistentReservations, TestPersistentReserveIn) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    WnbdProps.Flags.PersistResSupported = 1;
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false,
-        false
-    );
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
 
     WnbdDaemon.Start();
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+    ASSERT_FALSE(WnbdShow(WnbdProps.InstanceName, &ConnectionInfo))
         << "couldn't retrieve WNBD disk info";
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
     UCHAR Data[24];
@@ -571,22 +568,17 @@ TEST(TestPersistentReservations, TestPersistentReserveIn) {
 }
 
 TEST(TestPersistentReservations, TestPersistentReserveOut) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    WnbdProps.Flags.PersistResSupported = 1;
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false,
-        false
-    );
-
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+    ASSERT_FALSE(WnbdShow(WnbdProps.InstanceName, &ConnectionInfo))
         << "couldn't retrieve WNBD disk info";
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
     PRO_PARAMETER_LIST OutParamList = { 0 };

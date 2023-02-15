@@ -22,42 +22,8 @@ MockWnbdDaemon::~MockWnbdDaemon()
 
 void MockWnbdDaemon::Start()
 {
-    WNBD_PROPERTIES WnbdProps = {0};
-
-    InstanceName.copy(WnbdProps.InstanceName, sizeof(WnbdProps.InstanceName));
-    ASSERT_TRUE(strlen(WNBD_OWNER_NAME) < WNBD_MAX_OWNER_LENGTH)
-        << "WnbdOwnerName too long";
-    strncpy_s(
-        WnbdProps.Owner, WNBD_MAX_OWNER_LENGTH,
-        WNBD_OWNER_NAME, strlen(WNBD_OWNER_NAME));
-
-    WnbdProps.BlockCount = BlockCount;
-    WnbdProps.BlockSize = BlockSize;
-    WnbdProps.MaxUnmapDescCount = 1;
-
-    WnbdProps.Flags.ReadOnly = ReadOnly;
-    WnbdProps.Flags.UnmapSupported = 1;
-    WnbdProps.Flags.PersistResSupported = 1;
-    if (CacheEnabled) {
-        WnbdProps.Flags.FUASupported = 1;
-        WnbdProps.Flags.FlushSupported = 1;
-    }
-
-    if (UseCustomNaaIdentifier) {
-        WnbdProps.Flags.NaaIdSpecified = 1;
-        WnbdProps.NaaIdentifier.data[0] = 0x60;
-        for (int i = 1; i < sizeof(WnbdProps.NaaIdentifier.data); i++)
-            WnbdProps.NaaIdentifier.data[i] = (BYTE)rand();
-    }
-
-    if (UseCustomDeviceSerial) {
-        std::string Serial = std::to_string(rand()) + "-" +
-                             std::to_string(rand());
-        Serial.copy(WnbdProps.SerialNumber, sizeof(WnbdProps.SerialNumber));
-    }
-
     DWORD err = WnbdCreate(
-        &WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
+        WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
         this, &WnbdDisk);
     ASSERT_FALSE(err) << "WnbdCreate failed";
 
@@ -66,7 +32,8 @@ void MockWnbdDaemon::Start()
     err = WnbdStartDispatcher(WnbdDisk, IO_REQ_WORKERS);
     ASSERT_FALSE(err) << "WnbdStartDispatcher failed";
 
-    if (!ReadOnly) {
+    if (!WnbdProps->Flags.ReadOnly) {
+        std::string InstanceName = WnbdProps->InstanceName;
         SetDiskWritable(InstanceName);
     }
 }
@@ -105,8 +72,8 @@ void MockWnbdDaemon::Read(
     MockWnbdDaemon* handler = nullptr;
     ASSERT_FALSE(WnbdGetUserContext(Disk, (PVOID*)&handler));
 
-    ASSERT_TRUE(handler->BlockSize);
-    ASSERT_TRUE(handler->BlockSize * BlockCount
+    ASSERT_TRUE(handler->WnbdProps->BlockSize);
+    ASSERT_TRUE(handler->WnbdProps->BlockSize * BlockCount
         <= WNBD_DEFAULT_MAX_TRANSFER_LENGTH);
 
     WnbdRequestType RequestType = WnbdReqTypeRead;
@@ -127,13 +94,13 @@ void MockWnbdDaemon::Read(
             SCSI_SENSE_ILLEGAL_REQUEST,
             SCSI_ADSENSE_VOLUME_OVERFLOW);
     } else {
-        memset(Buffer, READ_BYTE_CONTENT, BlockCount * handler->BlockSize);
+        memset(Buffer, READ_BYTE_CONTENT, BlockCount * handler->WnbdProps->BlockSize);
     }
 
     handler->SendIoResponse(
         RequestHandle, RequestType,
         handler->MockStatus,
-        Buffer, handler->BlockSize * BlockCount);
+        Buffer, handler->WnbdProps->BlockSize * BlockCount);
 }
 
 void MockWnbdDaemon::Write(
@@ -147,8 +114,8 @@ void MockWnbdDaemon::Write(
     MockWnbdDaemon* handler = nullptr;
     ASSERT_FALSE(WnbdGetUserContext(Disk, (PVOID*)&handler));
 
-    ASSERT_TRUE(handler->BlockSize);
-    ASSERT_TRUE(handler->BlockSize * BlockCount
+    ASSERT_TRUE(handler->WnbdProps->BlockSize);
+    ASSERT_TRUE(handler->WnbdProps->BlockSize * BlockCount
         <= WNBD_DEFAULT_MAX_TRANSFER_LENGTH);
 
     WnbdRequestType RequestType = WnbdReqTypeWrite;
@@ -159,7 +126,7 @@ void MockWnbdDaemon::Write(
     WnbdReq.Cmd.Write.BlockCount = BlockCount;
     WnbdReq.Cmd.Write.ForceUnitAccess = ForceUnitAccess;
 
-    handler->ReqLog.AddEntry(WnbdReq, Buffer, BlockCount * handler->BlockSize);
+    handler->ReqLog.AddEntry(WnbdReq, Buffer, BlockCount * handler->WnbdProps->BlockSize);
 
     WNBD_STATUS Status = handler->MockStatus;
 
@@ -175,7 +142,7 @@ void MockWnbdDaemon::Write(
     handler->SendIoResponse(
         RequestHandle, RequestType,
         Status,
-        Buffer, handler->BlockSize * BlockCount);
+        Buffer, handler->WnbdProps->BlockSize * BlockCount);
 }
 
 void MockWnbdDaemon::Flush(
