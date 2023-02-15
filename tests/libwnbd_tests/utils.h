@@ -28,6 +28,8 @@
         GTEST_FATAL_FAILURE_("Expression mismatch: "#expression);   \
 }
 
+#define WNBD_OWNER_NAME "WnbdTests"
+
 static const uint64_t DefaultBlockCount = 1 << 20;
 static const uint64_t DefaultBlockSize = 512;
 
@@ -39,7 +41,7 @@ std::string WinStrError(DWORD Err);
 
 // Retrieves the disk path and waits for it to become available.
 // Raises a runtime error upon failure.
-std::string GetDiskPath(std::string InstanceName);
+std::string GetDiskPath(const char* InstanceName);
 
 // Configures the specified disk as writable.
 // Raises a runtime error upon failure.
@@ -73,3 +75,5 @@ public:
     DWORD Retrieve(BOOLEAN Persistent);
     PWNBD_OPTION GetOpt(PWSTR Name);
 };
+
+void GetNewWnbdProps(PWNBD_PROPERTIES);

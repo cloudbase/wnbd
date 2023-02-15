@@ -42,7 +42,7 @@ std::string WinStrError(DWORD Err)
 }
 
 // Retrieves the disk path and waits for it to become available.
-std::string GetDiskPath(std::string InstanceName)
+std::string GetDiskPath(const char* InstanceName)
 {
     DWORD TimeoutMs = 10 * 1000;
     DWORD RetryInterval = 500;
@@ -53,7 +53,7 @@ std::string GetDiskPath(std::string InstanceName)
 
     do {
         WNBD_CONNECTION_INFO ConnectionInfo = {0};
-        NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+        NTSTATUS Status = WnbdShow(InstanceName, &ConnectionInfo);
         if (Status) {
             std::string Msg = "couln't retrieve WNBD disk info, error: " +
                 std::to_string(Status);
@@ -104,7 +104,7 @@ std::string GetDiskPath(std::string InstanceName)
 
 void SetDiskWritable(std::string InstanceName)
 {
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(InstanceName.c_str());
 
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
@@ -144,7 +144,7 @@ void SetDiskWritable(HANDLE DiskHandle)
         &BytesReturned,
         NULL);
     if (!Succeeded) {
-        std::string Msg = "couln't set wnbd disk as writable, error: " +
+        std::string Msg = "couldn't set wnbd disk as writable, error: " +
             WinStrError(GetLastError());
         throw std::runtime_error(Msg);
     }
@@ -253,4 +253,17 @@ PWNBD_OPTION WnbdOptionList::GetOpt(PWSTR Name)
     }
 
     return Option;
+}
+
+void GetNewWnbdProps(PWNBD_PROPERTIES WnbdProps) {
+    auto InstanceName = GetNewInstanceName();
+    InstanceName.copy(WnbdProps->InstanceName, sizeof(WnbdProps->InstanceName));
+    strncpy_s(
+        WnbdProps->Owner, WNBD_MAX_OWNER_LENGTH,
+        WNBD_OWNER_NAME, strlen(WNBD_OWNER_NAME));
+
+    WnbdProps->BlockCount = DefaultBlockCount;
+    WnbdProps->BlockSize = DefaultBlockSize;
+    WnbdProps->MaxUnmapDescCount = 1;
+    WnbdProps->Flags.UnmapSupported = 1;
 }

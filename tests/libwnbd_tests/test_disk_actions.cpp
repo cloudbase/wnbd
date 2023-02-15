@@ -8,26 +8,31 @@ void TestMap(
     bool ReadOnly = false,
     bool CacheEnabled = true)
 {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        BlockCount,
-        BlockSize,
-        ReadOnly,
-        CacheEnabled
-    );
+    WnbdProps.BlockCount = BlockCount;
+    WnbdProps.BlockSize = BlockSize;
+
+    WnbdProps.Flags.ReadOnly = ReadOnly;
+
+    if (CacheEnabled) {
+        WnbdProps.Flags.FUASupported = 1;
+        WnbdProps.Flags.FlushSupported = 1;
+    }
+
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
     EXPECT_EQ(
-        InstanceName,
+        WnbdProps.InstanceName,
         std::string(ConnectionInfo.Properties.InstanceName));
     EXPECT_EQ(
-        InstanceName,
+        WnbdProps.InstanceName,
         std::string(ConnectionInfo.Properties.SerialNumber));
     EXPECT_EQ(
         std::string(WNBD_OWNER_NAME),
@@ -96,6 +101,7 @@ void TestMapUnsupported(
         AdapterHandle, &CloseHandle);
 
     WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
 
     InstanceName.copy(WnbdProps.InstanceName, sizeof(WnbdProps.InstanceName));
@@ -129,19 +135,15 @@ void TestLiveResize(
     uint64_t BlockCount = DefaultBlockCount,
     uint64_t NewBlockCount = DefaultBlockCount * 2)
 {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    WnbdProps.BlockCount = BlockCount;
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        BlockCount,
-        DefaultBlockSize,
-        false,
-        false
-    );
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
@@ -150,7 +152,7 @@ void TestLiveResize(
     ASSERT_EQ(WnbdSetDiskSize(WnbdDisk, NewBlockCount), ERROR_SUCCESS);
     ASSERT_EQ(NewBlockCount, WnbdDisk->Properties.BlockCount);
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
         GENERIC_WRITE,
@@ -209,27 +211,25 @@ TEST(TestLiveResize, HalfDiskSize) {
 }
 
 TEST(TestNaaIdentifier, TestSetNaaId) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    WnbdProps.Flags.NaaIdSpecified = 1;
+    WnbdProps.NaaIdentifier.data[0] = 0x60;
+    for (int i = 1; i < sizeof(WnbdProps.NaaIdentifier.data); i++)
+        WnbdProps.NaaIdentifier.data[i] = (BYTE)rand();
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false,
-        false,
-        true
-    );
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
     ASSERT_EQ(WnbdDisk->Properties.Flags.NaaIdSpecified, 1);
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
 
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
@@ -241,7 +241,7 @@ TEST(TestNaaIdentifier, TestSetNaaId) {
         NULL);
 
     ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
-        << "couldn't open wnbd disk: " << InstanceName
+        << "couldn't open wnbd disk: " << WnbdProps.InstanceName
         << ", error: " << WinStrError(GetLastError());
 
 
@@ -297,26 +297,22 @@ TEST(TestNaaIdentifier, TestSetNaaId) {
 }
 
 TEST(TestDeviceSerial, TestSetDeviceSerial) {
-    auto InstanceName = GetNewInstanceName();
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    std::string Serial = std::to_string(rand()) + "-" +
+        std::to_string(rand());
+    Serial.copy(WnbdProps.SerialNumber, sizeof(WnbdProps.SerialNumber));
 
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false,
-        false,
-        false,
-        true
-    );
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
     WnbdDaemon.Start();
 
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    NTSTATUS Status = WnbdShow(InstanceName.c_str(), &ConnectionInfo);
+    NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
 
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
@@ -328,7 +324,7 @@ TEST(TestDeviceSerial, TestSetDeviceSerial) {
         NULL);
 
     ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
-        << "couldn't open wnbd disk: " << InstanceName
+        << "couldn't open wnbd disk: " << WnbdProps.InstanceName
         << ", error: " << WinStrError(GetLastError());
 
     std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
@@ -385,19 +381,13 @@ void TestUnmap(
     bool HardRemoveFallback = true
 )
 {
-    auto InstanceName = GetNewInstanceName();
-
-    MockWnbdDaemon WnbdDaemon(
-        InstanceName,
-        DefaultBlockCount,
-        DefaultBlockSize,
-        false,
-        false
-    );
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
 
     WnbdDaemon.Start();
     WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+    ASSERT_FALSE(WnbdShow(WnbdProps.InstanceName, &ConnectionInfo))
         << "couldn't retrieve WNBD disk info";
 
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
@@ -408,7 +398,7 @@ void TestUnmap(
     RemoveOptions.SoftRemoveTimeoutMs = SoftRemoveTimeoutMs;
     RemoveOptions.SoftRemoveRetryIntervalMs = SoftRemoveRetryIntervalMs;
 
-    std::string DiskPath = GetDiskPath(InstanceName);
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
 
     HANDLE DiskHandle = CreateFileA(
         DiskPath.c_str(),
