@@ -2,6 +2,8 @@
 #include "mock_wnbd_daemon.h"
 #include "utils.h"
 
+#include <ntddscsi.h>
+
 void TestWrite(
     uint64_t BlockCount = DefaultBlockCount,
     uint32_t BlockSize = DefaultBlockSize,
@@ -496,4 +498,162 @@ TEST(TestIoStats, TestIoStats) {
     // WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
 
     // EVENTUALLY(UserspaceStats.InvalidRequests >= 1, 150, 100);
+}
+
+TEST(TestPersistentReservations, TestPersistentReserveIn) {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false,
+        false
+    );
+
+    WnbdDaemon.Start();
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+        << "couldn't retrieve WNBD disk info";
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    UCHAR Data[24];
+    ZeroMemory(Data, sizeof(Data));
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        0,
+        NULL);
+
+    ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
+        << "Error opening device: " << GetLastError();
+
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    SCSI_PASS_THROUGH_DIRECT Sptd;
+    ZeroMemory(&Sptd, sizeof(Sptd));
+    Sptd.Length = sizeof(Sptd);
+    Sptd.CdbLength = 6;
+    Sptd.DataIn = SCSI_IOCTL_DATA_IN;
+    Sptd.DataBuffer = Data;
+    Sptd.DataTransferLength = sizeof(Data);
+    Sptd.TimeOutValue = 2;
+    Sptd.Cdb[0] = SCSIOP_PERSISTENT_RESERVE_IN;
+    Sptd.Cdb[1] = RESERVATION_ACTION_READ_RESERVATIONS;
+
+    DWORD BytesReturned = 0;
+    BOOL Result = DeviceIoControl(
+        DiskHandle,
+        IOCTL_SCSI_PASS_THROUGH_DIRECT,
+        &Sptd,
+        sizeof(Sptd),
+        &Sptd,
+        sizeof(Sptd),
+        &BytesReturned,
+        NULL);
+
+    EXPECT_NE(Result, 0) << "Error sending command: " << GetLastError();
+    ASSERT_EQ(Sptd.ScsiStatus, 0) << "Command returned with error status: "
+                                  << std::hex << Sptd.ScsiStatus;
+    EXPECT_EQ(*(PUINT32)&Data[0], MOCK_PR_GENERATION);
+    EXPECT_EQ(BytesReturned, sizeof(SCSI_PASS_THROUGH_DIRECT));
+
+    WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
+    ExpWnbdRequest.RequestType = WnbdReqTypePersistResIn;
+    ExpWnbdRequest.Cmd.PersistResIn.ServiceAction = RESERVATION_ACTION_READ_RESERVATIONS;
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
+
+    WNBD_USR_STATS UserspaceStats = { 0 };
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+    ASSERT_EQ(UserspaceStats.PersistResInErrors, 0);
+}
+
+TEST(TestPersistentReservations, TestPersistentReserveOut) {
+    auto InstanceName = GetNewInstanceName();
+
+    MockWnbdDaemon WnbdDaemon(
+        InstanceName,
+        DefaultBlockCount,
+        DefaultBlockSize,
+        false,
+        false
+    );
+
+    WnbdDaemon.Start();
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    ASSERT_FALSE(WnbdShow(InstanceName.c_str(), &ConnectionInfo))
+        << "couldn't retrieve WNBD disk info";
+
+    std::string DiskPath = GetDiskPath(InstanceName);
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    PRO_PARAMETER_LIST OutParamList = { 0 };
+    *(PUINT64)&OutParamList.ReservationKey = 0x1111beef;
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        0,
+        NULL);
+
+    ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
+        << "Error opening device: " << GetLastError();
+
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    SCSI_PASS_THROUGH_DIRECT Sptd;
+    ZeroMemory(&Sptd, sizeof(Sptd));
+    Sptd.Length = sizeof(Sptd);
+    Sptd.CdbLength = 10;
+    Sptd.DataIn = SCSI_IOCTL_DATA_OUT;
+    Sptd.DataBuffer = &OutParamList;
+    Sptd.DataTransferLength = sizeof(OutParamList);
+    Sptd.TimeOutValue = 2;
+    Sptd.Cdb[0] = SCSIOP_PERSISTENT_RESERVE_OUT;
+    Sptd.Cdb[1] = RESERVATION_ACTION_CLEAR;
+    Sptd.Cdb[2] = RESERVATION_TYPE_EXCLUSIVE;
+    Sptd.Cdb[8] = sizeof(PRO_PARAMETER_LIST);
+
+    DWORD BytesReturned = 0;
+    BOOL Result = DeviceIoControl(
+        DiskHandle,
+        IOCTL_SCSI_PASS_THROUGH_DIRECT,
+        &Sptd,
+        sizeof(Sptd),
+        &Sptd,
+        sizeof(Sptd),
+        &BytesReturned,
+        NULL);
+
+    EXPECT_NE(Result, 0) << "Error sending command: " << GetLastError();
+    ASSERT_EQ(Sptd.ScsiStatus, 0) << "Command returned with error status: "
+                                  << std::hex << Sptd.ScsiStatus;
+
+    WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
+    ExpWnbdRequest.RequestType = WnbdReqTypePersistResOut;
+    ExpWnbdRequest.Cmd.PersistResOut.ServiceAction = RESERVATION_ACTION_CLEAR;
+    ExpWnbdRequest.Cmd.PersistResOut.Type = RESERVATION_TYPE_EXCLUSIVE;
+    ExpWnbdRequest.Cmd.PersistResOut.ParameterListLength = sizeof(OutParamList);
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(
+        ExpWnbdRequest, &OutParamList, sizeof(OutParamList)));
+
+    *(PUINT64)&OutParamList.ReservationKey = 0x33331111;
+    // Ensure that the buffer check works as expected by using a negative test.
+    ASSERT_FALSE(WnbdDaemon.ReqLog.HasEntry(
+        ExpWnbdRequest, &OutParamList, sizeof(OutParamList)));
+
+    WNBD_USR_STATS UserspaceStats = { 0 };
+    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+    ASSERT_EQ(UserspaceStats.PersistResOutErrors, 0);
 }
