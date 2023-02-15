@@ -510,7 +510,7 @@ TEST(TestPersistentReservations, TestPersistentReserveIn) {
     sptd.Cdb[0] = SCSIOP_PERSISTENT_RESERVE_IN;
     sptd.Cdb[1] = RESERVATION_ACTION_READ_RESERVATIONS;
 
-    DWORD bytesReturned = 0;
+    DWORD BytesReturned = 0;
     BOOL Result = DeviceIoControl(
         hDevice,
         IOCTL_SCSI_PASS_THROUGH_DIRECT,
@@ -518,11 +518,14 @@ TEST(TestPersistentReservations, TestPersistentReserveIn) {
         sizeof(sptd),
         &sptd,
         sizeof(sptd),
-        &bytesReturned,
+        &BytesReturned,
         NULL);
 
     EXPECT_NE(Result, 0) << "Error sending command: " << GetLastError();
-    ASSERT_EQ(sptd.ScsiStatus, 0) << "Command returned with error status: " << std::hex << sptd.ScsiStatus;
+    ASSERT_EQ(sptd.ScsiStatus, 0) << "Command returned with error status: "
+                                  << std::hex << sptd.ScsiStatus;
+    EXPECT_EQ(*(PUINT32)&data[0], MOCK_PR_GENERATION);
+    EXPECT_EQ(BytesReturned, sizeof(SCSI_PASS_THROUGH_DIRECT));
 
     WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
     ExpWnbdRequest.RequestType = WnbdReqTypePersistResIn;
@@ -556,8 +559,8 @@ TEST(TestPersistentReservations, TestPersistentReserveOut) {
     std::string DiskPath = GetDiskPath(InstanceName);
     PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
 
-    UCHAR data[24];
-    ZeroMemory(data, sizeof(data));
+    PRO_PARAMETER_LIST OutParamList = { 0 };
+    *(PUINT64)&OutParamList.ReservationKey = 0x1111beef;
 
     HANDLE hDevice = CreateFileA(
         DiskPath.c_str(),
@@ -577,15 +580,17 @@ TEST(TestPersistentReservations, TestPersistentReserveOut) {
     SCSI_PASS_THROUGH_DIRECT sptd;
     ZeroMemory(&sptd, sizeof(sptd));
     sptd.Length = sizeof(sptd);
-    sptd.CdbLength = 6;
-    sptd.DataIn = SCSI_IOCTL_DATA_IN;
-    sptd.DataBuffer = data;
-    sptd.DataTransferLength = sizeof(data);
+    sptd.CdbLength = 10;
+    sptd.DataIn = SCSI_IOCTL_DATA_OUT;
+    sptd.DataBuffer = &OutParamList;
+    sptd.DataTransferLength = sizeof(OutParamList);
     sptd.TimeOutValue = 2;
     sptd.Cdb[0] = SCSIOP_PERSISTENT_RESERVE_OUT;
     sptd.Cdb[1] = RESERVATION_ACTION_CLEAR;
     sptd.Cdb[2] = RESERVATION_TYPE_EXCLUSIVE;
-    DWORD bytesReturned = 0;
+    sptd.Cdb[8] = sizeof(PRO_PARAMETER_LIST);
+
+    DWORD BytesReturned = 0;
     BOOL Result = DeviceIoControl(
         hDevice,
         IOCTL_SCSI_PASS_THROUGH_DIRECT,
@@ -593,17 +598,25 @@ TEST(TestPersistentReservations, TestPersistentReserveOut) {
         sizeof(sptd),
         &sptd,
         sizeof(sptd),
-        &bytesReturned,
+        &BytesReturned,
         NULL);
 
     EXPECT_NE(Result, 0) << "Error sending command: " << GetLastError();
-    ASSERT_EQ(sptd.ScsiStatus, 0) << "Command returned with error status: " << std::hex << sptd.ScsiStatus;
+    ASSERT_EQ(sptd.ScsiStatus, 0) << "Command returned with error status: "
+                                  << std::hex << sptd.ScsiStatus;
 
     WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
     ExpWnbdRequest.RequestType = WnbdReqTypePersistResOut;
     ExpWnbdRequest.Cmd.PersistResOut.ServiceAction = RESERVATION_ACTION_CLEAR;
     ExpWnbdRequest.Cmd.PersistResOut.Type = RESERVATION_TYPE_EXCLUSIVE;
-    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
+    ExpWnbdRequest.Cmd.PersistResOut.ParameterListLength = sizeof(OutParamList);
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(
+        ExpWnbdRequest, &OutParamList, sizeof(OutParamList)));
+
+    *(PUINT64)&OutParamList.ReservationKey = 0x33331111;
+    // Ensure that the buffer check works as expected by using a negative test.
+    ASSERT_FALSE(WnbdDaemon.ReqLog.HasEntry(
+        ExpWnbdRequest, &OutParamList, sizeof(OutParamList)));
 
     WNBD_USR_STATS UserspaceStats = { 0 };
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);

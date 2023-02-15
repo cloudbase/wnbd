@@ -37,6 +37,7 @@ void MockWnbdDaemon::Start()
 
     WnbdProps.Flags.ReadOnly = ReadOnly;
     WnbdProps.Flags.UnmapSupported = 1;
+    WnbdProps.Flags.PersistResSupported = 1;
     if (CacheEnabled) {
         WnbdProps.Flags.FUASupported = 1;
         WnbdProps.Flags.FlushSupported = 1;
@@ -54,9 +55,6 @@ void MockWnbdDaemon::Start()
                              std::to_string(rand());
         Serial.copy(WnbdProps.SerialNumber, sizeof(WnbdProps.SerialNumber));
     }
-
-    if (EnablePersistentReservations)
-        WnbdProps.Flags.PersistResSupported = 1;
 
     DWORD err = WnbdCreate(
         &WnbdProps, (const PWNBD_INTERFACE) &MockWnbdInterface,
@@ -268,9 +266,10 @@ void MockWnbdDaemon::PersistentReserveIn(
         break;
     }
 
+    MOCK_PRI_LIST MockPrList = { MOCK_PR_GENERATION, 0 };
     handler->SendIoResponse(
         RequestHandle, RequestType,
-        handler->MockStatus, NULL, 0);
+        handler->MockStatus, &MockPrList, sizeof(MockPrList));
 }
 
 void MockWnbdDaemon::PersistentReserveOut(
@@ -294,7 +293,7 @@ void MockWnbdDaemon::PersistentReserveOut(
     WnbdReq.Cmd.PersistResOut.Scope = Scope;
     WnbdReq.Cmd.PersistResOut.Type = Type;
 
-    handler->ReqLog.AddEntry(WnbdReq);
+    handler->ReqLog.AddEntry(WnbdReq, Buffer, ParameterListLength);
 
     switch (ServiceAction)
     {
