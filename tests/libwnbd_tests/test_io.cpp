@@ -291,9 +291,7 @@ void TestRead(
     ExpWnbdRequest.Cmd.Read.BlockAddress = 1;
     ExpWnbdRequest.Cmd.Read.BlockCount =
         WNBD_DEFAULT_MAX_TRANSFER_LENGTH / BlockSize;
-    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(
-        ExpWnbdRequest, ReadBuffer.get(),
-        WNBD_DEFAULT_MAX_TRANSFER_LENGTH));
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
     ASSERT_FALSE(
         memcmp(ReadBuffer.get(), ExpReadBuffer.get(),
             WNBD_DEFAULT_MAX_TRANSFER_LENGTH));
@@ -303,9 +301,7 @@ void TestRead(
         WNBD_DEFAULT_MAX_TRANSFER_LENGTH / BlockSize;
     ExpWnbdRequest.Cmd.Read.BlockCount =
         WNBD_DEFAULT_MAX_TRANSFER_LENGTH / BlockSize;
-    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(
-        ExpWnbdRequest, ReadBuffer.get(),
-        WNBD_DEFAULT_MAX_TRANSFER_LENGTH));
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
     ASSERT_FALSE(
         memcmp(ReadBuffer.get(), ExpReadBuffer.get(),
             WNBD_DEFAULT_MAX_TRANSFER_LENGTH));
@@ -325,8 +321,7 @@ void TestRead(
 
     ExpWnbdRequest.Cmd.Read.BlockAddress = BlockCount - 1;
     ExpWnbdRequest.Cmd.Read.BlockCount = 1;
-    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest, ReadBuffer.get(),
-        BlockSize));
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(ExpWnbdRequest));
     ASSERT_FALSE(
         memcmp(ReadBuffer.get(), ExpReadBuffer.get(), BlockSize));
 
