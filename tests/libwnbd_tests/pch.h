@@ -4,7 +4,10 @@
 
 #pragma once
 
+#define _CRT_RAND_S
+#include <stdlib.h>
 #include <iostream>
+#include <string>
 
 #include <windows.h>
 
@@ -12,3 +15,5 @@
 #include <scsi.h>
 
 #include "gtest/gtest.h"
+
+#include <wnbd.h>

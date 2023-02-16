@@ -7,21 +7,20 @@
 #include "pch.h"
 
 #include "utils.h"
+#include "options.h"
 
 int main(int argc, char **argv)
 {
+    if (argc > 1 && !strcmp(argv[1], "--help")) {
+        PrintHelp();
+    }
+
     ::testing::InitGoogleTest(&argc, argv);
 
-    std::string WnbdLogLevelStr = GetEnv("WNBD_LOG_LEVEL");
-    try {
-        if (!WnbdLogLevelStr.empty()) {
-            int LogLevel = std::stoi(WnbdLogLevelStr);
-            WnbdSetLogLevel((WnbdLogLevel) LogLevel);
-        }
-    } catch (...) {
-        std::cerr << "invalid wnbd log level: " << WnbdLogLevelStr << std::endl;
-        exit(1);
-    }
+    ParseOptions(argc, argv);
+
+    DWORD LogLevel = GetOpt<DWORD>("log-level");
+    WnbdSetLogLevel((WnbdLogLevel) LogLevel);
 
     return RUN_ALL_TESTS();
 }

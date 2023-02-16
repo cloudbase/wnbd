@@ -7,9 +7,6 @@
 #pragma once
 
 #include <mutex>
-#include <string.h>
-
-#include <wnbd.h>
 
 #include "request_log.h"
 
