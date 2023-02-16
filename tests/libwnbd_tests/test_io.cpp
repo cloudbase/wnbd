@@ -1,3 +1,9 @@
+/*
+ * Copyright (C) 2023 Cloudbase Solutions
+ *
+ * Licensed under LGPL-2.1 (see LICENSE)
+ */
+
 #include "pch.h"
 #include "mock_wnbd_daemon.h"
 #include "utils.h"
