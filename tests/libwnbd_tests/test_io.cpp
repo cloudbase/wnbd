@@ -644,3 +644,86 @@ TEST(TestPersistentReservations, TestPersistentReserveOut) {
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
     ASSERT_EQ(UserspaceStats.PersistResOutErrors, 0);
 }
+
+TEST(TestScsiUnmap, TestUnmap) {
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+    MockWnbdDaemon WnbdDaemon(&WnbdProps);
+    WnbdDaemon.Start();
+    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
+    ASSERT_FALSE(WnbdShow(WnbdProps.InstanceName, &ConnectionInfo))
+        << "couldn't retrieve WNBD disk info";
+
+    std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
+    PWNBD_DISK WnbdDisk = WnbdDaemon.GetDisk();
+
+    HANDLE DiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        0,
+        NULL);
+
+    ASSERT_NE(DiskHandle, INVALID_HANDLE_VALUE)
+        << "Error opening device: " << GetLastError();
+
+    std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+        DiskHandle, &CloseHandle);
+
+    const int AllocationLength = sizeof(UNMAP_LIST_HEADER) + sizeof(UNMAP_BLOCK_DESCRIPTOR);
+    std::unique_ptr<UNMAP_LIST_HEADER> UnmapListHeader(
+        (PUNMAP_LIST_HEADER) new BYTE[AllocationLength]);
+
+    ZeroMemory(UnmapListHeader.get(), AllocationLength);
+
+    CDB UnmapCdb = { 0 };
+    UnmapCdb.UNMAP.OperationCode = SCSIOP_UNMAP;
+    REVERSE_BYTES_2(&UnmapCdb.UNMAP.AllocationLength, &AllocationLength);
+    int LbaCount = 1;
+    REVERSE_BYTES_4(UnmapListHeader->Descriptors[0].LbaCount, &LbaCount);
+    int64_t StartingLba = 2;
+    REVERSE_BYTES_8(UnmapListHeader->Descriptors[0].StartingLba, &StartingLba);
+    int BlockDescrDataLength = sizeof(UNMAP_BLOCK_DESCRIPTOR);
+    REVERSE_BYTES_2(&UnmapListHeader->BlockDescrDataLength, &BlockDescrDataLength);
+
+    SCSI_PASS_THROUGH_DIRECT Sptd;
+    ZeroMemory(&Sptd, sizeof(Sptd));
+    Sptd.Length = sizeof(Sptd);
+    Sptd.CdbLength = 10;
+    Sptd.DataIn = SCSI_IOCTL_DATA_OUT;
+    Sptd.DataBuffer = UnmapListHeader.get();
+    Sptd.DataTransferLength = sizeof(UNMAP_LIST_HEADER) + sizeof(UNMAP_BLOCK_DESCRIPTOR);
+    Sptd.TimeOutValue = 2;
+    RtlCopyMemory(&Sptd.Cdb, &UnmapCdb, sizeof(CDB));
+
+    DWORD BytesReturned = 0;
+    BOOL Result = DeviceIoControl(
+        DiskHandle,
+        IOCTL_SCSI_PASS_THROUGH_DIRECT,
+        &Sptd,
+        sizeof(Sptd),
+        &Sptd,
+        sizeof(Sptd),
+        &BytesReturned,
+        NULL);
+
+    EXPECT_NE(Result, 0) << "Error sending command: " << GetLastError();
+    ASSERT_EQ(Sptd.ScsiStatus, 0) << "Command returned with error status: "
+        << std::hex << Sptd.ScsiStatus;
+
+    WNBD_IO_REQUEST ExpWnbdRequest = { 0 };
+    ExpWnbdRequest.RequestType = WnbdReqTypeUnmap;
+    ExpWnbdRequest.Cmd.Unmap.Count = 1;
+
+    WNBD_UNMAP_DESCRIPTOR ExpectedUnmapDescriptor = { 0 };
+    ZeroMemory(&ExpectedUnmapDescriptor, sizeof(WNBD_UNMAP_DESCRIPTOR));
+    ExpectedUnmapDescriptor.BlockCount = 1;
+    ExpectedUnmapDescriptor.BlockAddress = 2;
+
+    ASSERT_TRUE(WnbdDaemon.ReqLog.HasEntry(
+        ExpWnbdRequest,
+        (void*) &ExpectedUnmapDescriptor,
+        sizeof(WNBD_UNMAP_DESCRIPTOR)));
+}
