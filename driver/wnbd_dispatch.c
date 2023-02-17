@@ -191,6 +191,7 @@ NTSTATUS WnbdDispatchRequest(
 
             PWNBD_UNMAP_DESCRIPTOR UnmapDescriptor = (
                 PWNBD_UNMAP_DESCRIPTOR) Buffer;
+            RtlZeroMemory(UnmapDescriptor, sizeof(WNBD_UNMAP_DESCRIPTOR));
             UnmapDescriptor->BlockAddress =
                 Element->StartingLbn / DevProps->BlockSize;
             UnmapDescriptor->BlockCount =
