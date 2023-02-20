@@ -290,7 +290,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         // TODO: do we care about the actual error?
         WNBD_LOG_INFO("NBD reply contains error: %llu", Reply.Error);
         Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+        Element->Srb->SrbStatus = SRB_STATUS_ERROR;
     }
     else {
         Element->Srb->DataTransferLength = Element->DataLength;
