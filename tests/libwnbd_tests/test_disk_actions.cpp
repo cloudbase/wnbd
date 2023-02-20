@@ -447,3 +447,70 @@ TEST(TestUnmap, TestHardUnmapFallback) {
 TEST(TestUnmap, TestHardUnmap) {
     TestUnmap(false, 0, 0, true);
 }
+
+TEST(TestList, TestList) {
+    WNBD_PROPERTIES WnbdPropsA = { 0 };
+    GetNewWnbdProps(&WnbdPropsA);
+
+    WNBD_PROPERTIES WnbdPropsB = { 0 };
+    GetNewWnbdProps(&WnbdPropsB);
+
+    {
+        // Create two mappings and ensure that they show up
+        // in the connction list.
+        MockWnbdDaemon WnbdDaemonA(&WnbdPropsA);
+        WnbdDaemonA.Start();
+
+        MockWnbdDaemon WnbdDaemonB(&WnbdPropsB);
+        WnbdDaemonB.Start();
+
+        WnbdConnectionList ConnList;
+        EXPECT_FALSE(ConnList.Retrieve());
+
+        PWNBD_CONNECTION_INFO ConnA = ConnList.GetConn(
+            WnbdPropsA.InstanceName);
+        EXPECT_TRUE(ConnA);
+
+        PWNBD_CONNECTION_INFO ConnB = ConnList.GetConn(
+            WnbdPropsB.InstanceName);
+        EXPECT_TRUE(ConnB);
+
+        PWNBD_CONNECTION_INFO RetrievedConns[] = {ConnA, ConnB};
+        PWNBD_PROPERTIES WnbdProps[] = {&WnbdPropsA, &WnbdPropsB};
+
+        for (int Idx = 0; Idx < 2; Idx++) {
+            EXPECT_EQ(
+                WnbdProps[Idx]->InstanceName,
+                std::string(RetrievedConns[Idx]->Properties.InstanceName));
+            EXPECT_EQ(
+                WnbdProps[Idx]->InstanceName,
+                std::string(RetrievedConns[Idx]->Properties.SerialNumber));
+            EXPECT_EQ(
+                std::string(WNBD_OWNER_NAME),
+                std::string(RetrievedConns[Idx]->Properties.Owner));
+            EXPECT_EQ(
+                DefaultBlockCount,
+                RetrievedConns[Idx]->Properties.BlockCount);
+            EXPECT_EQ(
+                DefaultBlockSize,
+                RetrievedConns[Idx]->Properties.BlockSize);
+            EXPECT_EQ(
+                _getpid(),
+                RetrievedConns[Idx]->Properties.Pid);
+
+            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.ReadOnly);
+            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.FlushSupported);
+            EXPECT_FALSE(
+                RetrievedConns[Idx]->Properties.Flags.FUASupported);
+            EXPECT_TRUE(RetrievedConns[Idx]->Properties.Flags.UnmapSupported);
+            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.UseNbd);
+        }
+    }
+    // The mappings went out of scope and have been disconnected,
+    // let's ensure that the connection list was updated.
+    WnbdConnectionList ConnList;
+    EXPECT_FALSE(ConnList.Retrieve());
+
+    EXPECT_FALSE(ConnList.GetConn(WnbdPropsA.InstanceName));
+    EXPECT_FALSE(ConnList.GetConn(WnbdPropsB.InstanceName));
+}

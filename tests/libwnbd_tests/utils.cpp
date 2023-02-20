@@ -12,7 +12,10 @@ std::string GetNewInstanceName()
 {
     auto TestInstance = ::testing::UnitTest::GetInstance();
     auto TestName = std::string(TestInstance->current_test_info()->name());
-    return TestName + "-" + std::to_string(rand());
+
+    unsigned int Rand;
+    rand_s(&Rand);
+    return TestName + "-" + std::to_string(Rand);
 }
 
 std::string WinStrError(DWORD Err)
@@ -253,6 +256,65 @@ PWNBD_OPTION WnbdOptionList::GetOpt(PWSTR Name)
     }
 
     return Option;
+}
+
+DWORD WnbdConnectionList::Retrieve()
+{
+    DWORD ReqBuffSz = 0;
+    DWORD Status = 0;
+
+    if (ConnList && BuffSz) {
+        memset(ConnList, 0, BuffSz);
+    }
+
+    do {
+        if (ReqBuffSz) {
+            if (ConnList) {
+                free(ConnList);
+            }
+
+            ConnList = (PWNBD_CONNECTION_LIST) calloc(1, ReqBuffSz);
+            if (!ConnList) {
+                Status = ERROR_NOT_ENOUGH_MEMORY;
+                break;
+            }
+            BuffSz = ReqBuffSz;
+        } else {
+            ReqBuffSz = BuffSz;
+        }
+
+        // If the buffer is too small, the return value is 0 and "ReqBuffSz"
+        // will contain the required size.
+        Status = WnbdList(ConnList, &ReqBuffSz);
+        if (Status)
+            break;
+    } while (BuffSz < ReqBuffSz);
+
+    if (Status && ConnList) {
+        free(ConnList);
+        ConnList = nullptr;
+    }
+
+    return Status;
+}
+
+PWNBD_CONNECTION_INFO WnbdConnectionList::GetConn(PSTR InstanceName)
+{
+    PWNBD_CONNECTION_INFO Conn = nullptr;
+
+    if (!ConnList) {
+        return nullptr;
+    }
+
+    for (unsigned int Idx=0; Idx < ConnList->Count; Idx++) {
+        if (!strcmp(InstanceName,
+                    ConnList->Connections[Idx].Properties.InstanceName)) {
+            Conn = &ConnList->Connections[Idx];
+            break;
+        }
+    }
+
+    return Conn;
 }
 
 void GetNewWnbdProps(PWNBD_PROPERTIES WnbdProps) {
