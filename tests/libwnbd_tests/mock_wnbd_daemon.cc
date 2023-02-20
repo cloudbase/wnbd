@@ -88,11 +88,10 @@ void MockWnbdDaemon::Read(
 
     if (Disk->Properties.BlockCount < BlockAddress + BlockCount) {
         // Overflow
-        // TODO: consider moving this check to the driver.
         WnbdSetSense(
             &handler->MockStatus,
             SCSI_SENSE_ILLEGAL_REQUEST,
-            SCSI_ADSENSE_VOLUME_OVERFLOW);
+            SCSI_ADSENSE_ILLEGAL_BLOCK);
     } else {
         memset(Buffer, READ_BYTE_CONTENT, BlockCount * handler->WnbdProps->BlockSize);
     }

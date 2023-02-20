@@ -373,7 +373,7 @@ NTSTATUS WnbdHandleResponse(
             Response->Status.ScsiStatus,
             Response->RequestHandle);
         Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SetSrbStatus(Element->Srb, &Response->Status);
+        SetSrbStatus(Element->Srb, &Response->Status);
     }
     else {
         Element->Srb->DataTransferLength = Element->DataLength;

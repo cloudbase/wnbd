@@ -636,14 +636,37 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
         SrbCdbGetRange(Cdb, &BlockAddress, &BlockCount, &FUA);
         DataLength = BlockCount * Device->Properties.BlockSize;
         if (DataLength < Srb->DataTransferLength &&
-            (Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE || Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE16)) {
+                (Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE ||
+                 Cdb->AsByte[0] != SCSIOP_SYNCHRONIZE_CACHE16)) {
             WNBD_LOG_WARN("Requested length is less than the SRB data length");
             Srb->SrbStatus = SRB_STATUS_ABORTED;
             Status = STATUS_BUFFER_TOO_SMALL;
             break;
         }
-        Status = WnbdPendElement(DeviceExtension, Device, Srb,
-            BlockAddress * Device->Properties.BlockSize, DataLength, (BOOLEAN)FUA);
+        if (BlockAddress + BlockCount < BlockAddress ||
+            BlockAddress + BlockCount > Device->Properties.BlockCount)
+        {
+            WNBD_LOG_DEBUG("IO overflow. Request type: %#x. "
+                           "Request block address: %llu. "
+                           "Request block count: %u. "
+                           "Total disk block count: %llu.",
+                           Cdb->AsByte[0],
+                           BlockAddress, BlockCount,
+                           Device->Properties.BlockCount);
+
+            WNBD_STATUS WnbdStatus = { 0 };
+            WnbdStatus.ScsiStatus = SCSISTAT_CHECK_CONDITION;
+            WnbdStatus.SenseKey = SCSI_SENSE_ILLEGAL_REQUEST;
+            WnbdStatus.ASC = SCSI_ADSENSE_ILLEGAL_BLOCK;
+
+            SetSrbStatus(Srb, &WnbdStatus);
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+        Status = WnbdPendElement(
+            DeviceExtension, Device, Srb,
+            BlockAddress * Device->Properties.BlockSize,
+            DataLength, (BOOLEAN)FUA);
         }
         break;
     case SCSIOP_UNMAP:

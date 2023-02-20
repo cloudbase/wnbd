@@ -82,7 +82,9 @@ BOOLEAN ValidateScsiRequest(
 
 #endif
 
-UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status);
+void SetSrbStatus(
+    PSCSI_REQUEST_BLOCK Srb,
+    PWNBD_STATUS Status);
 
 static inline int
 ScsiOpToWnbdReqType(int ScsiOp)
