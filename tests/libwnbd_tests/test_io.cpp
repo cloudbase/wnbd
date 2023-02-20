@@ -475,7 +475,9 @@ TEST(TestIoStats, TestIoStats) {
 
     WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
     WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
-    EVENTUALLY(UserspaceStats.WriteErrors >= 1, 20, 100);
+    // The address check was moved to the driver, which is why
+    // we won't have a write error on the libwnbd side.
+    // EVENTUALLY(UserspaceStats.WriteErrors >= 1, 20, 100);
     EVENTUALLY(UserspaceStats.TotalRWRequests >= 3, 20, 100);
     EVENTUALLY(DriverStats.TotalReceivedIORequests >= 3, 20, 100);
     EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 3, 20, 100);

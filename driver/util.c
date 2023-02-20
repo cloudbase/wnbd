@@ -403,7 +403,9 @@ ValidateScsiRequest(
     return TRUE;
 }
 
-UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
+void SetSrbStatus(
+    PSCSI_REQUEST_BLOCK Srb,
+    PWNBD_STATUS Status)
 {
     UCHAR SrbStatus = SRB_STATUS_ERROR;
     PSENSE_DATA SenseInfoBuffer = SrbGetSenseInfoBuffer(Srb);
@@ -435,7 +437,7 @@ UCHAR SetSrbStatus(PVOID Srb, PWNBD_STATUS Status)
         SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
     }
 
-    return SrbStatus;
+    Srb->SrbStatus = SrbStatus;
 }
 
 VOID CompleteRequest(
