@@ -76,4 +76,23 @@ public:
     PWNBD_OPTION GetOpt(PWSTR Name);
 };
 
+// A simple wrapper on top of WNBD_CONNECTION_LIST, making it easier
+// to retrieve and parse.
+class WnbdConnectionList {
+private:
+    PWNBD_CONNECTION_LIST ConnList = nullptr;
+    DWORD BuffSz = 0;
+
+public:
+    ~WnbdConnectionList() {
+        if (ConnList) {
+            free(ConnList);
+            ConnList = nullptr;
+        }
+    }
+
+    DWORD Retrieve();
+    PWNBD_CONNECTION_INFO GetConn(PSTR InstanceName);
+};
+
 void GetNewWnbdProps(PWNBD_PROPERTIES);
