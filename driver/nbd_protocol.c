@@ -33,7 +33,9 @@ NbdReadExact(_In_ INT Fd,
             Length -= Result;
             Temp = Temp + Result;
         } else {
-            WNBD_LOG_WARN("Failed with : %d", Result);
+            if (Result) {
+                WNBD_LOG_WARN("Read failed, status: %d", Result);
+            }
             *error = STATUS_CONNECTION_DISCONNECTED;
             return -1;
         }
