@@ -115,6 +115,15 @@ void TestMapUnsupported(
         &WnbdProps,
         &ConnectionInfo,
         nullptr);
+    if (!err) {
+        // We were expecting this to fail. Let's clean up.
+        err = WnbdIoctlRemove(
+            AdapterHandle,
+            WnbdProps.InstanceName,
+            nullptr,
+            nullptr);
+        EXPECT_FALSE(err) << "Couldn't remove WNBD mapping";
+    }
     ASSERT_TRUE(err)
         << "WnbdCreate succeeded although it was expected to fail";
 }
