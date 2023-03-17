@@ -93,10 +93,14 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     // smaller than 32MB avoids this issue.
     ConfigInfo->MaximumTransferLength = WNBD_DEFAULT_MAX_TRANSFER_LENGTH;
     ConfigInfo->MaxNumberOfIO = WNBD_MAX_IN_FLIGHT_REQUESTS;
+    ConfigInfo->MaxIOsPerLun = WNBD_MAX_IO_REQ_PER_LUN;
+    ConfigInfo->InitialLunQueueDepth = WNBD_MAX_IO_REQ_PER_LUN;
     ConfigInfo->NumberOfPhysicalBreaks = SP_UNINITIALIZED_VALUE;
     ConfigInfo->AlignmentMask = FILE_BYTE_ALIGNMENT;
     ConfigInfo->NumberOfBuses = WNBD_MAX_BUSES_PER_ADAPTER;
     ConfigInfo->ScatterGather = TRUE;
+    ConfigInfo->Dma64BitAddresses =
+        SCSI_DMA64_MINIPORT_FULL64BIT_NO_BOUNDARY_REQ_SUPPORTED;
     ConfigInfo->Master = TRUE;
     ConfigInfo->CachesData = TRUE;
     ConfigInfo->MaximumNumberOfTargets = WNBD_MAX_TARGETS_PER_BUS;
@@ -228,7 +232,7 @@ WnbdHwResetBus(PVOID DeviceExtension,
 }
 
 UCHAR
-WnbdFirmwareInfo(PSCSI_REQUEST_BLOCK Srb)
+WnbdFirmwareInfo(PVOID Srb)
 {
     PSRB_IO_CONTROL SrbControl;
     PFIRMWARE_REQUEST_BLOCK Request;
@@ -240,7 +244,7 @@ WnbdFirmwareInfo(PSCSI_REQUEST_BLOCK Srb)
 
     if (sizeof(STORAGE_FIRMWARE_INFO_V2) > Request->DataBufferLength) {
         SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
@@ -249,7 +253,7 @@ WnbdFirmwareInfo(PSCSI_REQUEST_BLOCK Srb)
     if ((STORAGE_FIRMWARE_INFO_STRUCTURE_VERSION_V2 != Info->Version ) ||
         (sizeof(STORAGE_FIRMWARE_INFO_V2) > Info->Size)) {
         SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
@@ -272,19 +276,19 @@ WnbdFirmwareInfo(PSCSI_REQUEST_BLOCK Srb)
         Info->Slot[0].ReadOnly = FALSE;
         StorPortCopyMemory(&Info->Slot[0].Revision, "01234567", 8);
         SrbControl->ReturnCode = FIRMWARE_STATUS_SUCCESS;
-        Srb->SrbStatus = SRB_STATUS_SUCCESS;
+        SrbSetSrbStatus(Srb, SRB_STATUS_SUCCESS);
     } else {
         Request->DataBufferLength = sizeof(STORAGE_FIRMWARE_INFO_V2) + sizeof(STORAGE_FIRMWARE_SLOT_INFO_V2);
         SrbControl->ReturnCode = FIRMWARE_STATUS_OUTPUT_BUFFER_TOO_SMALL;
-        Srb->SrbStatus = SRB_STATUS_SUCCESS;
+        SrbSetSrbStatus(Srb, SRB_STATUS_SUCCESS);
     }
 
 exit:
-    return Srb->SrbStatus;
+    return SrbGetSrbStatus(Srb);
 }
 
 UCHAR
-WnbdFirmareIOCTL(PSCSI_REQUEST_BLOCK Srb)
+WnbdFirmareIOCTL(PVOID Srb)
 {
     ULONG                   BufferLength = 0;
     PSRB_IO_CONTROL         SrbControl;
@@ -295,7 +299,7 @@ WnbdFirmareIOCTL(PSCSI_REQUEST_BLOCK Srb)
 
     if ((sizeof(SRB_IO_CONTROL) + sizeof(FIRMWARE_REQUEST_BLOCK))
         >BufferLength) {
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
@@ -304,20 +308,20 @@ WnbdFirmareIOCTL(PSCSI_REQUEST_BLOCK Srb)
     if (((ULONGLONG)Request->DataBufferOffset + Request->DataBufferLength)
         >(ULONGLONG)(BufferLength)) {
         SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
     if (FIRMWARE_REQUEST_BLOCK_STRUCTURE_VERSION > Request->Version) {
         SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
     if (ALIGN_UP(sizeof(SRB_IO_CONTROL) + sizeof(FIRMWARE_REQUEST_BLOCK), PVOID)
         > Request->DataBufferOffset) {
         SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-        Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+        SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
         goto exit;
     }
 
@@ -331,17 +335,17 @@ WnbdFirmareIOCTL(PSCSI_REQUEST_BLOCK Srb)
     case FIRMWARE_FUNCTION_ACTIVATE:
     default:
         SrbControl->ReturnCode = FIRMWARE_STATUS_SUCCESS;
-        Srb->SrbStatus = SRB_STATUS_SUCCESS;
+        SrbSetSrbStatus(Srb, SRB_STATUS_SUCCESS);
         break;
 
     }
 
 exit:
-    return Srb->SrbStatus;
+    return SrbGetSrbStatus(Srb);
 }
 
 UCHAR
-WnbdProcessSrbIOCTL(PSCSI_REQUEST_BLOCK Srb)
+WnbdProcessSrbIOCTL(PVOID Srb)
 {
     PSRB_IO_CONTROL SrbControl = (PSRB_IO_CONTROL)SrbGetDataBuffer(Srb);
 
@@ -354,11 +358,11 @@ WnbdProcessSrbIOCTL(PSCSI_REQUEST_BLOCK Srb)
 
         default:
             SrbControl->ReturnCode = FIRMWARE_STATUS_INVALID_PARAMETER;
-            Srb->SrbStatus = SRB_STATUS_BAD_SRB_BLOCK_LENGTH;
+            SrbSetSrbStatus(Srb, SRB_STATUS_BAD_SRB_BLOCK_LENGTH);
             break;
     }
 
-    return Srb->SrbStatus;
+    return SrbGetSrbStatus(Srb);
 }
 
 /*
@@ -366,19 +370,19 @@ WnbdProcessSrbIOCTL(PSCSI_REQUEST_BLOCK Srb)
  */
 _Use_decl_annotations_
 BOOLEAN
-WnbdHwStartIo(PVOID DeviceExtension,
-              PSCSI_REQUEST_BLOCK  Srb)
+WnbdHwStartIo(PVOID DeviceExtension, PVOID Srb)
 {
     _IRQL_limited_to_(DISPATCH_LEVEL);
     UCHAR SrbStatus = SRB_STATUS_INVALID_REQUEST;
     BOOLEAN Complete = TRUE;
     ASSERT(DeviceExtension);
     PWNBD_EXTENSION Ext = (PWNBD_EXTENSION)DeviceExtension;
+    ULONG SrbFunction = SrbGetSrbFunction(Srb);
 
     WNBD_LOG_DEBUG("WnbdHwStartIo Processing SRB Function = 0x%x(%s)",
-                   Srb->Function, WnbdToStringSrbFunction(Srb->Function));
+                   SrbFunction, WnbdToStringSrbFunction(SrbFunction));
 
-    switch (Srb->Function) {
+    switch (SrbFunction) {
     case SRB_FUNCTION_EXECUTE_SCSI:
         SrbStatus = WnbdExecuteScsiFunction(Ext, Srb, &Complete);
         break;
@@ -414,7 +418,7 @@ WnbdHwStartIo(PVOID DeviceExtension,
     case SRB_FUNCTION_RESET_BUS:
     default:
         WNBD_LOG_INFO("Unknown SRB Function = 0x%x(%s)",
-                       Srb->Function, WnbdToStringSrbFunction(Srb->Function));
+                       SrbFunction, WnbdToStringSrbFunction(SrbFunction));
         SrbStatus = SRB_STATUS_INVALID_REQUEST;
         break;
 
@@ -425,10 +429,10 @@ WnbdHwStartIo(PVOID DeviceExtension,
      */
     if (Complete) {
         WNBD_LOG_DEBUG("RequestComplete of %s status: 0x%x(%s)",
-                       WnbdToStringSrbFunction(Srb->Function),
+                       WnbdToStringSrbFunction(SrbFunction),
                        SrbStatus,
                        WnbdToStringSrbStatus(SrbStatus));
-        Srb->SrbStatus = SrbStatus;
+        SrbSetSrbStatus(Srb, SrbStatus);
         StorPortNotification(RequestComplete, DeviceExtension, Srb);
     }
 

@@ -15,7 +15,7 @@
 #include "userspace.h"
 
 UCHAR DrainDeviceQueues(PVOID DeviceExtension,
-                        PSCSI_REQUEST_BLOCK Srb)
+                        PVOID Srb)
 
 {
     ASSERT(Srb);
@@ -24,18 +24,23 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_DISK_DEVICE Device;
 
-    if (SrbGetCdb(Srb)) {
-        BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
+    UCHAR PathId = SrbGetPathId(Srb);
+    UCHAR TargetId = SrbGetTargetId(Srb);
+    UCHAR Lun = SrbGetLun(Srb);
+
+    PCDB Cdb = SrbGetCdb(Srb);
+    if (Cdb) {
+        BYTE CdbValue = Cdb->AsByte[0];
 
         WNBD_LOG_INFO("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-            CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+            CdbValue, Srb, CdbValue, PathId, TargetId, Lun);
     }
 
     Device = WnbdFindDeviceByAddr(
-        DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun, TRUE);
+        DeviceExtension, PathId, TargetId, Lun, TRUE);
     if (NULL == Device) {
         WNBD_LOG_INFO("Could not find device PathId: %d TargetId: %d LUN: %d",
-            Srb->PathId, Srb->TargetId, Srb->Lun);
+            PathId, TargetId, Lun);
         goto Exit;
     }
 
@@ -59,7 +64,7 @@ Exit:
 _Use_decl_annotations_
 UCHAR
 WnbdAbortFunction(_In_ PVOID DeviceExtension,
-                  _In_ PSCSI_REQUEST_BLOCK Srb)
+                  _In_ PVOID Srb)
 {
     ASSERT(Srb);
     ASSERT(DeviceExtension);
@@ -72,7 +77,7 @@ WnbdAbortFunction(_In_ PVOID DeviceExtension,
 _Use_decl_annotations_
 UCHAR
 WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
-                             PSCSI_REQUEST_BLOCK Srb)
+                             PVOID Srb)
 {
     ASSERT(Srb);
     ASSERT(DeviceExtension);
@@ -85,15 +90,15 @@ WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
 _Use_decl_annotations_
 UCHAR
 WnbdResetDeviceFunction(PVOID DeviceExtension,
-                        PSCSI_REQUEST_BLOCK  Srb)
+                        PVOID Srb)
 {
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
     StorPortCompleteRequest(DeviceExtension,
-                            Srb->PathId,
-                            Srb->TargetId,
-                            SP_UNTAGGED,
+                            SrbGetPathId(Srb),
+                            SrbGetTargetId(Srb),
+                            SrbGetLun(Srb),
                             SRB_STATUS_TIMEOUT);
 
     return SRB_STATUS_SUCCESS;
@@ -102,35 +107,40 @@ WnbdResetDeviceFunction(PVOID DeviceExtension,
 _Use_decl_annotations_
 UCHAR
 WnbdExecuteScsiFunction(PVOID DeviceExtension,
-                        PSCSI_REQUEST_BLOCK Srb,
+                        PVOID Srb,
                         PBOOLEAN Complete)
 {
     ASSERT(DeviceExtension);
     ASSERT(Srb);
     ASSERT(Complete);
 
+    UCHAR PathId = SrbGetPathId(Srb);
+    UCHAR TargetId = SrbGetTargetId(Srb);
+    UCHAR Lun = SrbGetLun(Srb);
+
     NTSTATUS Status = STATUS_SUCCESS;
     UCHAR SrbStatus = SRB_STATUS_NO_DEVICE;
     PWNBD_DISK_DEVICE Device;
     *Complete = TRUE;
 
-    if (SrbGetCdb(Srb)) {
-        BYTE CdbValue = SrbGetCdb(Srb)->AsByte[0];
+    PCDB Cdb = SrbGetCdb(Srb);
+    if (Cdb) {
+        BYTE CdbValue = Cdb->AsByte[0];
 
         WNBD_LOG_DEBUG("Received %#02x command. SRB = 0x%p. CDB = 0x%x. PathId: %d TargetId: %d LUN: %d",
-            CdbValue, Srb, CdbValue, Srb->PathId, Srb->TargetId, Srb->Lun);
+            CdbValue, Srb, CdbValue, PathId, TargetId, Lun);
     }
 
     Device = WnbdFindDeviceByAddr(
-        (PWNBD_EXTENSION)DeviceExtension, Srb->PathId, Srb->TargetId, Srb->Lun, TRUE);
+        (PWNBD_EXTENSION)DeviceExtension, PathId, TargetId, Lun, TRUE);
     if (NULL == Device) {
         WNBD_LOG_DEBUG("Could not find device PathId: %d TargetId: %d LUN: %d",
-                       Srb->PathId, Srb->TargetId, Srb->Lun);
+                       PathId, TargetId, Lun);
         goto Exit;
     }
     if (Device->HardRemoveDevice) {
         WNBD_LOG_DEBUG("%p is marked for deletion. PathId = %d. TargetId = %d. LUN = %d",
-                       Device, Srb->PathId, Srb->TargetId, Srb->Lun);
+                       Device, PathId, TargetId, Lun);
         goto Exit;
     }
 
@@ -142,7 +152,7 @@ WnbdExecuteScsiFunction(PVOID DeviceExtension,
         SrbStatus = SRB_STATUS_PENDING;
     } else {
         InterlockedDecrement64(&Device->Stats.OutstandingIOCount);
-        SrbStatus = Srb->SrbStatus;
+        SrbStatus = SrbGetSrbStatus(Srb);
     }
 
 Exit:
@@ -154,23 +164,41 @@ Exit:
 
 _Use_decl_annotations_
 UCHAR
-WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
+WnbdPNPFunction(PVOID Srb)
 {
     ASSERT(Srb);
-    PSCSI_PNP_REQUEST_BLOCK PNP = (PSCSI_PNP_REQUEST_BLOCK) Srb;
+
+    STOR_PNP_ACTION PnPAction;
+    ULONG SrbPnPFlags;
+
+    PSRBEX_DATA_PNP SrbExPnp = (PSRBEX_DATA_PNP)SrbGetSrbExDataByType(
+        (PSTORAGE_REQUEST_BLOCK) Srb,
+        SrbExDataTypePnP);
+    if (SrbExPnp) {
+        SrbPnPFlags = SrbExPnp->SrbPnPFlags;
+        PnPAction = SrbExPnp->PnPAction;
+    } else {
+        PSCSI_PNP_REQUEST_BLOCK SrbPnp = (PSCSI_PNP_REQUEST_BLOCK) Srb;
+        SrbPnPFlags = SrbPnp->SrbPnPFlags;
+        PnPAction = SrbPnp->PnPAction;
+    }
+
     UCHAR SrbStatus = SRB_STATUS_INVALID_REQUEST;
 
-    switch (PNP->PnPAction)
+    switch (PnPAction)
     {
     case StorQueryCapabilities:
-        if (!(PNP->SrbPnPFlags & SRB_PNP_FLAGS_ADAPTER_REQUEST)) {
+        if (!(SrbPnPFlags & SRB_PNP_FLAGS_ADAPTER_REQUEST) &&
+                SrbGetDataTransferLength(Srb) >=
+                    sizeof(STOR_DEVICE_CAPABILITIES_EX))
+        {
             PVOID DataBuffer = SrbGetDataBuffer(Srb);
             ASSERT(DataBuffer);
 
             PSTOR_DEVICE_CAPABILITIES_EX DeviceCapabilitiesEx = DataBuffer;
-            // TODO: check why zero-ing the entire structure leads to a crash
-            // on WS 2016.
-            RtlZeroMemory(DeviceCapabilitiesEx, sizeof(PSTOR_DEVICE_CAPABILITIES_EX));
+            RtlZeroMemory(
+                DeviceCapabilitiesEx,
+                sizeof(STOR_DEVICE_CAPABILITIES_EX));
             DeviceCapabilitiesEx->DefaultWriteCacheEnabled = 1;
             DeviceCapabilitiesEx->SilentInstall = 1;
             // We're disabling SurpriseRemovalOK in order to
@@ -185,7 +213,7 @@ WnbdPNPFunction(PSCSI_REQUEST_BLOCK Srb)
 
     default:
         WNBD_LOG_INFO("Untreated SCSI request. PnP action: %x, "
-                      "PnP flag: %x", PNP->PnPAction, PNP->SrbPnPFlags);
+                      "PnP flag: %x", PnPAction, SrbPnPFlags);
         break;
     }
 

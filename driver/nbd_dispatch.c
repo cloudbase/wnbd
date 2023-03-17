@@ -8,6 +8,7 @@
 
 #include "nbd_dispatch.h"
 #include "util.h"
+#include "srb_helper.h"
 #include "debug.h"
 
 _Use_decl_annotations_
@@ -81,15 +82,15 @@ WnbdProcessDeviceThreadRequests(_In_ PWNBD_DISK_DEVICE Device)
         RequestTag += 1;
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
         Element->Tag = RequestTag;
-        Element->Srb->DataTransferLength = 0;
-        PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+        SrbSetDataTransferLength(Element->Srb, 0);
+        PCDB Cdb = SrbGetCdb(Element->Srb);
         WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx",
                        Element->Srb, Element->Tag);
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
 
         if(!ValidateScsiRequest(Device, Element)) {
-            Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+            SrbSetDataTransferLength(Element->Srb, 0);
+            SrbSetSrbStatus(Element->Srb, SRB_STATUS_INVALID_REQUEST);
             CompleteRequest(Device, Element, TRUE);
             InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
             continue;
@@ -234,7 +235,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
     ULONG StorResult;
     if(!Element->Aborted) {
         // We need to avoid accessing aborted or already completed SRBs.
-        PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+        PCDB Cdb = SrbGetCdb(Element->Srb);
         int NbdReqType = ScsiOpToNbdReqType(Cdb->AsByte[0]);
         WNBD_LOG_DEBUG("Received reply header for %s %p 0x%llx.",
                        NbdRequestTypeStr(NbdReqType), Element->Srb, Element->Tag);
@@ -244,7 +245,7 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
             if (STOR_STATUS_SUCCESS != StorResult) {
                 WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: 0x%x.",
                               Element->Srb, Element->Tag, error);
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 WnbdDisconnectAsync(Device);
                 goto Exit;
             }
@@ -272,8 +273,8 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
         if (-1 == NbdReadExact(Device->NbdSocket, TempBuff, Element->DataLength, &error)) {
             WNBD_LOG_WARN("Failed receiving reply %p 0x%llx. Error: %d",
                            Element->Srb, Element->Tag, error);
-            Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+            SrbSetDataTransferLength(Element->Srb, 0);
+            SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
             WnbdDisconnectAsync(Device);
             goto Exit;
         } else {
@@ -289,12 +290,12 @@ NbdProcessDeviceThreadReplies(_In_ PWNBD_DISK_DEVICE Device)
     if (Reply.Error) {
         // TODO: do we care about the actual error?
         WNBD_LOG_INFO("NBD reply contains error: %llu", Reply.Error);
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ERROR;
+        SrbSetDataTransferLength(Element->Srb, 0);
+        SrbSetSrbStatus(Element->Srb, SRB_STATUS_ERROR);
     }
     else {
-        Element->Srb->DataTransferLength = Element->DataLength;
-        Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
+        SrbSetDataTransferLength(Element->Srb, Element->DataLength);
+        SrbSetSrbStatus(Element->Srb, SRB_STATUS_SUCCESS);
     }
 
     InterlockedIncrement64(&Device->Stats.TotalReceivedIOReplies);

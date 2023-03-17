@@ -128,9 +128,8 @@ NTSTATUS WnbdDispatchRequest(
 
         PSRB_QUEUE_ELEMENT Element = CONTAINING_RECORD(RequestEntry, SRB_QUEUE_ELEMENT, Link);
         Element->Tag = InterlockedIncrement64(&(LONG64)RequestHandle);
-        Element->Srb->DataTransferLength = 0;
-        PCDB Cdb = (PCDB)&Element->Srb->Cdb;
-
+        SrbSetDataTransferLength(Element->Srb, 0);
+        PCDB Cdb = SrbGetCdb(Element->Srb);
         RtlZeroMemory(Request, sizeof(WNBD_IO_REQUEST));
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
         WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx Type: %d",
@@ -139,8 +138,8 @@ NTSTATUS WnbdDispatchRequest(
         // TODO: consider moving this to WnbdPendOperation so that we don't
         // queue unsupported requests.
         if (!ValidateScsiRequest(Device, Element)) {
-            Element->Srb->DataTransferLength = 0;
-            Element->Srb->SrbStatus = SRB_STATUS_INVALID_REQUEST;
+            SrbSetDataTransferLength(Element->Srb, 0);
+            SrbSetSrbStatus(Element->Srb, SRB_STATUS_INVALID_REQUEST);
             CompleteRequest(Device, Element, TRUE);
             InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
             continue;
@@ -182,7 +181,7 @@ NTSTATUS WnbdDispatchRequest(
                 // The user buffer must be at least as large as
                 // the specified maximum transfer length, which in
                 // turn must fit a WNBD_UNMAP_DESCRIPTOR.
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 CompleteRequest(Device, Element, TRUE);
                 InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
                 Status = STATUS_BUFFER_TOO_SMALL;
@@ -222,7 +221,7 @@ NTSTATUS WnbdDispatchRequest(
         case WnbdReqTypeWrite:
         case WnbdReqTypePersistResOut:
             if (Element->DataLength > Command->DataBufferSize) {
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 CompleteRequest(Device, Element, TRUE);
                 InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
                 Status = STATUS_BUFFER_TOO_SMALL;
@@ -233,7 +232,7 @@ NTSTATUS WnbdDispatchRequest(
             ULONG StorResult = StorPortGetSystemAddress(
                 Element->DeviceExtension, Element->Srb, &SrbBuffer);
             if (StorResult) {
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 CompleteRequest(Device, Element, TRUE);
                 InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
                 WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
@@ -315,7 +314,7 @@ NTSTATUS WnbdHandleResponse(
     ULONG StorResult;
     if (!Element->Aborted) {
         // We need to avoid accessing aborted or already completed SRBs.
-        PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+        PCDB Cdb = SrbGetCdb(Element->Srb);
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
         WNBD_LOG_DEBUG("Received reply header for %d %p 0x%llx.",
                        RequestType, Element->Srb, Element->Tag);
@@ -325,7 +324,7 @@ NTSTATUS WnbdHandleResponse(
             if (STOR_STATUS_SUCCESS != StorResult) {
                 WNBD_LOG_WARN("Could not get SRB %p 0x%llx data buffer. Error: %lu.",
                               Element->Srb, Element->Tag, StorResult);
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 Status = STATUS_INTERNAL_ERROR;
                 goto Exit;
             }
@@ -343,7 +342,7 @@ NTSTATUS WnbdHandleResponse(
                                "NULL buffer with non-zero buffer size: %d.",
                                Element->Srb, Element->Tag, Command->DataBufferSize);
                 Status = STATUS_INVALID_PARAMETER;
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 goto Exit;
             }
         } else {
@@ -351,7 +350,7 @@ NTSTATUS WnbdHandleResponse(
                 Command->DataBuffer, Command->DataBufferSize, FALSE,
                 &LockedUserBuff, &Mdl, &BufferLocked);
             if (Status) {
-                Element->Srb->SrbStatus = SRB_STATUS_INTERNAL_ERROR;
+                SrbSetSrbStatus(Element->Srb, SRB_STATUS_INTERNAL_ERROR);
                 goto Exit;
             }
         }
@@ -373,12 +372,12 @@ NTSTATUS WnbdHandleResponse(
             "Received reply with non-zero scsi status: 0x%llx # 0x%llx",
             Response->Status.ScsiStatus,
             Response->RequestHandle);
-        Element->Srb->DataTransferLength = 0;
+        SrbSetDataTransferLength(Element->Srb, 0);
         SetSrbStatus(Element->Srb, &Response->Status);
     }
     else {
-        Element->Srb->DataTransferLength = Element->DataLength;
-        Element->Srb->SrbStatus = SRB_STATUS_SUCCESS;
+        SrbSetDataTransferLength(Element->Srb, Element->DataLength);
+        SrbSetSrbStatus(Element->Srb, SRB_STATUS_SUCCESS);
     }
 
 Exit:
