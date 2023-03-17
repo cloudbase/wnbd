@@ -11,7 +11,7 @@
 
 _Use_decl_annotations_
 PCHAR
-WnbdToStringSrbFunction(UCHAR SrbFunction)
+WnbdToStringSrbFunction(ULONG SrbFunction)
 {
     switch(SrbFunction) {
     CASE_STR(SRB_FUNCTION_EXECUTE_SCSI)

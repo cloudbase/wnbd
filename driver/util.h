@@ -64,9 +64,9 @@ WnbdFindDeviceByInstanceName(
     _In_ BOOLEAN Acquire);
 
 BOOLEAN
-IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
+IsReadSrb(_In_ PVOID Srb);
 BOOLEAN
-IsPerResInSrb(_In_ PSCSI_REQUEST_BLOCK Srb);
+IsPerResInSrb(_In_ PVOID Srb);
 
 VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device);
 VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device);
@@ -83,7 +83,7 @@ BOOLEAN ValidateScsiRequest(
 #endif
 
 void SetSrbStatus(
-    PSCSI_REQUEST_BLOCK Srb,
+    PVOID Srb,
     PWNBD_STATUS Status);
 
 static inline int

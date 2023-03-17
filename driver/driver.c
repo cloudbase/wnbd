@@ -41,8 +41,8 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
      * Register Virtual Storport Miniport data
      */
     NTSTATUS Status;
-    VIRTUAL_HW_INITIALIZATION_DATA WnbdInitData = { 0 };
-    WnbdInitData.HwInitializationDataSize = sizeof(VIRTUAL_HW_INITIALIZATION_DATA);
+    HW_INITIALIZATION_DATA WnbdInitData = { 0 };
+    WnbdInitData.HwInitializationDataSize = sizeof(HW_INITIALIZATION_DATA);
     GlobalLogLevel = 0;
 
     /*
@@ -50,7 +50,7 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
      */
     WnbdInitData.HwAdapterControl        = WnbdHwAdapterControl;
     WnbdInitData.HwCompleteServiceIrp    = 0;
-    WnbdInitData.HwFindAdapter           = WnbdHwFindAdapter;
+    WnbdInitData.HwFindAdapter           = (PVOID)WnbdHwFindAdapter;
     WnbdInitData.HwFreeAdapterResources  = WnbdHwFreeAdapterResources;
     WnbdInitData.HwInitialize            = WnbdHwInitialize;
     WnbdInitData.HwProcessServiceRequest = WnbdHwProcessServiceRequest;
@@ -77,6 +77,14 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
     WnbdInitData.AutoRequestSense     = TRUE;
     WnbdInitData.MultipleRequestPerLu = TRUE;
 
+    WnbdInitData.FeatureSupport |=
+        STOR_FEATURE_VIRTUAL_MINIPORT |
+        STOR_FEATURE_FULL_PNP_DEVICE_CAPABILITIES |
+        // STOR_FEATURE_DEVICE_NAME_NO_SUFFIX |
+        STOR_FEATURE_ADAPTER_NOT_REQUIRE_IO_PORT;
+    WnbdInitData.SrbTypeFlags = SRB_TYPE_FLAG_STORAGE_REQUEST_BLOCK |
+                                SRB_TYPE_FLAG_SCSI_REQUEST_BLOCK;
+
     Status = IoOpenDriverRegistryKey(
         DriverObject,
         DriverRegKeyPersistentState,
@@ -95,7 +103,7 @@ DriverEntry(PDRIVER_OBJECT DriverObject,
      */
     Status =  StorPortInitialize(DriverObject,
                                  RegistryPath,
-                                 (PHW_INITIALIZATION_DATA)&WnbdInitData,
+                                 &WnbdInitData,
                                  NULL);
     if (!NT_SUCCESS(Status)) {
         WNBD_LOG_ERROR("DriverEntry failure in call to StorPortInitialize. Status: 0x%x", Status);

@@ -13,5 +13,5 @@
 NTSTATUS
 WnbdHandleSrbOperation(_In_ PWNBD_EXTENSION DeviceExtension,
                        _In_ PWNBD_DISK_DEVICE ScsiDeviceExtension,
-                       _In_ PSCSI_REQUEST_BLOCK Srb);
+                       _In_ PVOID Srb);
 #endif

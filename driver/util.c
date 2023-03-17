@@ -40,8 +40,8 @@ VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
 
     while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+        SrbSetDataTransferLength(Element->Srb, 0);
+        SrbSetSrbStatus(Element->Srb, SRB_STATUS_ABORTED);
         if (!Element->Aborted) {
             Element->Aborted = 1;
             if (SubmittedRequests)
@@ -68,8 +68,8 @@ VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
     KeAcquireSpinLock(ListLock, &Irql);
     LIST_FORALL_SAFE(ListHead, ItemLink, ItemNext) {
         Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
-        Element->Srb->DataTransferLength = 0;
-        Element->Srb->SrbStatus = SRB_STATUS_ABORTED;
+        SrbSetDataTransferLength(Element->Srb, 0);
+        SrbSetSrbStatus(Element->Srb, SRB_STATUS_ABORTED);
         if (!Element->Aborted) {
             Element->Aborted = 1;
             InterlockedIncrement64(&Device->Stats.AbortedSubmittedIORequests);
@@ -319,7 +319,7 @@ WnbdDisconnectSync(_In_ PWNBD_DISK_DEVICE Device)
 }
 
 BOOLEAN
-IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
+IsReadSrb(_In_ PVOID Srb)
 {
     PCDB Cdb = SrbGetCdb(Srb);
     if(!Cdb) {
@@ -338,7 +338,7 @@ IsReadSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
 }
 
 BOOLEAN
-IsPerResInSrb(_In_ PSCSI_REQUEST_BLOCK Srb)
+IsPerResInSrb(_In_ PVOID Srb)
 {
     PCDB Cdb = SrbGetCdb(Srb);
     if (!Cdb) {
@@ -353,7 +353,7 @@ ValidateScsiRequest(
     _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element)
 {
-    PCDB Cdb = (PCDB)&Element->Srb->Cdb;
+    PCDB Cdb = SrbGetCdb(Element->Srb);
     int ScsiOp = Cdb->AsByte[0];
     int WnbdReqType = ScsiOpToWnbdReqType(ScsiOp);
     PWNBD_PROPERTIES DevProps = &Device->Properties;
@@ -404,7 +404,7 @@ ValidateScsiRequest(
 }
 
 void SetSrbStatus(
-    PSCSI_REQUEST_BLOCK Srb,
+    PVOID Srb,
     PWNBD_STATUS Status)
 {
     UCHAR SrbStatus = SRB_STATUS_ERROR;
@@ -437,7 +437,7 @@ void SetSrbStatus(
         SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
     }
 
-    Srb->SrbStatus = SrbStatus;
+    SrbSetSrbStatus(Srb, SrbStatus);
 }
 
 VOID CompleteRequest(
@@ -450,8 +450,8 @@ VOID CompleteRequest(
     if (!InterlockedExchange8((CHAR*)&Element->Completed, TRUE)) {
         WNBD_LOG_DEBUG(
             "Notifying StorPort of completion of %p 0x%llx status: 0x%x(%s)",
-            Element->Srb, Element->Tag, Element->Srb->SrbStatus,
-            WnbdToStringSrbStatus(Element->Srb->SrbStatus));
+            Element->Srb, Element->Tag, SrbGetSrbStatus(Element->Srb),
+            WnbdToStringSrbStatus(SrbGetSrbStatus(Element->Srb)));
         StorPortNotification(RequestComplete, Element->DeviceExtension, Element->Srb);
         InterlockedDecrement64(&Device->Stats.OutstandingIOCount);
     }

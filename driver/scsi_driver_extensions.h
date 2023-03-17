@@ -75,7 +75,7 @@ typedef struct _WNBD_DISK_DEVICE
 
 typedef struct _SRB_QUEUE_ELEMENT {
     LIST_ENTRY Link;
-    PSCSI_REQUEST_BLOCK Srb;
+    PVOID Srb;
     UINT64 StartingLbn;
     ULONG DataLength;
     BOOLEAN FUA;
@@ -115,6 +115,6 @@ WnbdHwResetBus(_In_ PVOID DeviceExtension,
 
 BOOLEAN
 WnbdHwStartIo(_In_ PVOID PDevExt,
-              _In_ PSCSI_REQUEST_BLOCK  PSrb);
+              _In_ PVOID PSrb);
 
 #endif

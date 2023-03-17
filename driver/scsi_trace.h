@@ -10,7 +10,7 @@
 #include "common.h"
 
 PCHAR
-WnbdToStringSrbFunction(_In_ UCHAR SrbFunction);
+WnbdToStringSrbFunction(_In_ ULONG SrbFunction);
 
 PCHAR
 WnbdToStringSrbStatus(_In_ UCHAR SrbStatus);
