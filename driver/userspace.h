@@ -12,10 +12,6 @@
 #include "wnbd_ioctl.h"
 #include "scsi_driver_extensions.h"
 
-// TODO: make this configurable. 1024 is the Storport default.
-#define WNBD_MAX_IN_FLIGHT_REQUESTS 2048
-// TODO: make this configuragble. 255 is the Storport default.
-#define WNBD_MAX_IO_REQ_PER_LUN 512
 #define WNBD_PREALLOC_BUFF_SZ (WNBD_DEFAULT_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
 
 NTSTATUS

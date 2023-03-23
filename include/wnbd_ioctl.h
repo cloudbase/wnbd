@@ -50,6 +50,18 @@ static const GUID WNBD_GUID = {
 // however it's not. We shold rename it, dropping the "default" keyword.
 #define WNBD_DEFAULT_MAX_TRANSFER_LENGTH 2 * 1024 * 1024
 
+// The maximum number of outstanding IO operations per adapter.
+// 1000 is the Storport default.
+// Minimum: 1, maximum: WNBD_ABS_MAX_IO_REQ_PER_ADAPTER.
+#define WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER 1000
+// The maximum number of outstanding IO operations per lun.
+// 255 is the Storport default.
+// Minimum: 1. maximum: WNBD_ABS_MAX_IO_REQ_PER_LUN.
+#define WNBD_DEFAULT_MAX_IO_REQ_PER_LUN 255
+// Out of caution, we're defining maximum values for the IO queue size.
+#define WNBD_ABS_MAX_IO_REQ_PER_ADAPTER 1024 * 128
+#define WNBD_ABS_MAX_IO_REQ_PER_LUN 1024
+
 // Only used for NBD connections, in which case the block size is optional.
 #define WNBD_DEFAULT_BLOCK_SIZE 512
 

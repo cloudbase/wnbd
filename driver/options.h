@@ -38,7 +38,9 @@ typedef enum {
     OptNewMappingsAllowed,
     OptEtwLoggingEnabled,
     OptWppLoggingEnabled,
-    OptDbgPrintEnabled
+    OptDbgPrintEnabled,
+    OptMaxIOReqPerAdapter,
+    OptMaxIOReqPerLun,
 } WNBD_OPT_KEY;
 
 extern WNBD_OPTION WnbdDriverOptions[];

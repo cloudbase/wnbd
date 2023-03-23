@@ -33,6 +33,8 @@ WNBD_OPTION WnbdDriverOptions[] = {
     WNBD_DEF_OPT(L"EtwLoggingEnabled", Bool, TRUE),
     WNBD_DEF_OPT(L"WppLoggingEnabled", Bool, FALSE),
     WNBD_DEF_OPT(L"DbgPrintEnabled", Bool, TRUE),
+    WNBD_DEF_OPT(L"MaxIOReqPerAdapter", Int64, WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER),
+    WNBD_DEF_OPT(L"MaxIOReqPerLun", Int64, WNBD_DEFAULT_MAX_IO_REQ_PER_LUN),
 };
 DWORD WnbdOptionsCount = sizeof(WnbdDriverOptions) / sizeof(WNBD_OPTION);
 
