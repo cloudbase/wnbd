@@ -6,6 +6,7 @@
 
 #include "debug.h"
 #include "driver.h"
+#include "options.h"
 #include "srb_helper.h"
 #include "scsi_driver_extensions.h"
 #include "scsi_function.h"
@@ -92,9 +93,43 @@ WnbdHwFindAdapter(PVOID DeviceExtension,
     // MaximumTransferLength to SP_UNINITIALIZED_VALUE. Keeping transfer lengths
     // smaller than 32MB avoids this issue.
     ConfigInfo->MaximumTransferLength = WNBD_DEFAULT_MAX_TRANSFER_LENGTH;
-    ConfigInfo->MaxNumberOfIO = WNBD_MAX_IN_FLIGHT_REQUESTS;
-    ConfigInfo->MaxIOsPerLun = WNBD_MAX_IO_REQ_PER_LUN;
-    ConfigInfo->InitialLunQueueDepth = WNBD_MAX_IO_REQ_PER_LUN;
+
+    DWORD MaxIOReqPerAdapter =
+        (DWORD) WnbdDriverOptions[OptMaxIOReqPerAdapter].Value.Data.AsInt64;
+    if (0 < MaxIOReqPerAdapter &&
+            MaxIOReqPerAdapter <= WNBD_ABS_MAX_IO_REQ_PER_ADAPTER) {
+        WNBD_LOG_INFO("Configured maximum number of requests per adapter: %d",
+                      MaxIOReqPerAdapter);
+        ConfigInfo->MaxNumberOfIO = MaxIOReqPerAdapter;
+    } else {
+        WNBD_LOG_WARN("Unsupported maximum number of requests per adapter: %d. "
+                      "Minimum: 1. Maximum: %d. "
+                      "Falling back to default value: %d.",
+                      MaxIOReqPerAdapter,
+                      WNBD_ABS_MAX_IO_REQ_PER_ADAPTER,
+                      WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER);
+        ConfigInfo->MaxNumberOfIO = WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER;
+    }
+
+    DWORD MaxIOReqPerLun =
+        (DWORD) WnbdDriverOptions[OptMaxIOReqPerLun].Value.Data.AsInt64;
+    if (0 < MaxIOReqPerLun &&
+            MaxIOReqPerLun <= WNBD_ABS_MAX_IO_REQ_PER_LUN) {
+        WNBD_LOG_INFO("Configured maximum number of requests per lun: %d",
+                      MaxIOReqPerLun);
+        ConfigInfo->MaxIOsPerLun = MaxIOReqPerLun;
+    } else {
+        WNBD_LOG_WARN("Unsupported maximum number of requests per lun: %d. "
+                      "Minimum: 1. Maximum: %d. "
+                      "Falling back to default value: %d.",
+                      MaxIOReqPerLun,
+                      WNBD_ABS_MAX_IO_REQ_PER_LUN,
+                      WNBD_DEFAULT_MAX_IO_REQ_PER_LUN);
+        ConfigInfo->MaxIOsPerLun = WNBD_DEFAULT_MAX_IO_REQ_PER_LUN;
+    }
+
+    ConfigInfo->InitialLunQueueDepth = ConfigInfo->MaxIOsPerLun;
+
     ConfigInfo->NumberOfPhysicalBreaks = SP_UNINITIALIZED_VALUE;
     ConfigInfo->AlignmentMask = FILE_BYTE_ALIGNMENT;
     ConfigInfo->NumberOfBuses = WNBD_MAX_BUSES_PER_ADAPTER;
