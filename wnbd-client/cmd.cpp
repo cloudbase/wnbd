@@ -190,12 +190,75 @@ DWORD CmdStats(string InstanceName)
     return Status;
 }
 
+
+DWORD GetIOLimits(const string& DiskPath, INT& LunMaxIoCount, INT& AdapterMaxIoCount)
+{
+    DWORD Status = 0;
+
+    HANDLE RawDiskHandle = CreateFileA(
+        DiskPath.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        NULL,
+        NULL);
+    if (RawDiskHandle == INVALID_HANDLE_VALUE) {
+        Status = GetLastError();
+        cerr << "Couldn't open wnbd disk: " << DiskPath
+             << ", error: " << Status << endl;
+        return Status;
+    }
+
+    unique_ptr<void, decltype(&CloseHandle)> DiskHandle(
+        RawDiskHandle, &CloseHandle);
+
+    STORAGE_PROPERTY_QUERY PropertyQuery = { 0 };
+    PropertyQuery.PropertyId = StorageDeviceIoCapabilityProperty;
+    PropertyQuery.QueryType = PropertyStandardQuery;
+
+    STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR IoCapabilityDescriptor = { 0 };
+    DWORD BytesReturned = 0;
+
+    // Retrieve the actual IO limits.
+    BOOL Succeeded = DeviceIoControl(
+        DiskHandle.get(),
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        (LPVOID)&PropertyQuery,
+        sizeof(STORAGE_PROPERTY_QUERY),
+        (LPVOID)&IoCapabilityDescriptor,
+        sizeof(STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR),
+        &BytesReturned,
+        NULL);
+    if (!Succeeded) {
+        Status = GetLastError();
+        cerr << "Couldn't retrieve disk IO limits, error: " << Status << endl;
+        return Status;
+    }
+
+    LunMaxIoCount = IoCapabilityDescriptor.LunMaxIoCount;
+    AdapterMaxIoCount = IoCapabilityDescriptor.AdapterMaxIoCount;
+    return 0;
+}
+
 DWORD CmdShow(string InstanceName)
 {
     WNBD_CONNECTION_INFO ConnInfo = {0};
     DWORD Status = WnbdShow(InstanceName.c_str(), &ConnInfo);
     if (Status) {
         return Status;
+    }
+
+    INT LunMaxIoCount = -1;
+    INT AdapterMaxIoCount = -1;
+
+
+    if (ConnInfo.DiskNumber != -1) {
+        string DiskPath = "\\\\.\\PhysicalDrive" + to_string(ConnInfo.DiskNumber);
+        Status = GetIOLimits(DiskPath, LunMaxIoCount, AdapterMaxIoCount);
+        if (Status) {
+            return Status;
+        }
     }
 
     cout << "Connection info" << endl << left
@@ -218,6 +281,9 @@ DWORD CmdShow(string InstanceName)
          << setw(25) << "BusNumber" << " : " <<  ConnInfo.BusNumber << endl
          << setw(25) << "TargetId" << " : " <<  ConnInfo.TargetId << endl
          << setw(25) << "Lun" << " : " <<  ConnInfo.Lun << endl
+         // For consistency, we're using the same naming as the wnbd settings for IO limits.
+         << setw(25) << "MaxIOReqPerLun" << " : " << LunMaxIoCount << endl
+         << setw(25) << "MaxIOReqPerAdapter" << " : " << AdapterMaxIoCount << endl
          << endl;
 
     if (ConnInfo.Properties.Flags.UseNbd) {
