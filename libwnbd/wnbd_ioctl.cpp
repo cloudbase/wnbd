@@ -803,6 +803,9 @@ Exit:
             LogError("Driver rollback failed. Error: %d.", Status);
         }
     }
+    if (DeviceInfoList != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(DeviceInfoList);
+    }
 
     return Status;
 }
