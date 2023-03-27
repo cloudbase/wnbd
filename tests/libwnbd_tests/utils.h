@@ -19,8 +19,8 @@
     while (_retry_attempts--) {                                     \
         if (expression) {                                           \
             ok = true;                                              \
-        }                                                           \
-        else {                                                      \
+            break;                                                  \
+        } else {                                                    \
             Sleep(retry_interval_ms);                               \
         }                                                           \
     }                                                               \

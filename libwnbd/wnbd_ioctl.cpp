@@ -265,7 +265,7 @@ DWORD WnbdAdapterExists(PBOOL Exists) {
     Status = WnbdOpenAdapterEx(
         &Adapter, DeviceInfoList, &DevInfoData, 0, FALSE);
     if (!Status || Status == ERROR_FILE_NOT_FOUND) {
-        // If ERROR_FILE_NOT_FOUND is returned instead of ERROR_FILE_NOT_FOUND,
+        // If ERROR_FILE_NOT_FOUND is returned instead of ERROR_NO_MORE_ITEMS,
         // the device exists but cannot be opened in current state.
         *Exists = TRUE;
     }
@@ -274,7 +274,32 @@ DWORD WnbdAdapterExists(PBOOL Exists) {
     }
 
     if (Adapter != INVALID_HANDLE_VALUE)
-        CloseHandle(INVALID_HANDLE_VALUE);
+        CloseHandle(Adapter);
+    if (DeviceInfoList != INVALID_HANDLE_VALUE)
+        SetupDiDestroyDeviceInfoList(DeviceInfoList);
+    return Status;
+}
+
+DWORD WnbdGetAdapterDevInst(PDEVINST DeviceInst) {
+    DWORD Status = 0;
+    SP_DEVINFO_DATA DevInfoData = { 0 };
+    DevInfoData.cbSize = sizeof(DevInfoData);
+
+    HDEVINFO DeviceInfoList = INVALID_HANDLE_VALUE;
+    Status = InitializeWnbdAdapterList(&DeviceInfoList);
+    if (Status) {
+        return Status;
+    }
+
+    HANDLE Adapter = INVALID_HANDLE_VALUE;
+    Status = WnbdOpenAdapterEx(
+        &Adapter, DeviceInfoList, &DevInfoData, 0, FALSE);
+    if (!Status) {
+        *DeviceInst = DevInfoData.DevInst;
+    }
+
+    if (Adapter != INVALID_HANDLE_VALUE)
+        CloseHandle(Adapter);
     if (DeviceInfoList != INVALID_HANDLE_VALUE)
         SetupDiDestroyDeviceInfoList(DeviceInfoList);
     return Status;
@@ -1137,6 +1162,39 @@ DWORD WnbdIoctlShow(
     }
 
     return Status;
+}
+
+DWORD WnbdIoctlGetIOLimits(
+    HANDLE DiskHandle,
+    PDWORD LunMaxIoCount,
+    PDWORD AdapterMaxIoCount,
+    LPOVERLAPPED Overlapped)
+{
+    STORAGE_PROPERTY_QUERY PropertyQuery = { 0 };
+    PropertyQuery.PropertyId = StorageDeviceIoCapabilityProperty;
+    PropertyQuery.QueryType = PropertyStandardQuery;
+
+    STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR IoCapabilityDescriptor = { 0 };
+    DWORD BytesReturned = 0;
+
+    // Retrieve the actual IO limits.
+    DWORD Status = WnbdDeviceIoControl(
+        DiskHandle,
+        IOCTL_STORAGE_QUERY_PROPERTY,
+        (LPVOID)&PropertyQuery,
+        sizeof(STORAGE_PROPERTY_QUERY),
+        (LPVOID)&IoCapabilityDescriptor,
+        sizeof(STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR),
+        &BytesReturned,
+        Overlapped);
+    if (Status) {
+        LogError("Couldn't retrieve disk IO limits, error: %d.", Status);
+        return Status;
+    }
+
+    *LunMaxIoCount = IoCapabilityDescriptor.LunMaxIoCount;
+    *AdapterMaxIoCount = IoCapabilityDescriptor.AdapterMaxIoCount;
+    return 0;
 }
 
 DWORD WnbdIoctlReloadConfig(

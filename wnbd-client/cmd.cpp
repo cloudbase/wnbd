@@ -191,7 +191,10 @@ DWORD CmdStats(string InstanceName)
 }
 
 
-DWORD GetIOLimits(const string& DiskPath, INT& LunMaxIoCount, INT& AdapterMaxIoCount)
+DWORD GetIOLimits(
+    const string& DiskPath,
+    PDWORD LunMaxIoCount,
+    PDWORD AdapterMaxIoCount)
 {
     DWORD Status = 0;
 
@@ -213,32 +216,11 @@ DWORD GetIOLimits(const string& DiskPath, INT& LunMaxIoCount, INT& AdapterMaxIoC
     unique_ptr<void, decltype(&CloseHandle)> DiskHandle(
         RawDiskHandle, &CloseHandle);
 
-    STORAGE_PROPERTY_QUERY PropertyQuery = { 0 };
-    PropertyQuery.PropertyId = StorageDeviceIoCapabilityProperty;
-    PropertyQuery.QueryType = PropertyStandardQuery;
-
-    STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR IoCapabilityDescriptor = { 0 };
-    DWORD BytesReturned = 0;
-
-    // Retrieve the actual IO limits.
-    BOOL Succeeded = DeviceIoControl(
+    return WnbdIoctlGetIOLimits(
         DiskHandle.get(),
-        IOCTL_STORAGE_QUERY_PROPERTY,
-        (LPVOID)&PropertyQuery,
-        sizeof(STORAGE_PROPERTY_QUERY),
-        (LPVOID)&IoCapabilityDescriptor,
-        sizeof(STORAGE_DEVICE_IO_CAPABILITY_DESCRIPTOR),
-        &BytesReturned,
-        NULL);
-    if (!Succeeded) {
-        Status = GetLastError();
-        cerr << "Couldn't retrieve disk IO limits, error: " << Status << endl;
-        return Status;
-    }
-
-    LunMaxIoCount = IoCapabilityDescriptor.LunMaxIoCount;
-    AdapterMaxIoCount = IoCapabilityDescriptor.AdapterMaxIoCount;
-    return 0;
+        LunMaxIoCount,
+        AdapterMaxIoCount,
+        nullptr);
 }
 
 DWORD CmdShow(string InstanceName)
@@ -255,7 +237,8 @@ DWORD CmdShow(string InstanceName)
 
     if (ConnInfo.DiskNumber != -1) {
         string DiskPath = "\\\\.\\PhysicalDrive" + to_string(ConnInfo.DiskNumber);
-        Status = GetIOLimits(DiskPath, LunMaxIoCount, AdapterMaxIoCount);
+        Status = GetIOLimits(
+            DiskPath, (PDWORD) &LunMaxIoCount, (PDWORD) &AdapterMaxIoCount);
         if (Status) {
             return Status;
         }
