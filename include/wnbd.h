@@ -301,9 +301,11 @@ DWORD WnbdListDrvOpt(
 
 // Open the WNBD SCSI adapter device.
 DWORD WnbdOpenAdapter(PHANDLE Handle);
+DWORD WnbdGetAdapterDevInst(PDEVINST DeviceInst);
 DWORD WnbdIoctlPing(HANDLE Adapter, LPOVERLAPPED Overlapped);
 DWORD WnbdUninstallDriver(PBOOL RebootRequired);
 DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired);
+DWORD WnbdResetAdapter();
 
 // The "Overlapped" parameter used by WnbdIoctl* functions allows
 // asynchronous calls. If NULL, a valid overlapped structure is
@@ -392,6 +394,12 @@ DWORD WnbdIoctlSendResponse(
     PWNBD_IO_RESPONSE Response,
     PVOID DataBuffer,
     UINT32 DataBufferSize,
+    LPOVERLAPPED Overlapped);
+
+DWORD WnbdIoctlGetIOLimits(
+    HANDLE DiskHandle,
+    PDWORD LunMaxIoCount,
+    PDWORD AdapterMaxIoCount,
     LPOVERLAPPED Overlapped);
 
 static inline const CHAR* WnbdLogLevelToStr(WnbdLogLevel LogLevel) {

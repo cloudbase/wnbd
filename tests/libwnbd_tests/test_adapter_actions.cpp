@@ -231,3 +231,106 @@ TEST(TestDrvOptions, TestListOptions) {
     ASSERT_TRUE(!Status || Status == ERROR_FILE_NOT_FOUND)
         << "couldn't reset opt";
 }
+
+TEST(TestDrvOptions, TestIOLimits) {
+    WNBD_OPTION_VALUE OptVal = { WnbdOptUnknown, 0 };
+    DWORD Status = 0;
+
+    // We'll create a mapping in order to validate the IO limits.
+    WNBD_PROPERTIES WnbdProps = { 0 };
+    GetNewWnbdProps(&WnbdProps);
+
+    DWORD CustomAdapterIOLimit = 8192;
+    DWORD CustomLunIOLimit = 512;
+
+    DWORD RetrievedAdapterIOLimit = 0;
+    DWORD RetrievedLunIOLimit = 0;
+
+    OptVal.Type = WnbdOptInt64;
+    OptVal.Data.AsInt64 = CustomAdapterIOLimit;
+    Status = WnbdSetDrvOpt("MaxIOReqPerAdapter", &OptVal, TRUE);
+    ASSERT_FALSE(Status) << "couldn't set opt";
+
+    OptVal.Type = WnbdOptInt64;
+    OptVal.Data.AsInt64 = CustomLunIOLimit;
+    Status = WnbdSetDrvOpt("MaxIOReqPerLun", &OptVal, TRUE);
+    ASSERT_FALSE(Status) << "couldn't set opt";
+
+    // Reset the adapter in order to load the new settings
+    ASSERT_FALSE(WnbdResetAdapter()) << "couldn't reset WNBD adapter";
+
+    // Check the IO limits
+    {
+        MockWnbdDaemon WnbdDaemon(&WnbdProps);
+        WnbdDaemon.Start();
+
+        std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
+        HANDLE DiskHandle = CreateFileA(
+            DiskPath.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ,
+            NULL,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+            << "couldn't open disk: " << DiskPath
+            << ", error: " << WinStrError(GetLastError());
+        std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+            DiskHandle, &CloseHandle);
+
+        Status = WnbdIoctlGetIOLimits(
+            DiskHandle,
+            &RetrievedLunIOLimit,
+            &RetrievedAdapterIOLimit,
+            nullptr);
+        EXPECT_FALSE(Status) << "couldn't retrieve disk IO limits";
+
+        EXPECT_EQ(CustomLunIOLimit, RetrievedLunIOLimit);
+        EXPECT_EQ(CustomAdapterIOLimit, RetrievedAdapterIOLimit);
+    }
+
+    // Reset IO limits
+    Status = WnbdResetDrvOpt("MaxIOReqPerAdapter", TRUE);
+    ASSERT_TRUE(!Status || Status == ERROR_FILE_NOT_FOUND)
+        << "couldn't reset opt";
+    Status = WnbdResetDrvOpt("MaxIOReqPerLun", TRUE);
+    ASSERT_TRUE(!Status || Status == ERROR_FILE_NOT_FOUND)
+        << "couldn't reset opt";
+
+    // Reset the adapter in order to load the new settings
+    // Adapter removals will be vetoed right after the disk is disconnected,
+    // which is why we may need a few retries.
+    EVENTUALLY(WnbdResetAdapter() == 0, 10, 500);
+
+    // Check the IO limits
+    {
+        MockWnbdDaemon WnbdDaemon(&WnbdProps);
+        WnbdDaemon.Start();
+
+        std::string DiskPath = GetDiskPath(WnbdProps.InstanceName);
+        HANDLE DiskHandle = CreateFileA(
+            DiskPath.c_str(),
+            GENERIC_WRITE,
+            FILE_SHARE_READ,
+            NULL,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL);
+        ASSERT_NE(INVALID_HANDLE_VALUE, DiskHandle)
+            << "couldn't open disk: " << DiskPath
+            << ", error: " << WinStrError(GetLastError());
+        std::unique_ptr<void, decltype(&CloseHandle)> DiskHandleCloser(
+            DiskHandle, &CloseHandle);
+
+        Status = WnbdIoctlGetIOLimits(
+            DiskHandle,
+            &RetrievedLunIOLimit,
+            &RetrievedAdapterIOLimit,
+            nullptr);
+        EXPECT_FALSE(Status) << "couldn't retrieve disk IO limits";
+
+        EXPECT_EQ(WNBD_DEFAULT_MAX_IO_REQ_PER_LUN, RetrievedLunIOLimit);
+        EXPECT_EQ(WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER, RetrievedAdapterIOLimit);
+    }
+}

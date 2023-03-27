@@ -30,6 +30,8 @@ EXPORTS
     WnbdInstallDriver
     WnbdUninstallDriver
     WnbdOpenAdapter
+    WnbdResetAdapter
+    WnbdGetAdapterDevInst
 
     WnbdIoctlPing
     WnbdIoctlCreate
@@ -45,3 +47,5 @@ EXPORTS
     WnbdIoctlSetDrvOpt
     WnbdIoctlResetDrvOpt
     WnbdIoctlListDrvOpt
+
+    WnbdIoctlGetIOLimits

@@ -177,6 +177,38 @@ DWORD WnbdPnpRemoveDevice(
     return PnpRemoveDevice(DiskDeviceInst, TimeoutMs, RetryIntervalMs);
 }
 
+DWORD WnbdResetAdapter()
+{
+    DEVINST DeviceInst = {0};
+    DWORD Status = WnbdGetAdapterDevInst(&DeviceInst);
+    if (Status) {
+        LogError("Could not retrieve adapter device instance handle. "
+                 "Status: %d.", Status);
+        return Status;
+    }
+
+    DWORD CMStatus = CM_Disable_DevNode(DeviceInst, CM_DISABLE_UI_NOT_OK);
+    if (CMStatus) {
+        if (CMStatus == CR_REMOVE_VETOED) {
+            LogWarning("Could not reset WNBD adapter. "
+                       "Device in use, operation veto-ed.");
+            return ERROR_BUSY;
+        }
+        LogError("Could not disable WNBD adapter. CM status: %d.",
+                 CMStatus);
+        return ERROR_REMOVE_FAILED;
+    }
+
+    CMStatus = CM_Enable_DevNode(DeviceInst, 0);
+    if (CMStatus) {
+        LogError("Could not enable WNBD adapter. CM status: %d.",
+                 CMStatus);
+        return ERROR_NOT_READY;
+    }
+
+    return 0;
+}
+
 DWORD WnbdRemove(
     PWNBD_DISK Disk,
     PWNBD_REMOVE_OPTIONS RemoveOptions)
