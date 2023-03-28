@@ -191,10 +191,10 @@ DWORD WnbdResetAdapter()
     if (CMStatus) {
         if (CMStatus == CR_REMOVE_VETOED) {
             LogWarning("Could not reset WNBD adapter. "
-                       "Device in use, operation veto-ed.");
+                       "Device in use, operation vetoed.");
             return ERROR_BUSY;
         }
-        LogError("Could not disable WNBD adapter. CM status: %d.",
+        LogError("Could not reset WNBD adapter. CM status: %d.",
                  CMStatus);
         return ERROR_REMOVE_FAILED;
     }
@@ -208,6 +208,54 @@ DWORD WnbdResetAdapter()
 
     return 0;
 }
+
+DWORD WnbdResetAdapterEx(
+    DWORD TimeoutMs,
+    DWORD RetryIntervalMs)
+{
+    DWORD Status = 0;
+
+    LARGE_INTEGER StartTime, CurrTime, ElapsedMs, CounterFreq;
+    QueryPerformanceFrequency(&CounterFreq);
+    QueryPerformanceCounter(&StartTime);
+
+    BOOLEAN ResetVetoed = FALSE;
+    BOOLEAN TimeLeft = TRUE;
+
+    do {
+        Status = WnbdResetAdapter();
+
+        QueryPerformanceCounter(&CurrTime);
+        ElapsedMs.QuadPart = CurrTime.QuadPart - StartTime.QuadPart;
+        ElapsedMs.QuadPart *= 1000;
+        ElapsedMs.QuadPart /= CounterFreq.QuadPart;
+
+        ResetVetoed = Status == ERROR_BUSY;
+        TimeLeft = !TimeoutMs || (TimeoutMs > ElapsedMs.QuadPart);
+        if (Status) {
+            std::ostringstream TimeLeftSS;
+            if (!TimeoutMs) {
+                TimeLeftSS << "infinite";
+            } else {
+                TimeLeftSS << std::setprecision(2)
+                           << (TimeoutMs - ElapsedMs.QuadPart) / 1000.0
+                           << "s";
+            }
+
+            LogWarning(
+               "Could not reset adapter, device busy. "
+               "Time elapsed: %.2fs, time left: %s. ",
+               ElapsedMs.QuadPart / 1000.0,
+               TimeLeftSS.str().c_str());
+        }
+        if (ResetVetoed && TimeLeft) {
+            Sleep(RetryIntervalMs);
+        }
+    } while (ResetVetoed && TimeLeft);
+
+    return Status;
+}
+
 
 DWORD WnbdRemove(
     PWNBD_DISK Disk,

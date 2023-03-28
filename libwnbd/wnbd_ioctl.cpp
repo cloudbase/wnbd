@@ -516,7 +516,7 @@ Exit:
     return Status;
 }
 
-DWORD RemoveAllWnbdDisks(HANDLE AdapterHandle)
+DWORD WnbdRemoveAllDisks(HANDLE AdapterHandle)
 {
     DWORD BufferSize = 0;
     DWORD Status = 0;
@@ -613,7 +613,7 @@ DWORD RemoveAllWnbdDevices(PBOOL RebootRequired) {
 
         Found = TRUE;
         if (DeviceAvailable) {
-            TempStatus = RemoveAllWnbdDisks(AdapterHandle);
+            TempStatus = WnbdRemoveAllDisks(AdapterHandle);
             Status = TempStatus ? TempStatus : Status;
         }
         else {

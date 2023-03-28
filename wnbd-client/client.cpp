@@ -338,6 +338,30 @@ DWORD execute_uninstall(const po::variables_map& vm)
     return CmdUninstall();
 }
 
+void get_reset_adapter_args(
+    po::positional_options_description &positonal_opts,
+    po::options_description &named_opts)
+{
+    named_opts.add_options()
+        ("hard-disconnect-mappings", po::bool_switch(),
+         "Forcefully removes existing disk mappings.")
+        ("reset-timeout",
+            po::value<DWORD>()->default_value(10),
+            "Adapter reset timeout in seconds. The PnP reset request can be "
+            "vetoed if the device is still in use. Default: 10s.")
+        ("reset-retry-interval",
+            po::value<DWORD>()->default_value(1),
+            "Adapter reset retry interval in seconds. Default: 1s.");
+}
+
+DWORD execute_reset_adapter(const po::variables_map &vm)
+{
+    return CmdResetAdapter(
+        safe_get_param<bool>(vm, "hard-disconnect-mappings"),
+        safe_get_param<DWORD>(vm, "reset-timeout"),
+        safe_get_param<DWORD>(vm, "reset-retry-interval"));
+}
+
 Client::Command commands[] = {
     Client::Command(
         "version", {"-v"}, "Get the client, library and driver version.",
@@ -381,4 +405,8 @@ Client::Command commands[] = {
         "uninstall-driver", {}, "Hard remove all disk mappings and adapters"
                                 " and uninstall all WNBD driver instances.",
         execute_uninstall),
+    Client::Command(
+        "reset-adapter", {}, "Resets the WNBD adapter using PnP. Existing "
+                             "disk mappings need to be removed.",
+        execute_reset_adapter, get_reset_adapter_args),
 };

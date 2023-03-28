@@ -489,3 +489,49 @@ CmdInstall(std::string FileName)
 
     return Status;
 }
+
+DWORD
+CmdResetAdapter(
+    BOOLEAN HardRemoveMappings,
+    DWORD ResetTimeout,
+    DWORD ResetRetryInterval)
+{
+    // WnbdRemoveAllDisks temporarily rejects new mappings. If we get to
+    // use it, we need to reset the "NewMappingsAllowed" setting.
+    BOOLEAN ShouldAllowNewMappings = FALSE;
+    DWORD Status = 0;
+
+    if (HardRemoveMappings) {
+        HANDLE AdapterHandle = INVALID_HANDLE_VALUE;
+        Status = WnbdOpenAdapter(&AdapterHandle);
+        if (Status) {
+            cerr << "Could not open WNBD device. Make sure that the driver "
+                    "is installed." << endl;
+            return Status;
+        }
+
+        cerr << "Forcefully removing WNBD disk mappings." << endl;
+        Status = WnbdRemoveAllDisks(AdapterHandle);
+        ShouldAllowNewMappings = TRUE;
+        CloseHandle(AdapterHandle);
+
+        if (Status) {
+            cerr << "Could not forcefully remove existing disk mappings. "
+                 << endl;
+            goto Exit;
+        }
+    }
+
+    Status = WnbdResetAdapterEx(ResetTimeout * 1000, ResetRetryInterval * 1000);
+
+Exit:
+    if (ShouldAllowNewMappings) {
+        DWORD OptStatus = WnbdResetDrvOpt("NewMappingsAllowed", FALSE);
+        if (OptStatus) {
+            cerr << "Unable to reset the 'NewMappingsAllowed' setting." << endl;
+            return OptStatus;
+        }
+    }
+
+    return Status;
+}
