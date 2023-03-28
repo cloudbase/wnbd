@@ -4,7 +4,7 @@ Windows Network Block Device (WNBD)
 Build Status:
 -------------
 
-[![Build status](https://ci.appveyor.com/api/projects/status/2m73dxm2t7s7jlit/branch/main?svg=true)](https://ci.appveyor.com/project/aserdean/wnbd/branch/main)
+[![Build status](https://ci.appveyor.com/api/projects/status/4sh808y8v3hv0k2d?svg=true)](https://ci.appveyor.com/project/petrutlucian94/wnbd)
 
 What is WNBD?
 -------------
@@ -353,6 +353,8 @@ NewMappingsAllowed : true (Default: true)
 EtwLoggingEnabled  : true (Default: true)
 WppLoggingEnabled  : false (Default: false)
 DbgPrintEnabled    : true (Default: true)
+MaxIOReqPerAdapter : 1000 (Default: 1000)
+MaxIOReqPerLun     : 255 (Default: 255)
 ```
 
 Use the following command to configure an option. If the setting should persist
@@ -383,6 +385,34 @@ wnbd-client.exe reset-opt LogLevel
 ```
 
 Passing the ``--persistent`` flag will remove the persistent setting as well.
+
+Adjusting IO queue size
+-----------------------
+
+By default, Storport allows up to 1000 concurrent IO requests per adapter and
+255 requests per disk. This may be insufficient for large workloads, which is why
+the WNBD IO limits can be adjusted using the following settings:
+
+* ``MaxIOReqPerAdapter`` - min: 1, max: 131072
+* ``MaxIOReqPerLun`` - min: 1, max: 1024
+
+The WNBD adapter must be reset in order for the new IO limits to be applied.
+
+```PowerShell
+wnbd-client.exe set-opt MaxIOReqPerAdapter 8192 --persistent
+wnbd-client.exe set-opt MaxIOReqPerLun 512 --persistent
+
+# When using Ceph, stop the "ceph-rbd" service so that the existing
+# mappings will be gracefully disconnected.
+stop-service ceph-rbd
+
+wnbd-client.exe reset-adapter --hard-disconnect-mappings
+
+start-service ceph-rbd
+
+# Verify the updated IO limits
+wnbd-client.exe show $mapping
+```
 
 Limitations
 ===========
