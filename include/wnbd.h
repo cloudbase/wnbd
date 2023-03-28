@@ -306,6 +306,11 @@ DWORD WnbdIoctlPing(HANDLE Adapter, LPOVERLAPPED Overlapped);
 DWORD WnbdUninstallDriver(PBOOL RebootRequired);
 DWORD WnbdInstallDriver(CONST CHAR* FileName, PBOOL RebootRequired);
 DWORD WnbdResetAdapter();
+// Reset the adapter and retry if the device is busy.
+DWORD WnbdResetAdapterEx(DWORD TimeoutMs, DWORD RetryIntervalMs);
+// Sets "NewMappingsAllowed" to false and removes all the connected
+// WNBD disks.
+DWORD WnbdRemoveAllDisks(HANDLE AdapterHandle);
 
 // The "Overlapped" parameter used by WnbdIoctl* functions allows
 // asynchronous calls. If NULL, a valid overlapped structure is

@@ -31,7 +31,9 @@ EXPORTS
     WnbdUninstallDriver
     WnbdOpenAdapter
     WnbdResetAdapter
+    WnbdResetAdapterEx
     WnbdGetAdapterDevInst
+    WnbdRemoveAllDisks
 
     WnbdIoctlPing
     WnbdIoctlCreate

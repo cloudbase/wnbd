@@ -74,3 +74,9 @@ CmdUninstall();
 
 DWORD
 CmdInstall(std::string FileName);
+
+DWORD
+CmdResetAdapter(
+    BOOLEAN HardRemoveMappings,
+    DWORD ResetTimeout,
+    DWORD ResetRetryInterval);
