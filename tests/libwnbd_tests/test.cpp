@@ -22,5 +22,9 @@ int main(int argc, char **argv)
     DWORD LogLevel = GetOpt<DWORD>("log-level");
     WnbdSetLogLevel((WnbdLogLevel) LogLevel);
 
+    if (int Err = InitializeWinsock()) {
+        return Err;
+    }
+
     return RUN_ALL_TESTS();
 }

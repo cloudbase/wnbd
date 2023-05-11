@@ -4,6 +4,12 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
+#include "nbd_daemon.h"
+#include "wnbd.h"
+#include "wnbd_log.h"
+#include "utils.h"
+#include "version.h"
+
 #include <windows.h>
 
 #include <stdio.h>
@@ -12,11 +18,6 @@
 
 #define _NTSCSI_USER_MODE_
 #include <scsi.h>
-
-#include "wnbd.h"
-#include "wnbd_log.h"
-#include "utils.h"
-#include "version.h"
 
 DWORD WnbdCreate(
     const PWNBD_PROPERTIES Properties,
@@ -91,6 +92,21 @@ Exit:
     return ErrorCode;
 }
 
+DWORD WnbdRunNbdDaemon(const PWNBD_PROPERTIES Properties)
+{
+    NbdDaemon Daemon(Properties);
+    DWORD Status = Daemon.Start();
+    if (Status) {
+        return Status;
+    }
+
+    LogInfo("NBD mapping created, running as a daemon. "
+            "Press CTRL-C to stop or use 'wnbd-client unmap'. ");
+    Status = Daemon.Wait();
+    LogDebug("NBD daemon exited. Status: %d.", Status);
+    return Status;
+}
+
 DWORD PnpRemoveDevice(
     DEVINST DiskDeviceInst,
     DWORD TimeoutMs,
@@ -105,6 +121,9 @@ DWORD PnpRemoveDevice(
     BOOLEAN RemoveVetoed = FALSE;
     BOOLEAN TimeLeft = TRUE;
     WCHAR VetoName[MAX_PATH];
+    DWORD Attempt = 0;
+
+    LogInfo("Soft removing disk device.");
     do {
         PNP_VETO_TYPE VetoType = PNP_VetoTypeUnknown;
         memset(VetoName, 0, sizeof(VetoName));
@@ -112,6 +131,7 @@ DWORD PnpRemoveDevice(
         // We're supposed to use CM_Query_And_Remove_SubTreeW when
         // SurpriseRemovalOK is not set, otherwise we'd have to go
         // with CM_Request_Device_EjectW.
+        LogDebug("Soft remove attempt: %d.", Attempt++);
         DWORD CMStatus = CM_Query_And_Remove_SubTreeW(
             DiskDeviceInst, &VetoType, VetoName, MAX_PATH, CM_REMOVE_NO_RESTART);
 
@@ -264,8 +284,8 @@ DWORD WnbdRemove(
     // TODO: check for null pointers.
     DWORD ErrorCode = ERROR_SUCCESS;
 
-    LogDebug("Unmapping device %s.",
-             Disk->Properties.InstanceName);
+    LogInfo("Unmapping device %s.",
+            Disk->Properties.InstanceName);
     if (!Disk->Handle || Disk->Handle == INVALID_HANDLE_VALUE) {
         LogDebug("WNBD device already removed.");
         return 0;
