@@ -38,6 +38,7 @@ std::string GetNewInstanceName();
 // Converts a Windows error code to a string, including the error
 // description.
 std::string WinStrError(DWORD Err);
+int InitializeWinsock();
 
 // Retrieves the disk path and waits for it to become available.
 // Raises a runtime error upon failure.

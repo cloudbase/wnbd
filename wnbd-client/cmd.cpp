@@ -34,6 +34,18 @@ std::string to_string(const std::wstring& str)
   return utf_to_utf<char>(str.c_str(), str.c_str() + str.size());
 }
 
+string DaemonInstanceName;
+
+BOOL WINAPI ConsoleHandlerRoutine(DWORD dwCtrlType)
+{
+    cout << "Received control signal, cleaning up." << endl;
+    if (!DaemonInstanceName.empty()) {
+        CmdUnmap(DaemonInstanceName, FALSE, FALSE, 3, 1);
+    }
+
+    return TRUE;
+}
+
 wstring OptValToWString(PWNBD_OPTION_VALUE Value)
 {
     wostringstream stream;
@@ -118,13 +130,6 @@ DWORD CmdMap(
     }
 
     WNBD_PROPERTIES Props = { 0 };
-    HANDLE WnbdDriverHandle = INVALID_HANDLE_VALUE;
-    DWORD Status = WnbdOpenAdapter(&WnbdDriverHandle);
-    if (Status) {
-        cerr << "Could not open WNBD device. Make sure that the driver "
-                "is installed." << endl;
-        return Status;
-    }
 
     InstanceName.copy((char*)&Props.InstanceName, WNBD_MAX_NAME_LENGTH);
     InstanceName.copy((char*)&Props.SerialNumber, WNBD_MAX_NAME_LENGTH);
@@ -143,11 +148,19 @@ DWORD CmdMap(
     Props.BlockSize = BlockSize;
     Props.BlockCount = BlockSize ? DiskSize / BlockSize : 0;
 
-    WNBD_CONNECTION_INFO ConnectionInfo = { 0 };
-    Status = WnbdIoctlCreate(WnbdDriverHandle, &Props, &ConnectionInfo, NULL);
+    DaemonInstanceName = InstanceName;
+    SetConsoleCtrlHandler(ConsoleHandlerRoutine, true);
 
-    CloseHandle(WnbdDriverHandle);
-    return Status;
+    WSADATA WsaData;
+    int Ret = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    if (Ret) {
+        auto Err = WSAGetLastError();
+        cerr << "WSAStartup failed. ";
+        PrintFormattedError(Err);
+        return Ret;
+    }
+
+    return WnbdRunNbdDaemon(&Props);
 }
 
 DWORD CmdUnmap(

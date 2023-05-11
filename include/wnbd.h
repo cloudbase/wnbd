@@ -169,6 +169,9 @@ DWORD WnbdCreate(
     const PWNBD_INTERFACE Interface,
     PVOID Context,
     PWNBD_DISK* PDisk);
+// Starts an NBD client daemon in blocking mode. Make sure to call
+// WSAStartup first.
+DWORD WnbdRunNbdDaemon(const PWNBD_PROPERTIES Properties);
 // Remove the disk. The existing dispatchers will continue running until all
 // the driver IO requests are completed unless the "HardRemove" flag is set.
 DWORD WnbdRemove(

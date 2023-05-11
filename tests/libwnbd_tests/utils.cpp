@@ -329,3 +329,17 @@ void GetNewWnbdProps(PWNBD_PROPERTIES WnbdProps) {
     WnbdProps->MaxUnmapDescCount = 1;
     WnbdProps->Flags.UnmapSupported = 1;
 }
+
+int InitializeWinsock() {
+    WSADATA WsaData;
+
+    int Ret = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    if (Ret) {
+        auto Err = WSAGetLastError();
+        std::cerr << "WSAStartup failed. "
+            << "Error code: " << Err
+            << ". Error message: " << WinStrError(Err)
+            << std::endl;
+    }
+    return Ret;
+}

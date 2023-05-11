@@ -125,9 +125,7 @@ typedef struct
     UINT32 FUASupported:1;
     UINT32 UnmapSupported:1;
     UINT32 UnmapAnchorSupported:1;
-    // Connect to an NBD server. If disabled, IO requests and replies will
-    // be submitted through the IOCTL_WNBD_FETCH_REQ/IOCTL_WNBD_SEND_RSP
-    // DeviceIoControl commands.
+    // Connect to an NBD server.
     UINT32 UseNbd:1;
     UINT32 PersistResSupported:1;
     UINT32 NaaIdSpecified:1;
@@ -159,6 +157,8 @@ typedef struct
     INT Pid;
     // NBD server details must be provided when the "UseNbd" flag
     // is set.
+    // Note that the NBD client functionality has been moved
+    // from the driver to libwnbd.
     NBD_CONNECTION_PROPERTIES NbdProperties;
     WNBD_NAA_ID NaaIdentifier;
     BYTE Reserved[240];
