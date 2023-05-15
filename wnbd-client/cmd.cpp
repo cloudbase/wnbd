@@ -7,7 +7,6 @@
 #include <wnbd.h>
 
 #include "cmd.h"
-#include "nbd_protocol.h"
 #include "version.h"
 
 #include <string>
@@ -141,7 +140,7 @@ DWORD CmdMap(
     Props.NbdProperties.PortNumber = PortNumber;
     Props.NbdProperties.Flags.SkipNegotiation = SkipNegotiation;
 
-    Props.Flags.UseNbd = TRUE;
+    Props.Flags.UseUserspaceNbd = TRUE;
     Props.Flags.ReadOnly = ReadOnly;
 
     Props.Pid = _getpid();
@@ -267,7 +266,7 @@ DWORD CmdShow(string InstanceName)
          << setw(25) << "UnmapSupported" << " : " <<  ConnInfo.Properties.Flags.UnmapSupported << endl
          << setw(25) << "UnmapAnchorSupported " << " : "
                      << ConnInfo.Properties.Flags.UnmapAnchorSupported << endl
-         << setw(25) << "UseNbd" << " : " <<  ConnInfo.Properties.Flags.UseNbd << endl
+         << setw(25) << "UseUserspaceNbd" << " : " <<  ConnInfo.Properties.Flags.UseUserspaceNbd << endl
          << setw(25) << "BlockCount" << " : " <<  ConnInfo.Properties.BlockCount << endl
          << setw(25) << "BlockSize" << " : " <<  ConnInfo.Properties.BlockSize << endl
          << setw(25) << "MaxUnmapDescCount" << " : " <<  ConnInfo.Properties.MaxUnmapDescCount << endl
@@ -282,7 +281,7 @@ DWORD CmdShow(string InstanceName)
          << setw(25) << "MaxIOReqPerAdapter" << " : " << AdapterMaxIoCount << endl
          << endl;
 
-    if (ConnInfo.Properties.Flags.UseNbd) {
+    if (ConnInfo.Properties.Flags.UseUserspaceNbd) {
         cout << "Nbd properties" << endl << left
              << setw(25) << "Hostname" << " : " << ConnInfo.Properties.NbdProperties.Hostname << endl
              << setw(25) << "PortNumber" << " : " << ConnInfo.Properties.NbdProperties.PortNumber << endl
@@ -353,11 +352,12 @@ DWORD CmdList()
          << "InstanceName" << endl;
 
     for (ULONG index = 0; index < ConnList->Count; index++) {
+        bool UseNbd = ConnList->Connections[index].Properties.Flags.UseKernelNbd ||
+                      ConnList->Connections[index].Properties.Flags.UseUserspaceNbd;
         cout << left
              << setw(10) << ConnList->Connections[index].Properties.Pid << "  "
              << setw(10) << ConnList->Connections[index].DiskNumber << "  "
-             << setw(5) << (ConnList->Connections[index].Properties.Flags.UseNbd
-                            ? "true" : "false") << "  "
+             << setw(5) << (UseNbd ? "true" : "false") << "  "
              << setw(15) << ConnList->Connections[index].Properties.Owner << "  "
              << ConnList->Connections[index].Properties.InstanceName << endl;
     }

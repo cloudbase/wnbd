@@ -299,14 +299,17 @@ void NbdDaemon::Read(
     WnbdGetUserContext(Disk, (PVOID*)&Handler);
     assert(Handler);
 
-    Handler->PendingRequests.emplace(std::make_pair(
-        RequestHandle,
-        PendingRequestInfo {
-            .RequestHandle = RequestHandle,
-            .RequestType = WnbdReqTypeRead,
-            .Length = BlockCount * Handler->WnbdProps.BlockSize,
-        }
-    ));
+    {
+        std::unique_lock Lock{Handler->PendingRequestsLock};
+        Handler->PendingRequests.emplace(std::make_pair(
+            RequestHandle,
+            PendingRequestInfo {
+                .RequestHandle = RequestHandle,
+                .RequestType = WnbdReqTypeRead,
+                .Length = BlockCount * Handler->WnbdProps.BlockSize,
+            }
+        ));
+    }
 
     // NBD doesn't currently support read FUA.
     DWORD Err = NbdRequest(
@@ -339,14 +342,17 @@ void NbdDaemon::Write(
         NbdTransmissionFlags |= NBD_CMD_FLAG_FUA;
     }
 
-    Handler->PendingRequests.emplace(std::make_pair(
-        RequestHandle,
-        PendingRequestInfo {
-            .RequestHandle = RequestHandle,
-            .RequestType = WnbdReqTypeWrite,
-            .Length = BlockCount * Handler->WnbdProps.BlockSize,
-        }
-    ));
+    {
+        std::unique_lock Lock{Handler->PendingRequestsLock};
+        Handler->PendingRequests.emplace(std::make_pair(
+            RequestHandle,
+            PendingRequestInfo {
+                .RequestHandle = RequestHandle,
+                .RequestType = WnbdReqTypeWrite,
+                .Length = BlockCount * Handler->WnbdProps.BlockSize,
+            }
+        ));
+    }
 
     DWORD Err = NbdSendWrite(
         Handler->Socket,
@@ -374,14 +380,17 @@ void NbdDaemon::Flush(
     WnbdGetUserContext(Disk, (PVOID*)&Handler);
     assert(Handler);
 
-    Handler->PendingRequests.emplace(std::make_pair(
-        RequestHandle,
-        PendingRequestInfo {
-            .RequestHandle = RequestHandle,
-            .RequestType = WnbdReqTypeFlush,
-            .Length = BlockCount * Handler->WnbdProps.BlockSize,
-        }
-    ));
+    {
+        std::unique_lock Lock{Handler->PendingRequestsLock};
+        Handler->PendingRequests.emplace(std::make_pair(
+            RequestHandle,
+            PendingRequestInfo {
+                .RequestHandle = RequestHandle,
+                .RequestType = WnbdReqTypeFlush,
+                .Length = BlockCount * Handler->WnbdProps.BlockSize,
+            }
+        ));
+    }
 
     DWORD Err = NbdRequest(
         Handler->Socket,
@@ -407,14 +416,17 @@ void NbdDaemon::Unmap(
     assert(Handler);
     assert(1 == Count);
 
-    Handler->PendingRequests.emplace(std::make_pair(
-        RequestHandle,
-        PendingRequestInfo {
-            .RequestHandle = RequestHandle,
-            .RequestType = WnbdReqTypeUnmap,
-            .Length = Descriptors[0].BlockCount * Handler->WnbdProps.BlockSize,
-        }
-    ));
+    {
+        std::unique_lock Lock{Handler->PendingRequestsLock};
+        Handler->PendingRequests.emplace(std::make_pair(
+            RequestHandle,
+            PendingRequestInfo {
+                .RequestHandle = RequestHandle,
+                .RequestType = WnbdReqTypeUnmap,
+                .Length = Descriptors[0].BlockCount * Handler->WnbdProps.BlockSize,
+            }
+        ));
+    }
 
     DWORD Err = NbdRequest(
         Handler->Socket,
@@ -479,15 +491,20 @@ DWORD NbdDaemon::ProcessNbdReply(LPOVERLAPPED Overlapped)
         return Err;
     }
 
-    auto RequestIt = PendingRequests.find(Reply.Handle);
-    if (RequestIt == PendingRequests.end()) {
-        LogError("Received unexpected NBD reply hanldle: %lld.",
-                 Reply.Handle);
-        return ERROR_INVALID_PARAMETER;
-    }
+    PendingRequestInfo Request = { 0 };
 
-    PendingRequestInfo Request = RequestIt->second;
-    PendingRequests.erase(RequestIt);
+    {
+        std::unique_lock Lock{PendingRequestsLock};
+        auto RequestIt = PendingRequests.find(Reply.Handle);
+        if (RequestIt == PendingRequests.end()) {
+            LogError("Received unexpected NBD reply hanldle: %lld.",
+                     Reply.Handle);
+            return ERROR_INVALID_PARAMETER;
+        }
+
+        Request = RequestIt->second;
+        PendingRequests.erase(RequestIt);
+    }
 
     PVOID DataBuffer = nullptr;
     UINT32 DataBufferSize = 0;    

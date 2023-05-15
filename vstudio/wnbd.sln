@@ -5,10 +5,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "driver", "driver.vcxproj", "{0091FAE6-479E-40CB-985E-1AC3FB633391}"
 	ProjectSection(ProjectDependencies) = postProject
 		{4EE28B36-2083-4FBA-88D7-FE60027B81BB} = {4EE28B36-2083-4FBA-88D7-FE60027B81BB}
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E} = {8C21EBB6-5127-4D50-A418-69771C8EC40E}
 	EndProjectSection
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ksocket_wsk", "..\ksocket_wsk\ksocket_wsk.vcxproj", "{8C21EBB6-5127-4D50-A418-69771C8EC40E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "wnbd-client", "..\wnbd-client\wnbd-client.vcxproj", "{A9A19AD0-D8F6-4D41-9B82-375370C408D7}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -40,14 +37,6 @@ Global
 		{0091FAE6-479E-40CB-985E-1AC3FB633391}.Release|x64.ActiveCfg = Release|x64
 		{0091FAE6-479E-40CB-985E-1AC3FB633391}.Release|x64.Build.0 = Release|x64
 		{0091FAE6-479E-40CB-985E-1AC3FB633391}.Release|x64.Deploy.0 = Release|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Analyze|x64.ActiveCfg = Analyze|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Analyze|x64.Build.0 = Analyze|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Debug|x64.ActiveCfg = Debug|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Debug|x64.Build.0 = Debug|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Debug|x64.Deploy.0 = Debug|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Release|x64.ActiveCfg = Release|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Release|x64.Build.0 = Release|x64
-		{8C21EBB6-5127-4D50-A418-69771C8EC40E}.Release|x64.Deploy.0 = Release|x64
 		{A9A19AD0-D8F6-4D41-9B82-375370C408D7}.Analyze|x64.ActiveCfg = Analyze|x64
 		{A9A19AD0-D8F6-4D41-9B82-375370C408D7}.Analyze|x64.Build.0 = Analyze|x64
 		{A9A19AD0-D8F6-4D41-9B82-375370C408D7}.Debug|x64.ActiveCfg = Debug|x64

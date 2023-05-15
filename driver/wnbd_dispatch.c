@@ -82,7 +82,7 @@ NTSTATUS WnbdDispatchRequest(
             Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
-    if ((ULONG)Device->Properties.Flags.UseNbd) {
+    if ((ULONG)Device->Properties.Flags.UseKernelNbd) {
         WNBD_LOG_DEBUG("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }
@@ -288,7 +288,7 @@ NTSTATUS WnbdHandleResponse(
             Device->Properties.Pid, IoGetRequestorProcessId(Irp));
         return STATUS_ACCESS_DENIED;
     }
-    if ((ULONG)Device->Properties.Flags.UseNbd) {
+    if ((ULONG)Device->Properties.Flags.UseKernelNbd) {
         WNBD_LOG_DEBUG("Direct IO is not allowed using NBD devices.");
         return STATUS_ACCESS_DENIED;
     }

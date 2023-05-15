@@ -54,8 +54,8 @@ DWORD WnbdCreate(
              Properties->Flags.UnmapSupported,
              Properties->Flags.UnmapAnchorSupported,
              Properties->MaxUnmapDescCount,
-             Properties->Flags.UseNbd);
-    if (Properties->Flags.UseNbd) {
+             Properties->Flags.UseUserspaceNbd);
+    if (Properties->Flags.UseKernelNbd || Properties->Flags.UseUserspaceNbd) {
         LogDebug("Nbd properties: Hostname=%s, Port=%u, ExportName=%s, "
                  "SkipNegotiation=%u.",
                  Properties->NbdProperties.Hostname,

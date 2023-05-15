@@ -42,7 +42,7 @@ int InitializeWinsock();
 
 // Retrieves the disk path and waits for it to become available.
 // Raises a runtime error upon failure.
-std::string GetDiskPath(const char* InstanceName);
+std::string GetDiskPath(const char* InstanceName, bool ExpectMapped=true);
 
 // Configures the specified disk as writable.
 // Raises a runtime error upon failure.
@@ -74,7 +74,7 @@ public:
     }
 
     DWORD Retrieve(BOOLEAN Persistent);
-    PWNBD_OPTION GetOpt(PWSTR Name);
+    PWNBD_OPTION GetOpt(PCWSTR Name);
 };
 
 // A simple wrapper on top of WNBD_CONNECTION_LIST, making it easier
@@ -93,7 +93,7 @@ public:
     }
 
     DWORD Retrieve();
-    PWNBD_CONNECTION_INFO GetConn(PSTR InstanceName);
+    PWNBD_CONNECTION_INFO GetConn(PCSTR InstanceName);
 };
 
 void GetNewWnbdProps(PWNBD_PROPERTIES);

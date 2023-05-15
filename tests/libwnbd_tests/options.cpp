@@ -80,7 +80,7 @@ void ParseOptions(int Argc, char** Argv)
 // an internal library reused between libwnbd, wnbd-client and the tests.
 void PrintHelp()
 {
-    char* Msg = R"HELP(
+    const char* Msg = R"HELP(
 Wnbd test parameters:
   --log-level=[LOG_LEVEL]
       Wnbd log level

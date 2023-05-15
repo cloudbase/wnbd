@@ -90,7 +90,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WppEnabled>true</WppEnabled>
       <WppPreprocessorDefinitions>WPP_INLINE __inline</WppPreprocessorDefinitions>
       <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -100,7 +100,7 @@
     <Link />
     <Link />
     <Link>
-      <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;$(DDK_LIB_PATH )libcntpr.lib;$(DDK_LIB_PATH )wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(DDK_LIB_PATH )libcntpr.lib;$(DDK_LIB_PATH )wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
     <DriverSign>
@@ -115,7 +115,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WppEnabled>true</WppEnabled>
       <WppPreprocessorDefinitions>WPP_INLINE __inline</WppPreprocessorDefinitions>
       <PreprocessorDefinitions>WPPFILE="%(Filename).tmh";_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -123,7 +123,7 @@
       <WppScanConfigurationData>$(KMDF_INC_PATH)$(KMDF_VER_PATH)\WdfTraceEnums.h</WppScanConfigurationData>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
     <DriverSign>
@@ -138,11 +138,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Analyze|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>..\ksocket_wsk;..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\include;$(IntDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;POOL_ZERO_DOWN_LEVEL_SUPPORT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(Platform)\$(Configuration)\ksocket_wsk.lib;libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>libcntpr.lib;wdmsec.lib;$(DDK_LIB_PATH )netio.lib;$(DDK_LIB_PATH )storport.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ProgramDatabaseFile>$(OutDir)\pdb\$(ProjectName)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
     <DriverSign>
@@ -167,8 +167,6 @@
   <ItemGroup>
     <ClCompile Include="..\driver\debug.c" />
     <ClCompile Include="..\driver\driver.c" />
-    <ClCompile Include="..\driver\nbd_dispatch.c" />
-    <ClCompile Include="..\driver\nbd_protocol.c" />
     <ClCompile Include="..\driver\options.c" />
     <ClCompile Include="..\driver\scsi_driver_extensions.c" />
     <ClCompile Include="..\driver\scsi_function.c" />
@@ -182,8 +180,6 @@
     <ClInclude Include="..\driver\common.h" />
     <ClInclude Include="..\driver\debug.h" />
     <ClInclude Include="..\driver\driver.h" />
-    <ClInclude Include="..\driver\nbd_dispatch.h" />
-    <ClInclude Include="..\driver\nbd_protocol.h" />
     <ClInclude Include="..\driver\options.h" />
     <ClInclude Include="..\driver\scsi_driver_extensions.h" />
     <ClInclude Include="..\driver\scsi_function.h" />

@@ -8,11 +8,8 @@
 #define USERSPACE_H 1
 
 #include "driver.h"
-#include "nbd_protocol.h"
 #include "wnbd_ioctl.h"
 #include "scsi_driver_extensions.h"
-
-#define WNBD_PREALLOC_BUFF_SZ (WNBD_DEFAULT_MAX_TRANSFER_LENGTH + sizeof(NBD_REQUEST))
 
 NTSTATUS
 WnbdParseUserIOCTL(_In_ PWNBD_EXTENSION DeviceExtension,

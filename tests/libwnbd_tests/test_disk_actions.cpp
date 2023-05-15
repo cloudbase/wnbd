@@ -51,7 +51,8 @@ void TestMap(
     EXPECT_EQ(CacheEnabled, ConnectionInfo.Properties.Flags.FlushSupported);
     EXPECT_EQ(CacheEnabled, ConnectionInfo.Properties.Flags.FUASupported);
     EXPECT_TRUE(ConnectionInfo.Properties.Flags.UnmapSupported);
-    EXPECT_FALSE(ConnectionInfo.Properties.Flags.UseNbd);
+    EXPECT_FALSE(ConnectionInfo.Properties.Flags.UseKernelNbd);
+    EXPECT_FALSE(ConnectionInfo.Properties.Flags.UseUserspaceNbd);
 
     // Should be called anyway by the destructor
     WnbdDaemon.Shutdown();
@@ -512,7 +513,8 @@ TEST(TestList, TestList) {
             EXPECT_FALSE(
                 RetrievedConns[Idx]->Properties.Flags.FUASupported);
             EXPECT_TRUE(RetrievedConns[Idx]->Properties.Flags.UnmapSupported);
-            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.UseNbd);
+            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.UseUserspaceNbd);
+            EXPECT_FALSE(RetrievedConns[Idx]->Properties.Flags.UseKernelNbd);
         }
     }
     // The mappings went out of scope and have been disconnected,

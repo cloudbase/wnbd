@@ -15,11 +15,6 @@ typedef struct _WNBD_EXTENSION {
     LIST_ENTRY                        DeviceList;
     KSPIN_LOCK                        DeviceListLock;
     LONG                              DeviceCount;
-    // TODO: try to remove this lock, maybe by adding a "Pending" device state
-    // That should avoid device duplicates, while allowing multiple devices
-    // to be created simultaneously. In particular, this might be a concern
-    // for NBD devices, in which case connecting to the NBD server might
-    // take longer. It shouldn't be a concern when not using NBD.
     ERESOURCE                         DeviceCreationLock;
 
     EX_RUNDOWN_REF                    RundownProtection;
@@ -45,10 +40,6 @@ typedef struct _WNBD_DISK_DEVICE
 
     PINQUIRYDATA                InquiryData;
 
-    INT                         NbdSocket;
-    INT                         SocketToClose;
-    ERESOURCE                   SocketLock;
-
     LIST_ENTRY                  PendingReqListHead;
     KSPIN_LOCK                  PendingReqListLock;
 
@@ -56,8 +47,6 @@ typedef struct _WNBD_DISK_DEVICE
     KSPIN_LOCK                  SubmittedReqListLock;
 
     KSEMAPHORE                  DeviceEvent;
-    PVOID                       DeviceRequestThread;
-    PVOID                       DeviceReplyThread;
     PVOID                       DeviceMonitorThread;
     BOOLEAN                     HardRemoveDevice;
     KEVENT                      DeviceRemovalEvent;
@@ -67,10 +56,6 @@ typedef struct _WNBD_DISK_DEVICE
     EX_RUNDOWN_REF              RundownProtection;
 
     WNBD_DRV_STATS              Stats;
-    PVOID                       ReadPreallocatedBuffer;
-    ULONG                       ReadPreallocatedBufferLength;
-    PVOID                       WritePreallocatedBuffer;
-    ULONG                       WritePreallocatedBufferLength;
 } WNBD_DISK_DEVICE, *PWNBD_DISK_DEVICE;
 
 typedef struct _SRB_QUEUE_ELEMENT {

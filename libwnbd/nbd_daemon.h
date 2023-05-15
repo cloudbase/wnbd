@@ -47,6 +47,7 @@ private:
     // the request size on our own in order to know how large is
     // the data buffer that follows the reply header.
     std::unordered_map<UINT64, PendingRequestInfo> PendingRequests;
+    std::mutex PendingRequestsLock;
 
     std::thread ReplyDispatcher;
 

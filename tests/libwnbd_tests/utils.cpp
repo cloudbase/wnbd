@@ -45,7 +45,7 @@ std::string WinStrError(DWORD Err)
 }
 
 // Retrieves the disk path and waits for it to become available.
-std::string GetDiskPath(const char* InstanceName)
+std::string GetDiskPath(const char* InstanceName, bool ExpectMapped)
 {
     DWORD TimeoutMs = 10 * 1000;
     DWORD RetryInterval = 500;
@@ -55,18 +55,28 @@ std::string GetDiskPath(const char* InstanceName)
     ElapsedMs = { 0 };
 
     do {
-        WNBD_CONNECTION_INFO ConnectionInfo = {0};
-        NTSTATUS Status = WnbdShow(InstanceName, &ConnectionInfo);
-        if (Status) {
-            std::string Msg = "couln't retrieve WNBD disk info, error: " +
-                std::to_string(Status);
-            throw std::runtime_error(Msg);
-        }
-
         QueryPerformanceCounter(&CurrTime);
         ElapsedMs.QuadPart = CurrTime.QuadPart - StartTime.QuadPart;
         ElapsedMs.QuadPart *= 1000;
         ElapsedMs.QuadPart /= CounterFreq.QuadPart;
+
+        WNBD_CONNECTION_INFO ConnectionInfo = {0};
+        NTSTATUS Status = WnbdShow(InstanceName, &ConnectionInfo);
+        if (Status) {
+            if (ExpectMapped ||
+                    (Status != ERROR_NO_SUCH_DEVICE &&
+                     Status != ERROR_FILE_NOT_FOUND)) {
+                std::string Msg = "WnbdShow failed, error: " +
+                    std::to_string(Status);
+                throw std::runtime_error(Msg);
+            }
+
+            // The disk isn't available yet.
+            if (TimeoutMs > ElapsedMs.QuadPart) {
+                Sleep(RetryInterval);
+            }
+            continue;
+        }
 
         if (ConnectionInfo.DiskNumber != -1) {
             std::string DiskPath = "\\\\.\\PhysicalDrive" + std::to_string(
@@ -240,7 +250,7 @@ DWORD WnbdOptionList::Retrieve(BOOLEAN Persistent)
     return Status;
 }
 
-PWNBD_OPTION WnbdOptionList::GetOpt(PWSTR Name)
+PWNBD_OPTION WnbdOptionList::GetOpt(PCWSTR Name)
 {
     PWNBD_OPTION Option = nullptr;
 
@@ -298,7 +308,7 @@ DWORD WnbdConnectionList::Retrieve()
     return Status;
 }
 
-PWNBD_CONNECTION_INFO WnbdConnectionList::GetConn(PSTR InstanceName)
+PWNBD_CONNECTION_INFO WnbdConnectionList::GetConn(PCSTR InstanceName)
 {
     PWNBD_CONNECTION_INFO Conn = nullptr;
 

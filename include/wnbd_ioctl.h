@@ -125,11 +125,13 @@ typedef struct
     UINT32 FUASupported:1;
     UINT32 UnmapSupported:1;
     UINT32 UnmapAnchorSupported:1;
-    // Connect to an NBD server.
-    UINT32 UseNbd:1;
+    // Deprecated: use kernel NBD client.
+    UINT32 UseKernelNbd:1;
     UINT32 PersistResSupported:1;
     UINT32 NaaIdSpecified:1;
-    UINT32 Reserved: 24;
+    // libwnbd NBD client
+    UINT32 UseUserspaceNbd:1;
+    UINT32 Reserved: 23;
 } WNBD_FLAGS, *PWNBD_FLAGS;
 WNBD_ASSERT_SZ_EQ(WNBD_FLAGS, 4);
 
@@ -155,8 +157,8 @@ typedef struct
     // The userspace process associated with this device. If not
     // specified, the caller PID will be used.
     INT Pid;
-    // NBD server details must be provided when the "UseNbd" flag
-    // is set.
+    // NBD server details must be provided when the
+    // "UseUserspaceNbd" flag is set.
     // Note that the NBD client functionality has been moved
     // from the driver to libwnbd.
     NBD_CONNECTION_PROPERTIES NbdProperties;
