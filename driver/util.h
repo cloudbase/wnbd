@@ -13,8 +13,7 @@
 VOID
 DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
                  _In_ BOOLEAN SubmittedRequests);
-VOID
-AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device);
+
 VOID
 CompleteRequest(_In_ PWNBD_DISK_DEVICE Device,
                 _In_ PSRB_QUEUE_ELEMENT Element,
@@ -68,9 +67,6 @@ IsReadSrb(_In_ PVOID Srb);
 BOOLEAN
 IsPerResInSrb(_In_ PVOID Srb);
 
-VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device);
-VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device);
-int ScsiOpToNbdReqType(_In_ int ScsiOp);
 BOOLEAN ValidateScsiRequest(
     _In_ PWNBD_DISK_DEVICE Device,
     _In_ PSRB_QUEUE_ELEMENT Element);

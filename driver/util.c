@@ -4,16 +4,13 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
-#include <berkeley.h>
-#include <ksocket.h>
+#include "common.h"
 
 #include <initguid.h>
 #include <ntddstor.h>
 #include <devpkey.h>
 
-#include "common.h"
 #include "debug.h"
-#include "nbd_protocol.h"
 #include "scsi_driver_extensions.h"
 #include "scsi_function.h"
 #include "scsi_trace.h"
@@ -53,33 +50,6 @@ VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
     }
 }
 
-VOID AbortSubmittedRequests(_In_ PWNBD_DISK_DEVICE Device)
-{
-    // We're marking submitted requests as aborted and notifying Storport. We only cleaning
-    // them up when eventually receiving a reply from the storage backend (needed by NBD,
-    // in which case the IO payload is otherwise unknown).
-    PLIST_ENTRY ListHead = &Device->SubmittedReqListHead;
-    PKSPIN_LOCK ListLock = &Device->SubmittedReqListLock;
-
-    PSRB_QUEUE_ELEMENT Element;
-    PLIST_ENTRY ItemLink, ItemNext;
-    KIRQL Irql = { 0 };
-
-    KeAcquireSpinLock(ListLock, &Irql);
-    LIST_FORALL_SAFE(ListHead, ItemLink, ItemNext) {
-        Element = CONTAINING_RECORD(ItemLink, SRB_QUEUE_ELEMENT, Link);
-        SrbSetDataTransferLength(Element->Srb, 0);
-        SrbSetSrbStatus(Element->Srb, SRB_STATUS_ABORTED);
-        if (!Element->Aborted) {
-            Element->Aborted = 1;
-            InterlockedIncrement64(&Device->Stats.AbortedSubmittedIORequests);
-        }
-        CompleteRequest(Device, Element, FALSE);
-    }
-    KeReleaseSpinLock(ListLock, Irql);
-}
-
-
 BOOLEAN HasPendingAsyncRequests(_In_ PWNBD_DISK_DEVICE Device)
 {
     KIRQL IrqlSubmitted = { 0 };
@@ -117,8 +87,6 @@ WnbdCleanupAllDevices(_In_ PWNBD_EXTENSION DeviceExtension)
     // The rundown protection is a device reference count. We're going to wait
     // for them to be removed after signaling the global device removal event.
     ExWaitForRundownProtectionRelease(&DeviceExtension->RundownProtection);
-
-    KsDestroy();
 }
 
 BOOLEAN
@@ -254,40 +222,6 @@ WnbdFindDeviceByInstanceName(
     KeReleaseSpinLock(&DeviceExtension->DeviceListLock, Irql);
     
     return Device;
-}
-
-VOID CloseSocket(_In_ PWNBD_DISK_DEVICE Device) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
-    if (-1 != Device->SocketToClose) {
-        WNBD_LOG_INFO("Closing socket FD: %d", Device->SocketToClose);
-        Close(Device->SocketToClose);
-    }
-    if (-1 != Device->NbdSocket) {
-        WNBD_LOG_INFO("Closing socket FD: %d", Device->NbdSocket);
-        Close(Device->NbdSocket);
-    }
-
-    Device->NbdSocket = -1;
-    Device->SocketToClose = -1;
-    ExReleaseResourceLite(&Device->SocketLock);
-    KeLeaveCriticalRegion();
-}
-
-VOID DisconnectSocket(_In_ PWNBD_DISK_DEVICE Device) {
-    KeEnterCriticalRegion();
-    ExAcquireResourceExclusiveLite(&Device->SocketLock, TRUE);
-    if (-1 != Device->NbdSocket) {
-        WNBD_LOG_INFO("Closing socket FD: %d", Device->NbdSocket);
-        Device->SocketToClose = Device->NbdSocket;
-        // We're setting this to -1 to avoid sending further requests. We're
-        // using SocketToClose so that CloseSocket can actually close it.
-        // TODO: consider merging those two functions.
-        Device->NbdSocket = -1;
-        Disconnect(Device->SocketToClose);
-    }
-    ExReleaseResourceLite(&Device->SocketLock);
-    KeLeaveCriticalRegion();
 }
 
 VOID

@@ -52,7 +52,6 @@ Folders
 * [Dockerfile](Dockerfile/) a Dockerfile providing the build prerequisites
 * [driver](driver/) the driver sources
 * [include](include/) public headers
-* [ksocket_wsk](ksocket_wsk/) a WSK wrapper used to communicate with the Network Block Device server
 * [wnbd-client](wnbd-client/) the WNBD CLI
 * [libwnbd](libwbd/) ``libwnbd.dll`` - the WNBD userspace library
 * [vstudio](vstudio/) the Visual Studio solution file and its projects

@@ -45,14 +45,7 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
     }
 
     DrainDeviceQueue(Device, FALSE);
-    if (Device->Properties.Flags.UseNbd) {
-        // NBD replies don't include the IO size so we'll have to keep
-        // this data around.
-        AbortSubmittedRequests(Device);
-    }
-    else {
-        DrainDeviceQueue(Device, TRUE);
-    }
+    DrainDeviceQueue(Device, TRUE);
 
     WnbdReleaseDevice(Device);
     SrbStatus = SRB_STATUS_SUCCESS;

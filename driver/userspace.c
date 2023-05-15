@@ -7,14 +7,10 @@
 #include <ntifs.h>
 #include <limits.h>
 
-#include <berkeley.h>
-#include <ksocket.h>
 #include "common.h"
 #include "debug.h"
-#include "nbd_protocol.h"
 #include "scsi_function.h"
 #include "userspace.h"
-#include "nbd_dispatch.h"
 #include "wnbd_dispatch.h"
 #include "wnbd_ioctl.h"
 #include "util.h"
@@ -87,78 +83,6 @@ WnbdSetInquiryData(_Inout_ PINQUIRYDATA InquiryData)
         ProductRevision, sizeof(ProductRevision));
 }
 
-NTSTATUS
-WnbdInitializeNbdClient(_In_ PWNBD_DISK_DEVICE Device)
-{
-    ASSERT(Device);
-    HANDLE request_thread_handle = NULL, reply_thread_handle = NULL;
-    NTSTATUS Status = STATUS_SUCCESS;
-
-    Device->ReadPreallocatedBuffer = NbdMallocZero((UINT)WNBD_PREALLOC_BUFF_SZ);
-    if (!Device->ReadPreallocatedBuffer) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-    Device->ReadPreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
-    Device->WritePreallocatedBuffer = NbdMallocZero((UINT)WNBD_PREALLOC_BUFF_SZ);
-    if (!Device->WritePreallocatedBuffer) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-    Device->WritePreallocatedBufferLength = WNBD_PREALLOC_BUFF_SZ;
-
-    Status = PsCreateSystemThread(&request_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, NbdDeviceRequestThread, Device);
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-
-    Status = ObReferenceObjectByHandle(request_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-        &Device->DeviceRequestThread, NULL);
-
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-
-    Status = PsCreateSystemThread(&reply_thread_handle, (ACCESS_MASK)0L, NULL,
-                                  NULL, NULL, NbdDeviceReplyThread, Device);
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-
-    Status = ObReferenceObjectByHandle(reply_thread_handle, THREAD_ALL_ACCESS, NULL, KernelMode,
-        &Device->DeviceReplyThread, NULL);
-
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
-
-    RtlZeroMemory(&Device->Stats, sizeof(WNBD_DRV_STATS));
-
-    return Status;
-
-Exit:
-    ExDeleteResourceLite(&Device->SocketLock);
-    if (Device->ReadPreallocatedBuffer) {
-        ExFreePool(Device->ReadPreallocatedBuffer);
-    }
-    if (Device->WritePreallocatedBuffer) {
-        ExFreePool(Device->WritePreallocatedBuffer);
-    }
-    if (request_thread_handle)
-        ZwClose(request_thread_handle);
-    if (reply_thread_handle)
-        ZwClose(reply_thread_handle);
-    Device->HardRemoveDevice = TRUE;
-    KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
-
-    return Status;
-}
-
 VOID
 WnbdDeviceMonitorThread(_In_ PVOID Context)
 {
@@ -181,11 +105,6 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     // which notifies the PnP stack.
     Device->HardRemoveDevice = TRUE;
     KeSetEvent(&Device->DeviceRemovalEvent, IO_NO_INCREMENT, FALSE);
-    LARGE_INTEGER Timeout;
-    // TODO: consider making this configurable, currently 120s.
-    // TODO: move this timeout to ksocket.
-    Timeout.QuadPart = (-120 * 1000 * 10000);
-    DisconnectSocket(Device);
 
     // Ensure that the device isn't currently being accessed.
     WNBD_LOG_INFO("Waiting for pending device requests: %s.",
@@ -194,17 +113,8 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     WNBD_LOG_INFO("Finished waiting for pending device requests: %s.",
                   Device->Properties.InstanceName);
 
-    if (Device->Properties.Flags.UseNbd) {
-        KeWaitForSingleObject(Device->DeviceRequestThread, Executive, KernelMode, FALSE, NULL);
-        KeWaitForSingleObject(Device->DeviceReplyThread, Executive, KernelMode, FALSE, &Timeout);
-        ObDereferenceObject(Device->DeviceRequestThread);
-        ObDereferenceObject(Device->DeviceReplyThread);
-    }
-
     DrainDeviceQueue(Device, FALSE);
     DrainDeviceQueue(Device, TRUE);
-
-    CloseSocket(Device);
 
     // After acquiring the device spinlock, we should return as quickly as possible.
     KIRQL Irql = { 0 };
@@ -228,17 +138,6 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
         Device->InquiryData = NULL;
     }
 
-    ExDeleteResourceLite(&Device->SocketLock);
-
-    if (Device->ReadPreallocatedBuffer) {
-        ExFreePool(Device->ReadPreallocatedBuffer);
-        Device->ReadPreallocatedBuffer = NULL;
-    }
-    if (Device->WritePreallocatedBuffer) {
-        ExFreePool(Device->WritePreallocatedBuffer);
-        Device->WritePreallocatedBuffer = NULL;
-    }
-
     ObDereferenceObject(Device->DeviceMonitorThread);
     ExFreePool(Device);
 
@@ -249,7 +148,7 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
 }
 
 NTSTATUS
-WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
+WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device)
 {
     // Internal resource initialization.
     ASSERT(Device);
@@ -262,12 +161,6 @@ WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
     ExInitializeRundownProtection(&Device->RundownProtection);
     KeInitializeSemaphore(&Device->DeviceEvent, 0, 1 << 30);
     KeInitializeEvent(&Device->DeviceRemovalEvent, NotificationEvent, FALSE);
-    // TODO: check if this is still needed.
-    Status = ExInitializeResourceLite(&Device->SocketLock);
-    if (!NT_SUCCESS(Status)) {
-        Status = STATUS_INSUFFICIENT_RESOURCES;
-        goto Exit;
-    }
 
     HANDLE monitor_thread_handle;
     Status = PsCreateSystemThread(&monitor_thread_handle, (ACCESS_MASK)0L, NULL,
@@ -284,10 +177,6 @@ WnbdInitializeDevice(_In_ PWNBD_DISK_DEVICE Device, BOOLEAN UseNbd)
         goto Exit;
     }
 
-    if (UseNbd) {
-        Status = WnbdInitializeNbdClient(Device);
-    }
-
 Exit:
     return Status;
 }
@@ -302,7 +191,6 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
     ASSERT(Properties);
 
     NTSTATUS Status = STATUS_SUCCESS;
-    INT Sock = -1;
     PINQUIRYDATA InquiryData = NULL;
     ULONG ScsiBitNumber = 0xFFFFFFFF;
     KIRQL Irql = { 0 };
@@ -376,56 +264,6 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
                   ConnectionInfo->ConnectionId,
                   Device->Properties.InstanceName);
 
-    // TODO: consider moving NBD initialization to a separate function.
-    UINT16 NbdFlags = 0;
-    Device->SocketToClose = -1;
-    Device->NbdSocket = -1;
-    if (Properties->Flags.UseNbd) {
-        WNBD_LOG_DEBUG("Initializing WSK.");
-        // WnbdCreateConnection calls are synchronized
-        // using DeviceExtension->DeviceCreationLock.
-        Status = KsInitialize();
-        if (!NT_SUCCESS(Status)) {
-            WNBD_LOG_ERROR("Could not initialize WSK framework. "
-                           "Status: 0x%x.", Status);
-            goto Exit;
-        }
-
-        WNBD_LOG_INFO("Connecting to NBD server: %s:%p. "
-                      "Export name: %s.",
-                      Properties->NbdProperties.Hostname,
-                      Properties->NbdProperties.PortNumber,
-                      Properties->NbdProperties.ExportName);
-        Sock = NbdOpenAndConnect(
-            Properties->NbdProperties.Hostname,
-            Properties->NbdProperties.PortNumber);
-        if (-1 == Sock) {
-            Status = STATUS_CONNECTION_REFUSED;
-            goto Exit;
-        }
-        Device->NbdSocket = Sock;
-
-        if (!Properties->NbdProperties.Flags.SkipNegotiation) {
-            WNBD_LOG_INFO("Performing NBD handshake.");
-            UINT64 DiskSize = 0;
-            Status = NbdNegotiate(&Sock, &DiskSize, &NbdFlags,
-                                  Properties->NbdProperties.ExportName, 1, 1);
-            if (!NT_SUCCESS(Status)) {
-                goto Exit;
-            }
-            WNBD_LOG_INFO("Negotiated disk size: %llu", DiskSize);
-            // TODO: negotiate block size.
-            Device->Properties.BlockSize = WNBD_DEFAULT_BLOCK_SIZE;
-            Device->Properties.BlockCount = DiskSize / Device->Properties.BlockSize;
-        }
-
-        Device->Properties.Flags.ReadOnly |= CHECK_NBD_READONLY(NbdFlags);
-        Device->Properties.Flags.UnmapSupported |= CHECK_NBD_SEND_TRIM(NbdFlags);
-        Device->Properties.Flags.FlushSupported |= CHECK_NBD_SEND_FLUSH(NbdFlags);
-        Device->Properties.Flags.FUASupported |= CHECK_NBD_SEND_FUA(NbdFlags);
-        Device->Properties.Flags.PersistResSupported = 0;
-    }
-
     // TODO: fix the 4k sector size issue, potentially allowing even larger sector
     // sizes.
     if (Device->Properties.BlockSize != 512) {
@@ -447,21 +285,11 @@ WnbdCreateConnection(PWNBD_EXTENSION DeviceExtension,
         goto Exit;
     }
 
-    WNBD_LOG_INFO("Retrieved NBD flags: %d. Read-only: %d, TRIM enabled: %d, "
-                  "FLUSH enabled: %d, FUA enabled: %d.",
-                  NbdFlags,
-                  Device->Properties.Flags.ReadOnly,
-                  Device->Properties.Flags.UnmapSupported,
-                  Device->Properties.Flags.FlushSupported,
-                  Device->Properties.Flags.FUASupported);
-
-    Status = WnbdInitializeDevice(Device, !!Properties->Flags.UseNbd);
+    Status = WnbdInitializeDevice(Device);
     if (!NT_SUCCESS(Status)) {
         goto Exit;
     }
 
-    // The connection properties might be slightly different than the ones set
-    // by the client (e.g. after NBD negotiation or setting default values).
     RtlCopyMemory(&ConnectionInfo->Properties, &Device->Properties, sizeof(WNBD_PROPERTIES));
     ConnectionInfo->BusNumber = Device->Bus;
     ConnectionInfo->TargetId = Device->Target;
@@ -497,11 +325,6 @@ Exit:
         }
         if (InquiryData) {
             ExFreePool(InquiryData);
-        }
-        if (-1 != Sock) {
-            WNBD_LOG_INFO("Closing socket FD: %d", Sock);
-            Close(Sock);
-            Sock = -1;
         }
     }
 
@@ -673,6 +496,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
         Props.NbdProperties.Hostname[WNBD_MAX_NAME_LENGTH - 1] = '\0';
         Props.NbdProperties.ExportName[WNBD_MAX_NAME_LENGTH - 1] = '\0';
 
+        if (Props.Flags.UseKernelNbd) {
+            WNBD_LOG_ERROR("The kernel space NBD client implementation has "
+                           "been deprecated in favor of an userspace "
+                           "implementation. Please update libwnbd.");
+            Status = STATUS_INVALID_PARAMETER;
+            break;
+        }
+
         if (!strlen((char*)&Props.InstanceName)) {
             WNBD_LOG_WARN("IOCTL_WNBD_CREATE: Invalid instance name.");
             Status = STATUS_INVALID_PARAMETER;
@@ -686,20 +517,14 @@ WnbdParseUserIOCTL(PWNBD_EXTENSION DeviceExtension,
             Props.Pid = IoGetRequestorProcessId(Irp);
         }
 
-        // Those might be retrieved later through NBD negotiation.
-        BOOLEAN UseNbdNegotiation =
-            Props.Flags.UseNbd && !Props.NbdProperties.Flags.SkipNegotiation;
-        if (!UseNbdNegotiation) {
-            if (!Props.BlockCount || !Props.BlockSize ||
-                Props.BlockCount > ULLONG_MAX / Props.BlockSize)
-            {
-                WNBD_LOG_WARN(
-                    "IOCTL_WNBD_CREATE: Invalid block size or block count. "
-                    "Block size: %d. Block count: %lld.",
-                    Props.BlockSize, Props.BlockCount);
-                Status = STATUS_INVALID_PARAMETER;
-                break;
-            }
+        if (!Props.BlockCount || !Props.BlockSize ||
+                Props.BlockCount > ULLONG_MAX / Props.BlockSize) {
+            WNBD_LOG_WARN(
+                "IOCTL_WNBD_CREATE: Invalid block size or block count. "
+                "Block size: %d. Block count: %lld.",
+                Props.BlockSize, Props.BlockCount);
+            Status = STATUS_INVALID_PARAMETER;
+            break;
         }
 
         KeEnterCriticalRegion();

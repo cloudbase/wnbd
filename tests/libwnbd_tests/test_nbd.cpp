@@ -13,7 +13,8 @@ using namespace std;
 
 class NbdMapping {
 private:
-    PWNBD_DISK WnbdDisk = nullptr;
+    std::thread NbdDaemonThread;
+    std::string InstanceName;
 
 public:
     NbdMapping(PWNBD_PROPERTIES WnbdProps) {
@@ -29,11 +30,11 @@ public:
         }
 
         // Fill the WNBD_PROPERTIES strucure
-        string InstanceName = GetNewInstanceName();
+        InstanceName = GetNewInstanceName();
         InstanceName.copy(WnbdProps->InstanceName, WNBD_MAX_NAME_LENGTH);
         string(WNBD_OWNER_NAME).copy(WnbdProps->Owner, WNBD_MAX_OWNER_LENGTH);
 
-        WnbdProps->Flags.UseNbd = 1;
+        WnbdProps->Flags.UseUserspaceNbd = 1;
 
         NbdHostName.copy(WnbdProps->NbdProperties.Hostname,
                          WNBD_MAX_NAME_LENGTH);
@@ -41,24 +42,24 @@ public:
                            WNBD_MAX_NAME_LENGTH);
         WnbdProps->NbdProperties.PortNumber = NbdPort;
 
-        DWORD Status = WnbdCreate(
-            WnbdProps, NULL,
-            NULL, &WnbdDisk);
-        if (Status) {
-            string Msg = "couln't create NBD mapping, error: " +
-                         to_string(Status);
-            throw runtime_error(Msg);
-        }
+        NbdDaemonThread = std::thread([&]{
+            WNBD_PROPERTIES Props = *WnbdProps;
+            WnbdRunNbdDaemon(&Props);
+        });
+
+        // Wait for the disk to become available.
+        GetDiskPath(InstanceName.c_str(), false);
     }
 
     ~NbdMapping() {
-        if (WnbdDisk) {
-            DWORD Status = WnbdRemove(WnbdDisk, NULL);
-            if (Status && Status != ERROR_FILE_NOT_FOUND) {
-                ADD_FAILURE() << "couln't remove NBD mapping, error: "
-                              << Status;
-            }
-            WnbdClose(WnbdDisk);
+        WNBD_REMOVE_OPTIONS RemoveOptions = { 0 };
+        RemoveOptions.Flags.HardRemove = 1;
+        WnbdRemoveEx(InstanceName.c_str(), &RemoveOptions);
+
+        if (NbdDaemonThread.joinable()) {
+            cout << "Waiting for NBD daemon thread." << endl;
+            NbdDaemonThread.join();
+            cout << "Nbd daemon stopped." << endl;
         }
     }
 };
@@ -100,11 +101,11 @@ TEST(TestNbd, TestMap) {
         EXPECT_EQ(
             string(WNBD_OWNER_NAME),
             string(ConnectionInfo.Properties.Owner));
-        EXPECT_LT(0, ConnectionInfo.Properties.BlockCount);
-        EXPECT_LT(0, ConnectionInfo.Properties.BlockSize);
+        EXPECT_LT(0UL, ConnectionInfo.Properties.BlockCount);
+        EXPECT_LT(0ULL, ConnectionInfo.Properties.BlockSize);
         EXPECT_EQ(_getpid(), ConnectionInfo.Properties.Pid);
 
-        EXPECT_TRUE(ConnectionInfo.Properties.Flags.UseNbd);
+        EXPECT_TRUE(ConnectionInfo.Properties.Flags.UseUserspaceNbd);
     }
 
     // The mapping went out of scope, let's ensure that it got
@@ -127,8 +128,8 @@ TEST(TestNbd, TestIO) {
     NTSTATUS Status = WnbdShow(WnbdProps.InstanceName, &ConnectionInfo);
     ASSERT_FALSE(Status) << "couldn't retrieve WNBD disk info";
 
-    ASSERT_LT(0, ConnectionInfo.Properties.BlockCount);
-    EXPECT_LT(0, ConnectionInfo.Properties.BlockSize);
+    ASSERT_LT(0ULL, ConnectionInfo.Properties.BlockCount);
+    EXPECT_LT(0UL, ConnectionInfo.Properties.BlockSize);
 
     UINT64 BlockCount = ConnectionInfo.Properties.BlockCount;
     UINT32 BlockSize = ConnectionInfo.Properties.BlockSize;
