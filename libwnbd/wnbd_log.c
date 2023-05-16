@@ -16,7 +16,10 @@ VOID ConsoleLogger(
     UINT32 Line,
     const char* FunctionName)
 {
-    fprintf(stderr, "libwnbd.dll!%s %s %s\n",
+    SYSTEMTIME T;
+    GetLocalTime(&T);
+    fprintf(stderr, "%02d:%02d:%02d.%03d libwnbd.dll!%s %s %s\n",
+            T.wHour, T.wMinute, T.wSecond, T.wMilliseconds,
             FunctionName, WnbdLogLevelToStr(LogLevel), Message);
 }
 
