@@ -239,6 +239,22 @@ Number Friendly Name            Serial Number   HealthStatus         Operational
 1      WNBD WNBD_DISK           foo             Healthy              Online                     256 MB RAW
 ```
 
+**WARNING:** when connecting to a **local NBD server** (e.g. ``qemu-nbd``), make
+sure to **disable caching** on the NBD server side. Having Windows caching
+enabled on the WNBD disk side as well as the underlying NBD backend can lead
+to deadlocks when running on the same host. **This issue does not affect Ceph**.
+
+For example, when using ``qemu-storage-daemon.exe`` locally, set
+``cache.direct=on`` like so:
+
+```PowerShell
+    qemu-storage-daemon.exe `
+      --blockdev driver=file,node-name=file,filename=e:\img\test_100gb.raw,cache.direct=on `
+      --blockdev driver=raw,node-name=raw,file=file `
+      --nbd-server addr.type=inet,addr.host=127.0.0.1,addr.port=10809 `
+      --export type=nbd,id=export,node-name=raw,name=test_100gb,writable=on-storage-daemon
+```
+
 ### Listing mapped devices
 
 ```PowerShell
