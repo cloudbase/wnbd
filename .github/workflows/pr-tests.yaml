@@ -1,0 +1,97 @@
+name: Pull Request tests
+on:
+  pull_request:
+    branches: [ main ]
+jobs:
+  static-analysis:
+    runs-on: windows-2019
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: microsoft/setup-msbuild@v1.1
+        with:
+          msbuild-architecture: x64
+      # stampinf.exe is unavailable with the 2019 image
+      # unless we explicitly add the following to PATH
+      - name: "Add toolkit bin dir to env PATH"
+        run: >
+          Add-Content $env:GITHUB_PATH
+          "C:\Program Files (x86)\Windows Kits\10\bin\x64"
+      - name: "Show git log"
+        run: git log -n 10 --oneline
+      - name: "Run static analysis tests"
+        run: >
+          msbuild vstudio\wnbd.sln
+          /property:Configuration=Analyze
+  build-and-test:
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: microsoft/setup-msbuild@v1.1
+        with:
+          msbuild-architecture: x64
+      # stampinf.exe is unavailable with the 2019 image
+      # unless we explicitly add the following to PATH
+      - name: "Add toolkit bin dir to env PATH"
+        run: >
+          Add-Content $env:GITHUB_PATH
+          "C:\Program Files (x86)\Windows Kits\10\bin\x64"
+      - name: "Show git log"
+        run: git log -n 10 --oneline
+      - name: "Build WNBD"
+        run: >
+          msbuild vstudio\wnbd.sln
+          /property:Configuration=${{ matrix.configuration }}
+      - name: "Add WNBD build directory to env PATH"
+        run: >
+          Add-Content $env:GITHUB_PATH
+          (Resolve-Path vstudio\x64\${{ matrix.configuration }}).Path
+      - name: "Import WNBD certificate to root store"
+        run: >
+          Import-Certificate
+          -FilePath vstudio\x64\${{ matrix.configuration }}\wnbd.cer
+          -Cert Cert:\LocalMachine\Root
+      - name: "Import WNBD certificate to trusted publisher store"
+        run: >
+          Import-Certificate
+          -FilePath vstudio\x64\${{ matrix.configuration }}\wnbd.cer
+          -Cert Cert:\LocalMachine\TrustedPublisher
+      - name: "Import WNBD event definitions"
+        run: wevtutil im vstudio\wnbdevents.xml
+      - name: "Install the WNBD driver and create the virtual adapter"
+        timeout-minutes: 1
+        run: >
+          wnbd-client install-driver --debug
+          vstudio\x64\${{ matrix.configuration }}\driver\wnbd.inf
+      - name: "Install qemu, used for NBD tests"
+        run: choco install qemu
+      - name: "Add qemu directory to env PATH"
+        run: Add-Content $env:GITHUB_PATH 'C:\Program Files\qemu'
+      - name: "Create qcow2 image, used for NBD"
+        run: qemu-img create -f qcow2 test_5tb.qcow2 5T
+      # cache.direct=on doesn't work with qcow2 images. Sparse files may not
+      # be properly handled on Windows, so we'll avoid raw images for now.
+      - name: "Start qemu-storage-daemon NBD server"
+        run: >
+          Start-Process qemu-storage-daemon
+          -ArgumentList
+          "--blockdev driver=file,node-name=file,filename=test_5tb.qcow2
+          --blockdev driver=qcow2,node-name=qcow2,file=file
+          --nbd-server addr.type=inet,addr.host=127.0.0.1,addr.port=10809
+          --export type=nbd,id=export,node-name=qcow2,name=test_5tb,writable=on"
+      - name: "Wait for the NBD server to start"
+        run: sleep 2
+      - name: "Run WNBD functional tests"
+        run: >
+          libwnbd_tests.exe
+          --nbd-export-name test_5tb
+          --nbd-hostname 127.0.0.1
+          --nbd-port 10809
