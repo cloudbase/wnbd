@@ -195,11 +195,13 @@ PNBD_HANDSHAKE_RPL NbdReadHandshakeReply(_In_ SOCKET Fd)
 
     if (Reply->Datasize > 0) {
         size_t NewSize = sizeof(NBD_HANDSHAKE_RPL) + Reply->Datasize;
-        Reply = (PNBD_HANDSHAKE_RPL) realloc(Reply, NewSize);
-        if (!Reply) {
+        PVOID ReplyTemp = realloc(Reply, NewSize);
+        if (!ReplyTemp) {
             LogError("Unable to allocate %d bytes.", NewSize);
+            free(Reply);
             return nullptr;
         }
+        Reply = (PNBD_HANDSHAKE_RPL) ReplyTemp;
 
         Retval = RecvExact(Fd, &(Reply->Data), Reply->Datasize);
         if (Retval) {
