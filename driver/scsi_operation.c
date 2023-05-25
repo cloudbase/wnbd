@@ -616,6 +616,11 @@ WnbdPendOperation(_In_ PWNBD_EXTENSION DeviceExtension,
 
     NTSTATUS Status = STATUS_SUCCESS;
     PCDB Cdb = SrbGetCdb(Srb);
+    if (!Cdb) {
+        WNBD_LOG_WARN("Missing CDB");
+        SrbSetSrbStatus(Srb, SRB_STATUS_INVALID_REQUEST);
+        return STATUS_INVALID_PARAMETER;
+    }
 
     switch(Cdb->AsByte[0]) {
     case SCSIOP_READ6:
@@ -775,10 +780,15 @@ WnbdHandleSrbOperation(PWNBD_EXTENSION DeviceExtension,
     ASSERT(Device);
     ASSERT(Srb);
     PCDB Cdb = SrbGetCdb(Srb);
+    if (!Cdb) {
+        WNBD_LOG_WARN("Missing CDB");
+        SrbSetSrbStatus(Srb, SRB_STATUS_INVALID_REQUEST);
+        return STATUS_INVALID_PARAMETER;
+    }
     NTSTATUS status = STATUS_SUCCESS;
     if (!Device || Device->HardRemoveDevice) {
         SrbSetSrbStatus(Srb, SRB_STATUS_INVALID_REQUEST);
-        return status;
+        return STATUS_INVALID_PARAMETER;
     }
     UINT32 BlockSize = Device->Properties.BlockSize;
     UINT64 BlockCount = Device->Properties.BlockCount;

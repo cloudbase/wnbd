@@ -288,6 +288,11 @@ ValidateScsiRequest(
     _In_ PSRB_QUEUE_ELEMENT Element)
 {
     PCDB Cdb = SrbGetCdb(Element->Srb);
+    if (!Cdb) {
+        WNBD_LOG_ERROR("Missing CDB.");
+        return FALSE;
+    }
+
     int ScsiOp = Cdb->AsByte[0];
     int WnbdReqType = ScsiOpToWnbdReqType(ScsiOp);
     PWNBD_PROPERTIES DevProps = &Device->Properties;

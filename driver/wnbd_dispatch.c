@@ -130,8 +130,12 @@ NTSTATUS WnbdDispatchRequest(
         Element->Tag = InterlockedIncrement64(&(LONG64)RequestHandle);
         SrbSetDataTransferLength(Element->Srb, 0);
         PCDB Cdb = SrbGetCdb(Element->Srb);
+
         RtlZeroMemory(Request, sizeof(WNBD_IO_REQUEST));
-        WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
+        WnbdRequestType RequestType = WnbdReqTypeUnknown;
+        if (Cdb) {
+            RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
+        }
         WNBD_LOG_DEBUG("Processing request. Address: %p Tag: 0x%llx Type: %d",
                        Element->Srb, Element->Tag, RequestType);
 
@@ -315,6 +319,11 @@ NTSTATUS WnbdHandleResponse(
     if (!Element->Aborted) {
         // We need to avoid accessing aborted or already completed SRBs.
         PCDB Cdb = SrbGetCdb(Element->Srb);
+        if (!Cdb) {
+            WNBD_LOG_ERROR("Missing CDB.");
+            Status = STATUS_INTERNAL_ERROR;
+            goto Exit;
+        }
         WnbdRequestType RequestType = ScsiOpToWnbdReqType(Cdb->AsByte[0]);
         WNBD_LOG_DEBUG("Received reply header for %d %p 0x%llx.",
                        RequestType, Element->Srb, Element->Tag);
