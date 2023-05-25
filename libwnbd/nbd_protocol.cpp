@@ -4,6 +4,9 @@
  * Licensed under LGPL-2.1 (see LICENSE)
  */
 
+// Disable "enum class" warnings
+#pragma warning(disable:26812)
+
 #include "nbd_protocol.h"
 #include "wnbd_log.h"
 #include "utils.h"
@@ -166,6 +169,7 @@ DWORD NbdSendInfoRequest(
     return Retval;
 }
 
+#pragma warning(disable:6001)
 PNBD_HANDSHAKE_RPL NbdReadHandshakeReply(_In_ SOCKET Fd)
 {
     PNBD_HANDSHAKE_RPL Reply = (PNBD_HANDSHAKE_RPL) calloc(
@@ -210,6 +214,7 @@ PNBD_HANDSHAKE_RPL NbdReadHandshakeReply(_In_ SOCKET Fd)
     }
     return Reply;
 }
+#pragma warning(default:6001)
 
 void NbdParseSizes(
     _In_ PCHAR Data,

@@ -7,6 +7,9 @@
 
 #pragma once
 
+#pragma warning(push)
+#pragma warning(disable:26812)
+
 #include <winsock2.h>
 #include <windows.h>
 
@@ -146,3 +149,5 @@ const char* NbdRequestTypeStr(NbdRequestType RequestType);
 #ifdef __cplusplus
 }
 #endif
+
+#pragma warning(pop)

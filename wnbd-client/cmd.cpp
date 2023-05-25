@@ -6,6 +6,9 @@
 
 #include <wnbd.h>
 
+// Disable "enum class" warnings
+#pragma warning(disable:26812)
+
 #include "cmd.h"
 #include "version.h"
 
