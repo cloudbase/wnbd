@@ -433,12 +433,18 @@ TEST(TestIoStats, TestIoStats) {
     ASSERT_EQ(DefaultBlockSize, BytesWritten);
     ASSERT_TRUE(FlushFileBuffers(DiskHandle));
 
-    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-    WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
-    EVENTUALLY(UserspaceStats.TotalWrittenBlocks >= 1, 20, 100);
-    EVENTUALLY(UserspaceStats.WriteErrors >= 0, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 1, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 1, 20, 100);
+    EVENTUALLY(
+        WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+        UserspaceStats.TotalWrittenBlocks >= 1, 20, 100);
+    EVENTUALLY(
+        WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+        UserspaceStats.WriteErrors >= 0, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIORequests >= 1, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIOReplies >= 1, 20, 100);
 
     // Clear read buffer
     memset(ReadBuffer.get(), 0, ReadBufferSize);
@@ -449,10 +455,18 @@ TEST(TestIoStats, TestIoStats) {
         << GetLastError() << std::endl;
     ASSERT_EQ(DefaultBlockSize, BytesRead);
 
-    EVENTUALLY(UserspaceStats.TotalReadBlocks >= 1, 20, 100);
-    EVENTUALLY(UserspaceStats.TotalRWRequests >= 2, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 2, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 2, 20, 100);
+    EVENTUALLY(
+        WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+        UserspaceStats.TotalReadBlocks >= 1, 20, 100);
+    EVENTUALLY(
+        WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+        UserspaceStats.TotalRWRequests >= 2, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIORequests >= 2, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIOReplies >= 2, 20, 100);
 
     // Write one block past the end of the disk.
     LARGE_INTEGER Offset;
@@ -473,35 +487,20 @@ TEST(TestIoStats, TestIoStats) {
         DefaultBlockSize, &BytesWritten, NULL));
     ASSERT_EQ(0, BytesWritten);
 
-    WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-    WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
     // The address check was moved to the driver, which is why
     // we won't have a write error on the libwnbd side.
     // EVENTUALLY(UserspaceStats.WriteErrors >= 1, 20, 100);
-    EVENTUALLY(UserspaceStats.TotalRWRequests >= 3, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIORequests >= 3, 20, 100);
-    EVENTUALLY(DriverStats.TotalReceivedIOReplies >= 3, 20, 100);
+    EVENTUALLY(
+        WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
+        UserspaceStats.TotalRWRequests >= 3, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIORequests >= 3, 20, 100);
+    EVENTUALLY(
+        WnbdGetDriverStats(WnbdProps.InstanceName, &DriverStats);
+        DriverStats.TotalReceivedIOReplies >= 3, 20, 100);
 
     ASSERT_EQ(UserspaceStats.InvalidRequests, 0);
-
-    // TODO: flaky test, temporarily disabled.
-    //
-    // Move file pointer back to the beggining of the disk
-    // Offset.QuadPart = 0;
-    // ASSERT_TRUE(SetFilePointerEx(
-    //     DiskHandle,
-    //     Offset,
-    //     NULL, FILE_BEGIN));
-    // ASSERT_TRUE(WriteFile(
-    //     DiskHandle, WriteBuffer.get(),
-    //     DefaultBlockSize, &BytesWritten, NULL));
-    // ASSERT_EQ(DefaultBlockSize, BytesWritten);
-
-    // WnbdDisk->Properties.Flags.FlushSupported = 0;
-    // ASSERT_FALSE(FlushFileBuffers(DiskHandle));
-    // WnbdGetUserspaceStats(WnbdDisk, &UserspaceStats);
-
-    // EVENTUALLY(UserspaceStats.InvalidRequests >= 1, 150, 100);
 }
 
 TEST(TestPersistentReservations, TestPersistentReserveIn) {
