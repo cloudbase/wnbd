@@ -45,6 +45,7 @@
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>WDM</DriverType>
+    <RunSDV Condition="'$(RunSDV)' == ''">Yes</RunSDV>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ItemGroup Label="WrappedTaskItems">
@@ -149,7 +150,9 @@
       <FileDigestAlgorithm>SHA256</FileDigestAlgorithm>
     </DriverSign>
     <PostBuildEvent>
-      <Command>powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(SolutionFileName) /p:Configuration=Release; msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Release /p:SolutionDir=$(SolutionDir); msbuild $(ProjectFileName) /p:Configuration=Release /P:RunCodeAnalysisOnce=True</Command>
+      <Command Condition="'$(RunSDV)'=='Yes'">
+        powershell.exe -executionpolicy bypass -command $env:VCINSTALLDIR='$(VCInstallDir)'; cd $(SolutionDir); msbuild $(ProjectFileName) /t:sdv /p:inputs='/check' /p:Configuration=Debug /p:SolutionDir=$(SolutionDir);
+      </Command>
     </PostBuildEvent>
     <Inf>
       <SpecifyDriverVerDirectiveVersion>false</SpecifyDriverVerDirectiveVersion>

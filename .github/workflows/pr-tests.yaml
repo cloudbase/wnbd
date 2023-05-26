@@ -21,10 +21,15 @@ jobs:
           "C:\Program Files (x86)\Windows Kits\10\bin\x64"
       - name: "Show git log"
         run: git log -n 10 --oneline
+      # SDV is skipped for now because of a cryptic error:
+      #   c1 : fatal error C1250: Unable to load plug-in '\x22dcA»'
+      #   logs: vstudio/smvbuild.log
+      #         vstudio/sdv/smvcl.log
       - name: "Run static analysis tests"
         run: >
           msbuild vstudio\wnbd.sln
           /property:Configuration=Analyze
+          /property:RunSDV=False
   build-and-test:
     timeout-minutes: 20
     strategy:
