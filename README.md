@@ -4,7 +4,7 @@ Windows Network Block Device (WNBD)
 Build Status:
 -------------
 
-[![Build status](https://ci.appveyor.com/api/projects/status/4sh808y8v3hv0k2d?svg=true)](https://ci.appveyor.com/project/petrutlucian94/wnbd)
+![Build status](https://github.com/cloudbase/wnbd/actions/workflows/pr-tests.yaml/badge.svg)
 
 What is WNBD?
 -------------
@@ -90,15 +90,6 @@ copy wnbd\vstudio\x64\Debug\wnbd-client.exe $outDir
 copy wnbd\vstudio\x64\Debug\libwnbd.dll $outDir
 copy wnbd\vstudio\reinstall.ps1 $outDir
 ```
-
-You can also download the latest prebuilt packages from Appveyor via the links:
-
-* [Debug](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Debug.zip?job=Configuration%3A+Debug)
-* [Release](https://ci.appveyor.com/api/projects/aserdean/wnbd/artifacts/wnbd-Release.zip?job=Configuration%3A+Release)
-
-When using the above Appveyor artifacts, make sure to also install the latest
-Microsoft VC runtime. Note that VS 2015, 2017 and 2019 use the same redistributable
-VC runtime package. You can skip this step when using the below MSI installer.
 
 [This project](https://github.com/cloudbase/ceph-windows-installer) allows building
 an MSI installer that bundles WNBD and the Ceph Windows clients.
