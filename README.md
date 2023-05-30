@@ -1,11 +1,6 @@
 Windows Network Block Device (WNBD)
 ===================================
 
-Build Status:
--------------
-
-![Build status](https://github.com/cloudbase/wnbd/actions/workflows/pr-tests.yaml/badge.svg)
-
 What is WNBD?
 -------------
 
