@@ -191,16 +191,24 @@ DWORD CmdStats(string InstanceName)
         return Status;
     }
 
+    int64_t TimeNow = (int64_t) GetTickCount64();
+
     cout << "Disk stats" << endl << left
-         << setw(30) << "TotalReceivedIORequests" << " : " <<  Stats.TotalReceivedIORequests << endl
-         << setw(30) << "TotalSubmittedIORequests" << " : " <<  Stats.TotalSubmittedIORequests << endl
-         << setw(30) << "TotalReceivedIOReplies" << " : " <<  Stats.TotalReceivedIOReplies << endl
-         << setw(30) << "UnsubmittedIORequests" << " : " <<  Stats.UnsubmittedIORequests << endl
-         << setw(30) << "PendingSubmittedIORequests" << " : " <<  Stats.PendingSubmittedIORequests << endl
-         << setw(30) << "AbortedSubmittedIORequests" << " : " <<  Stats.AbortedSubmittedIORequests << endl
-         << setw(30) << "AbortedUnsubmittedIORequests" << " : " <<  Stats.AbortedUnsubmittedIORequests << endl
-         << setw(30) << "CompletedAbortedIORequests" << " : " <<  Stats.CompletedAbortedIORequests << endl
-         << setw(30) << "OutstandingIOCount" << " : " <<  Stats.OutstandingIOCount << endl
+         << setw(30) << "TotalReceivedIORequests" << " : " << Stats.TotalReceivedIORequests << endl
+         << setw(30) << "TotalSubmittedIORequests" << " : " << Stats.TotalSubmittedIORequests << endl
+         << setw(30) << "TotalReceivedIOReplies" << " : " << Stats.TotalReceivedIOReplies << endl
+         << setw(30) << "UnsubmittedIORequests" << " : " << Stats.UnsubmittedIORequests << endl
+         << setw(30) << "PendingSubmittedIORequests" << " : " << Stats.PendingSubmittedIORequests << endl
+         << setw(30) << "AbortedSubmittedIORequests" << " : " << Stats.AbortedSubmittedIORequests << endl
+         << setw(30) << "AbortedUnsubmittedIORequests" << " : " << Stats.AbortedUnsubmittedIORequests << endl
+         << setw(30) << "CompletedAbortedIORequests" << " : " << Stats.CompletedAbortedIORequests << endl
+         << setw(30) << "OutstandingIOCount" << " : " << Stats.OutstandingIOCount << endl
+         << setw(30) << "TimeSinceLastReceivedReqMs" << " : "
+                     << (TimeNow - Stats.LastReceivedReqTimestamp / 10000) << endl
+         << setw(30) << "TimeSinceLastSubmittedReqMs" << " : "
+                     << (TimeNow - Stats.LastSubmittedReqTimestamp / 10000) << endl
+         << setw(30) << "TimeSinceLastReplyMs" << " : "
+                     << (TimeNow - Stats.LastReplyTimestamp / 10000) << endl
          << endl;
     return Status;
 }
@@ -260,25 +268,25 @@ DWORD CmdShow(string InstanceName)
     }
 
     cout << "Connection info" << endl << left
-         << setw(25) << "InstanceName" << " : " <<  ConnInfo.Properties.InstanceName << endl
-         << setw(25) << "SerialNumber" << " : " <<  ConnInfo.Properties.SerialNumber << endl
-         << setw(25) << "Owner" << " : " <<  ConnInfo.Properties.Owner << endl
-         << setw(25) << "ReadOnly" << " : " <<  ConnInfo.Properties.Flags.ReadOnly << endl
-         << setw(25) << "FlushSupported" << " : " <<  ConnInfo.Properties.Flags.FlushSupported << endl
-         << setw(25) << "FUASupported" << " : " <<  ConnInfo.Properties.Flags.FUASupported << endl
-         << setw(25) << "UnmapSupported" << " : " <<  ConnInfo.Properties.Flags.UnmapSupported << endl
+         << setw(25) << "InstanceName" << " : " << ConnInfo.Properties.InstanceName << endl
+         << setw(25) << "SerialNumber" << " : " << ConnInfo.Properties.SerialNumber << endl
+         << setw(25) << "Owner" << " : " << ConnInfo.Properties.Owner << endl
+         << setw(25) << "ReadOnly" << " : " << ConnInfo.Properties.Flags.ReadOnly << endl
+         << setw(25) << "FlushSupported" << " : " << ConnInfo.Properties.Flags.FlushSupported << endl
+         << setw(25) << "FUASupported" << " : " << ConnInfo.Properties.Flags.FUASupported << endl
+         << setw(25) << "UnmapSupported" << " : " << ConnInfo.Properties.Flags.UnmapSupported << endl
          << setw(25) << "UnmapAnchorSupported " << " : "
                      << ConnInfo.Properties.Flags.UnmapAnchorSupported << endl
-         << setw(25) << "UseUserspaceNbd" << " : " <<  ConnInfo.Properties.Flags.UseUserspaceNbd << endl
-         << setw(25) << "BlockCount" << " : " <<  ConnInfo.Properties.BlockCount << endl
-         << setw(25) << "BlockSize" << " : " <<  ConnInfo.Properties.BlockSize << endl
-         << setw(25) << "MaxUnmapDescCount" << " : " <<  ConnInfo.Properties.MaxUnmapDescCount << endl
-         << setw(25) << "Pid" << " : " <<  ConnInfo.Properties.Pid << endl
-         << setw(25) << "DiskNumber" << " : " <<  ConnInfo.DiskNumber << endl
-         << setw(25) << "PNPDeviceID" << " : " <<  to_string(wstring(ConnInfo.PNPDeviceID)) << endl
-         << setw(25) << "BusNumber" << " : " <<  ConnInfo.BusNumber << endl
-         << setw(25) << "TargetId" << " : " <<  ConnInfo.TargetId << endl
-         << setw(25) << "Lun" << " : " <<  ConnInfo.Lun << endl
+         << setw(25) << "UseUserspaceNbd" << " : " << ConnInfo.Properties.Flags.UseUserspaceNbd << endl
+         << setw(25) << "BlockCount" << " : " << ConnInfo.Properties.BlockCount << endl
+         << setw(25) << "BlockSize" << " : " << ConnInfo.Properties.BlockSize << endl
+         << setw(25) << "MaxUnmapDescCount" << " : " << ConnInfo.Properties.MaxUnmapDescCount << endl
+         << setw(25) << "Pid" << " : " << ConnInfo.Properties.Pid << endl
+         << setw(25) << "DiskNumber" << " : " << ConnInfo.DiskNumber << endl
+         << setw(25) << "PNPDeviceID" << " : " << to_string(wstring(ConnInfo.PNPDeviceID)) << endl
+         << setw(25) << "BusNumber" << " : " << ConnInfo.BusNumber << endl
+         << setw(25) << "TargetId" << " : " << ConnInfo.TargetId << endl
+         << setw(25) << "Lun" << " : " << ConnInfo.Lun << endl
          // For consistency, we're using the same naming as the wnbd settings for IO limits.
          << setw(25) << "MaxIOReqPerLun" << " : " << LunMaxIoCount << endl
          << setw(25) << "MaxIOReqPerAdapter" << " : " << AdapterMaxIoCount << endl
