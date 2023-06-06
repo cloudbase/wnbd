@@ -579,6 +579,7 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
 {
     NTSTATUS Status = STATUS_SUCCESS;
 
+    Device->Stats.LastReceivedReqTimestamp = KeQueryInterruptTime();
     InterlockedIncrement64(&Device->Stats.TotalReceivedIORequests);
     InterlockedIncrement64(&Device->Stats.UnsubmittedIORequests);
 
@@ -590,6 +591,7 @@ WnbdPendElement(_In_ PWNBD_EXTENSION DeviceExtension,
     }
     WNBD_LOG_DEBUG("Queuing Element, SRB=%p", Srb);
 
+    Element->ReqTimestamp = KeQueryInterruptTime();
     Element->DeviceExtension = DeviceExtension;
     Element->Srb = Srb;
     Element->StartingLbn = StartingLbn;
