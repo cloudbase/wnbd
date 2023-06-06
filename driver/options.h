@@ -41,6 +41,9 @@ typedef enum {
     OptDbgPrintEnabled,
     OptMaxIOReqPerAdapter,
     OptMaxIOReqPerLun,
+    OptRemoveStaleConnections,
+    OptStaleReqTimeoutMs,
+    OptStaleConnTimeoutMs,
 } WNBD_OPT_KEY;
 
 extern WNBD_OPTION WnbdDriverOptions[];

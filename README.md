@@ -356,6 +356,9 @@ WppLoggingEnabled  : false (Default: false)
 DbgPrintEnabled    : true (Default: true)
 MaxIOReqPerAdapter : 1000 (Default: 1000)
 MaxIOReqPerLun     : 255 (Default: 255)
+RemoveStaleConnections : true (Default: true)
+StaleReqTimeoutMs      : 15000 (Default: 15000)
+StaleConnTimeoutMs     : 60000 (Default: 60000)
 ```
 
 Use the following command to configure an option. If the setting should persist
@@ -414,6 +417,25 @@ start-service ceph-rbd
 # Verify the updated IO limits
 wnbd-client.exe show $mapping
 ```
+
+Stale IO daemon detection
+-------------------------
+
+In some situations, the host can become unresponsive if there are stale IO
+connections.
+
+To avoid this, WNBD automatically detects and removes stale connections. This
+behavior along with the timeouts are configurable using the following settings:
+
+```
+RemoveStaleConnections : true (Default: true)
+StaleReqTimeoutMs      : 15000 (Default: 15000)
+StaleConnTimeoutMs     : 60000 (Default: 60000)
+```
+
+The driver considers the connection to be stale if there are aborted requests
+older than ``StaleReqTimeoutMs`` and if there hasn't been any IO reply since
+``StaleConnTimeoutMs``.
 
 Limitations
 ===========
