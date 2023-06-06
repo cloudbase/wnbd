@@ -113,8 +113,8 @@ WnbdDeviceMonitorThread(_In_ PVOID Context)
     WNBD_LOG_INFO("Finished waiting for pending device requests: %s.",
                   Device->Properties.InstanceName);
 
-    DrainDeviceQueue(Device, FALSE);
-    DrainDeviceQueue(Device, TRUE);
+    DrainDeviceQueue(Device, FALSE, FALSE);
+    DrainDeviceQueue(Device, TRUE, FALSE);
 
     // After acquiring the device spinlock, we should return as quickly as possible.
     KIRQL Irql = { 0 };

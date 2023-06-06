@@ -62,6 +62,9 @@ static const GUID WNBD_GUID = {
 #define WNBD_ABS_MAX_IO_REQ_PER_ADAPTER 1024 * 128
 #define WNBD_ABS_MAX_IO_REQ_PER_LUN 1024
 
+#define WNBD_DEFAULT_STALE_REQ_TIMEOUT_MS 15000
+#define WNBD_DEFAULT_STALE_CONN_TIMEOUT_MS 60000
+
 // Only used for NBD connections, in which case the block size is optional.
 #define WNBD_DEFAULT_BLOCK_SIZE 512
 

@@ -12,7 +12,8 @@
 
 VOID
 DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
-                 _In_ BOOLEAN SubmittedRequests);
+                 _In_ BOOLEAN SubmittedRequests,
+                 _In_ BOOLEAN CheckStaleConn);
 
 VOID
 CompleteRequest(_In_ PWNBD_DISK_DEVICE Device,

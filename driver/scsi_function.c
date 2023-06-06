@@ -15,7 +15,8 @@
 #include "userspace.h"
 
 UCHAR DrainDeviceQueues(PVOID DeviceExtension,
-                        PVOID Srb)
+                        PVOID Srb,
+                        BOOLEAN CheckStaleConn)
 
 {
     ASSERT(Srb);
@@ -44,8 +45,8 @@ UCHAR DrainDeviceQueues(PVOID DeviceExtension,
         goto Exit;
     }
 
-    DrainDeviceQueue(Device, FALSE);
-    DrainDeviceQueue(Device, TRUE);
+    DrainDeviceQueue(Device, FALSE, CheckStaleConn);
+    DrainDeviceQueue(Device, TRUE, CheckStaleConn);
 
     WnbdReleaseDevice(Device);
     SrbStatus = SRB_STATUS_SUCCESS;
@@ -62,7 +63,7 @@ WnbdAbortFunction(_In_ PVOID DeviceExtension,
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
-    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
+    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb, TRUE);
 
     return SrbStatus;
 }
@@ -75,7 +76,7 @@ WnbdResetLogicalUnitFunction(PVOID DeviceExtension,
     ASSERT(Srb);
     ASSERT(DeviceExtension);
 
-    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb);
+    UCHAR SrbStatus = DrainDeviceQueues(DeviceExtension, Srb, TRUE);
 
     return SrbStatus;
 }

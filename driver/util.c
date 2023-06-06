@@ -17,9 +17,11 @@
 #include "srb_helper.h"
 #include "userspace.h"
 #include "util.h"
+#include "options.h"
 
 VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
-                      _In_ BOOLEAN SubmittedRequests)
+                      _In_ BOOLEAN SubmittedRequests,
+                      _In_ BOOLEAN CheckStaleConn)
 {
     PLIST_ENTRY Request;
     PSRB_QUEUE_ELEMENT Element;
@@ -35,6 +37,12 @@ VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
         ListLock = &Device->PendingReqListLock;
     }
 
+    UINT64 TimeNow = KeQueryInterruptTime();
+
+    BOOLEAN StaleConnDetected = FALSE;
+    BOOLEAN RemoveStaleConnections =
+        WnbdDriverOptions[OptRemoveStaleConnections].Value.Data.AsBool;
+
     while ((Request = ExInterlockedRemoveHeadList(ListHead, ListLock)) != NULL) {
         Element = CONTAINING_RECORD(Request, SRB_QUEUE_ELEMENT, Link);
         SrbSetDataTransferLength(Element->Srb, 0);
@@ -46,7 +54,58 @@ VOID DrainDeviceQueue(_In_ PWNBD_DISK_DEVICE Device,
             else
                 InterlockedIncrement64(&Device->Stats.AbortedUnsubmittedIORequests);
         }
+
+        // Storport resets the lun after hitting request timeouts. However,
+        // it never actually removes the disk. Having a stale disk can be
+        // troublesome, leading to an unresponsive host in certain situations
+        // (e.g. cache deadlocks, hanging persistent reservation
+        // requests, etc).
+        //
+        // For this reason, we'll detect stale connections and disconnect
+        // the disk. This feature along with the timeouts are configurable.
+        // By default, we'll consider a connection to be stale if at least one
+        // request older than 15s got aborted and if no IO reply was received
+        // in the last minute.
+        if (CheckStaleConn && !StaleConnDetected) {
+            UINT64 StaleReqTimeoutMs =
+                (UINT64) WnbdDriverOptions[OptStaleReqTimeoutMs].Value.Data.AsInt64;
+            if (!StaleReqTimeoutMs) {
+                StaleReqTimeoutMs = WNBD_DEFAULT_STALE_REQ_TIMEOUT_MS;
+            }
+            UINT64 StaleConnTimeoutMs =
+                (UINT64) WnbdDriverOptions[OptStaleConnTimeoutMs].Value.Data.AsInt64;
+            if (!StaleConnTimeoutMs) {
+                StaleConnTimeoutMs = WNBD_DEFAULT_STALE_CONN_TIMEOUT_MS;
+            }
+
+            if (Element->ReqTimestamp &&
+                    Element->ReqTimestamp < TimeNow &&
+                    StaleReqTimeoutMs < (
+                        (TimeNow - Element->ReqTimestamp) / 10000) &&
+                    Device->Stats.LastReplyTimestamp &&
+                    Device->Stats.LastReplyTimestamp < TimeNow &&
+                    StaleConnTimeoutMs < (
+                        TimeNow - Device->Stats.LastReplyTimestamp) / 10000) {
+                StaleConnDetected = TRUE;
+                WNBD_LOG_WARN(
+                    "Stale connection detected. "
+                    "Time since last IO reply (ms): %lld."
+                    "Time since the aborted request was issued (ms): %lld.",
+                    (TimeNow - Device->Stats.LastReplyTimestamp) / 10000,
+                    (TimeNow - Element->ReqTimestamp) / 10000);
+            }
+        }
+
         CompleteRequest(Device, Element, TRUE);
+    }
+
+    if (StaleConnDetected) {
+        if (RemoveStaleConnections) {
+            WNBD_LOG_ERROR("Removing stale connection.");
+            WnbdDisconnectAsync(Device);
+        } else {
+            WNBD_LOG_WARN("Ignoring stale connection as per WNBD settings.");
+        }
     }
 }
 

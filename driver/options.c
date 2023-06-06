@@ -35,6 +35,9 @@ WNBD_OPTION WnbdDriverOptions[] = {
     WNBD_DEF_OPT(L"DbgPrintEnabled", Bool, TRUE),
     WNBD_DEF_OPT(L"MaxIOReqPerAdapter", Int64, WNBD_DEFAULT_MAX_IO_REQ_PER_ADAPTER),
     WNBD_DEF_OPT(L"MaxIOReqPerLun", Int64, WNBD_DEFAULT_MAX_IO_REQ_PER_LUN),
+    WNBD_DEF_OPT(L"RemoveStaleConnections", Bool, TRUE),
+    WNBD_DEF_OPT(L"StaleReqTimeoutMs", Int64, WNBD_DEFAULT_STALE_REQ_TIMEOUT_MS),
+    WNBD_DEF_OPT(L"StaleConnTimeoutMs", Int64, WNBD_DEFAULT_STALE_CONN_TIMEOUT_MS),
 };
 DWORD WnbdOptionsCount = sizeof(WnbdDriverOptions) / sizeof(WNBD_OPTION);
 
