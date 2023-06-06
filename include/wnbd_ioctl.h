@@ -210,7 +210,14 @@ typedef struct
     // Soft device removals will wait for outstanding IO
     // requests.
     INT64 OutstandingIOCount;
-    INT64 Reserved[15];
+    // The following timestamps are retrieved using KeQueryInterruptTime.
+    // We aren't using QPC since 15ms precision is enough in our case
+    // and we want to avoid the potential overhead that may occur if
+    // QPC can't leverage TSC.
+    UINT64 LastReceivedReqTimestamp;
+    UINT64 LastSubmittedReqTimestamp;
+    UINT64 LastReplyTimestamp;
+    INT64 Reserved[12];
 } WNBD_DRV_STATS, *PWNBD_DRV_STATS;
 WNBD_ASSERT_SZ_EQ(WNBD_DRV_STATS, 192);
 

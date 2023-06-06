@@ -251,6 +251,8 @@ NTSTATUS WnbdDispatchRequest(
         ExInterlockedInsertTailList(
             &Device->SubmittedReqListHead,
             &Element->Link, &Device->SubmittedReqListLock);
+
+        Device->Stats.LastSubmittedReqTimestamp = KeQueryInterruptTime();
         InterlockedIncrement64(&Device->Stats.TotalSubmittedIORequests);
         InterlockedIncrement64(&Device->Stats.PendingSubmittedIORequests);
         InterlockedDecrement64(&Device->Stats.UnsubmittedIORequests);
@@ -390,6 +392,7 @@ NTSTATUS WnbdHandleResponse(
     }
 
 Exit:
+    Device->Stats.LastReplyTimestamp = KeQueryInterruptTime();
     InterlockedIncrement64(&Device->Stats.TotalReceivedIOReplies);
     InterlockedDecrement64(&Device->Stats.PendingSubmittedIORequests);
 

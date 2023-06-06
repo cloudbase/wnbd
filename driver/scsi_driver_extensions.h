@@ -68,6 +68,8 @@ typedef struct _SRB_QUEUE_ELEMENT {
     UINT64 Tag;
     BOOLEAN Aborted;
     BOOLEAN Completed;
+    // Retrieved using KeQueryInterruptTime.
+    UINT64 ReqTimestamp;
 } SRB_QUEUE_ELEMENT, * PSRB_QUEUE_ELEMENT;
 
 SCSI_ADAPTER_CONTROL_STATUS
