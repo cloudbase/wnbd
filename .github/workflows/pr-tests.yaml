@@ -77,7 +77,7 @@ jobs:
           wnbd-client install-driver --debug
           vstudio\x64\${{ matrix.configuration }}\driver\wnbd.inf
       - name: "Install qemu, used for NBD tests"
-        run: choco install qemu
+        run: choco install qemu --version 2023.4.24 -y
       - name: "Add qemu directory to env PATH"
         run: Add-Content $env:GITHUB_PATH 'C:\Program Files\qemu'
       - name: "Create qcow2 image, used for NBD"
