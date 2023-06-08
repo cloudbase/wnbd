@@ -204,11 +204,11 @@ DWORD CmdStats(string InstanceName)
          << setw(30) << "CompletedAbortedIORequests" << " : " << Stats.CompletedAbortedIORequests << endl
          << setw(30) << "OutstandingIOCount" << " : " << Stats.OutstandingIOCount << endl
          << setw(30) << "TimeSinceLastReceivedReqMs" << " : "
-                     << (TimeNow - Stats.LastReceivedReqTimestamp / 10000) << endl
+                     << max(0, (int64_t) (TimeNow - Stats.LastReceivedReqTimestamp / 10000)) << endl
          << setw(30) << "TimeSinceLastSubmittedReqMs" << " : "
-                     << (TimeNow - Stats.LastSubmittedReqTimestamp / 10000) << endl
+                     << max(0, (int64_t) (TimeNow - Stats.LastSubmittedReqTimestamp / 10000)) << endl
          << setw(30) << "TimeSinceLastReplyMs" << " : "
-                     << (TimeNow - Stats.LastReplyTimestamp / 10000) << endl
+                     << max(0, (int64_t) (TimeNow - Stats.LastReplyTimestamp / 10000)) << endl
          << endl;
     return Status;
 }
