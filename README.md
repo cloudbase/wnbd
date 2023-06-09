@@ -513,6 +513,9 @@ AbortedSubmittedIORequests     : 0
 AbortedUnsubmittedIORequests   : 0
 CompletedAbortedIORequests     : 0
 OutstandingIOCount             : 0
+TimeSinceLastReceivedReqMs     : 3037
+TimeSinceLastSubmittedReqMs    : 3037
+TimeSinceLastReplyMs           : 3037
 ```
 
 The ``received`` requests are the ones coming from Storport, the driver upper layer.
@@ -526,4 +529,7 @@ the requests. The userspace ``libwnbd`` library also gathers IO counters, which 
 retrieved by the library consumers.
 
 Worth mentioning that by default, Storport limits the number of pending IO requests to
-1000 per adapter and 255 per LUN.
+1000 per adapter and 255 per LUN. Those limits can be adjusted as described above.
+
+Be aware that the IO timers such as ``TimeSinceLastReceivedReqMs`` have a ~15ms
+accuracy and are mostly intended for timeout detection.
