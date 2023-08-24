@@ -48,71 +48,21 @@ std::string WinStrError(DWORD Err)
 std::string GetDiskPath(const char* InstanceName, bool ExpectMapped)
 {
     DWORD TimeoutMs = 10 * 1000;
-    DWORD RetryInterval = 500;
-    LARGE_INTEGER StartTime, CurrTime, ElapsedMs, CounterFreq;
-    QueryPerformanceFrequency(&CounterFreq);
-    QueryPerformanceCounter(&StartTime);
-    ElapsedMs = { 0 };
+    DWORD RetryIntervalMs = 500;
 
-    do {
-        QueryPerformanceCounter(&CurrTime);
-        ElapsedMs.QuadPart = CurrTime.QuadPart - StartTime.QuadPart;
-        ElapsedMs.QuadPart *= 1000;
-        ElapsedMs.QuadPart /= CounterFreq.QuadPart;
+    DWORD DiskNumber;
+    DWORD Status = WnbdPollDiskNumber(
+        InstanceName, ExpectMapped,
+        TRUE, // TryOpen
+        TimeoutMs, RetryIntervalMs,
+        &DiskNumber);
+    if (Status) {
+        std::string Msg = "Couldn't retrieve disk number, error: " +
+            std::to_string(Status);
+        throw std::runtime_error(Msg);
+    }
 
-        WNBD_CONNECTION_INFO ConnectionInfo = {0};
-        NTSTATUS Status = WnbdShow(InstanceName, &ConnectionInfo);
-        if (Status) {
-            if (ExpectMapped ||
-                    (Status != ERROR_NO_SUCH_DEVICE &&
-                     Status != ERROR_FILE_NOT_FOUND)) {
-                std::string Msg = "WnbdShow failed, error: " +
-                    std::to_string(Status);
-                throw std::runtime_error(Msg);
-            }
-
-            // The disk isn't available yet.
-            if (TimeoutMs > ElapsedMs.QuadPart) {
-                Sleep(RetryInterval);
-            }
-            continue;
-        }
-
-        if (ConnectionInfo.DiskNumber != -1) {
-            std::string DiskPath = "\\\\.\\PhysicalDrive" + std::to_string(
-                ConnectionInfo.DiskNumber);
-
-            HANDLE DiskHandle = CreateFileA(
-                DiskPath.c_str(),
-                GENERIC_READ,
-                FILE_SHARE_READ | FILE_SHARE_WRITE,
-                NULL,
-                OPEN_EXISTING,
-                NULL,
-                NULL);
-            if (INVALID_HANDLE_VALUE != DiskHandle) {
-                // Disk available
-                CloseHandle(DiskHandle);
-                return DiskPath;
-            }
-
-            DWORD Status = GetLastError();
-            if (Status != ERROR_NO_SUCH_DEVICE &&
-                    Status != ERROR_FILE_NOT_FOUND) {
-                std::string Msg = "unable to open WNBD disk, error: " +
-                    std::to_string(Status);
-                throw std::runtime_error(Msg);
-            }
-        }
-
-        // Disk not available yet
-        if (TimeoutMs > ElapsedMs.QuadPart) {
-            Sleep(RetryInterval);
-        }
-    } while (TimeoutMs > ElapsedMs.QuadPart);
-
-    std::string Msg = "couln't retrieve WNBD disk info, timed out";
-    throw std::runtime_error(Msg);
+    return "\\\\.\\PhysicalDrive" + std::to_string(DiskNumber);
 }
 
 void SetDiskWritable(std::string InstanceName)
