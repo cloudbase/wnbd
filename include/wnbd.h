@@ -186,6 +186,16 @@ DWORD WnbdSetDiskSize(
 // Cleanup the PWNBD_DISK structure. This should be called after stopping
 // the IO dispatchers.
 VOID WnbdClose(PWNBD_DISK Disk);
+// Waits for the disk to become available and returns the associated disk
+// number. Returns ERROR_TIMEOUT if the timeout is exceeded and zero if the
+// operation succeeded.
+DWORD WnbdPollDiskNumber(
+    const char* InstanceName,
+    BOOLEAN ExpectMapped,
+    BOOLEAN TryOpen,
+    DWORD TimeoutMs,
+    DWORD RetryIntervalMs,
+    PDWORD DiskNumber);
 
 DWORD WnbdList(
     PWNBD_CONNECTION_LIST ConnectionList,

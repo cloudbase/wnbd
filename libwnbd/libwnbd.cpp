@@ -658,6 +658,80 @@ void WnbdClose(PWNBD_DISK Disk)
     free(Disk);
 }
 
+DWORD WnbdPollDiskNumber(
+    const char* InstanceName,
+    BOOLEAN ExpectMapped,
+    BOOLEAN TryOpen,
+    DWORD TimeoutMs,
+    DWORD RetryIntervalMs,
+    PDWORD DiskNumber)
+{
+    LARGE_INTEGER StartTime, CurrTime, ElapsedMs, CounterFreq;
+    QueryPerformanceFrequency(&CounterFreq);
+    QueryPerformanceCounter(&StartTime);
+    ElapsedMs = { 0 };
+
+    do {
+        QueryPerformanceCounter(&CurrTime);
+        ElapsedMs.QuadPart = CurrTime.QuadPart - StartTime.QuadPart;
+        ElapsedMs.QuadPart *= 1000;
+        ElapsedMs.QuadPart /= CounterFreq.QuadPart;
+
+        WNBD_CONNECTION_INFO ConnectionInfo = {0};
+        DWORD Status = WnbdShow(InstanceName, &ConnectionInfo);
+        if (Status) {
+            if (ExpectMapped ||
+                    (Status != ERROR_NO_SUCH_DEVICE &&
+                     Status != ERROR_FILE_NOT_FOUND)) {
+                LogError("Couldn't retrieve WNBD disk info. Error: %d", Status);
+                return Status;
+            }
+
+            // The disk isn't available yet.
+            if (TimeoutMs > ElapsedMs.QuadPart) {
+                Sleep(RetryIntervalMs);
+            }
+            continue;
+        }
+
+        if (ConnectionInfo.DiskNumber != -1) {
+            std::string DiskPath = "\\\\.\\PhysicalDrive" + std::to_string(
+                ConnectionInfo.DiskNumber);
+
+            HANDLE DiskHandle = CreateFileA(
+                DiskPath.c_str(),
+                GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                NULL,
+                OPEN_EXISTING,
+                NULL,
+                NULL);
+            if (INVALID_HANDLE_VALUE != DiskHandle) {
+                // Disk available
+                CloseHandle(DiskHandle);
+
+                *DiskNumber = ConnectionInfo.DiskNumber;
+                return 0;
+            }
+
+            DWORD Status = GetLastError();
+            if (Status != ERROR_NO_SUCH_DEVICE &&
+                    Status != ERROR_FILE_NOT_FOUND) {
+                LogError("Unable to open WNBD disk, error: %d", Status);
+                return Status;
+            }
+        }
+
+        // Disk not available yet
+        if (TimeoutMs > ElapsedMs.QuadPart) {
+            Sleep(RetryIntervalMs);
+        }
+    } while (TimeoutMs > ElapsedMs.QuadPart);
+
+    LogError("Timed out waiting for WNBD disk to become available.");
+    return WAIT_TIMEOUT;
+}
+
 VOID WnbdSignalStopped(PWNBD_DISK Disk)
 {
     LogDebug("Marking device as stopped.");
