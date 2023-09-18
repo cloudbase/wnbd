@@ -238,7 +238,7 @@ For example, when using ``qemu-storage-daemon.exe`` locally, set
       --blockdev driver=file,node-name=file,filename=e:\img\test_100gb.raw,cache.direct=on `
       --blockdev driver=raw,node-name=raw,file=file `
       --nbd-server addr.type=inet,addr.host=127.0.0.1,addr.port=10809 `
-      --export type=nbd,id=export,node-name=raw,name=test_100gb,writable=on-storage-daemon
+      --export type=nbd,id=export,node-name=raw,name=test_100gb,writable=on
 ```
 
 ### Listing mapped devices
