@@ -8,5 +8,6 @@
 
 int main(int argc, const char** argv)
 {
+    SetConsoleOutputCP(CP_UTF8);
     return Client().execute(argc, argv);
 }

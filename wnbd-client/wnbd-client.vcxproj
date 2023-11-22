@@ -152,6 +152,9 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="code_page.manifest" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets" Condition="Exists('$(SolutionDir)\deps\boost.1.72.0.0\build\boost.targets')" />
